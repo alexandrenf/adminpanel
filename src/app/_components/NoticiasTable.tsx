@@ -23,6 +23,7 @@ export default function NoticiasTable() {
     const [open, setOpen] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
     const { data: noticias, refetch } = api.noticias.getAll.useQuery();
+
     const deleteMutation = api.noticias.delete.useMutation({
         onSuccess: () => {
             refetch();
@@ -30,8 +31,9 @@ export default function NoticiasTable() {
     });
 
     const handleDelete = async (id: number) => {
-        deleteMutation.mutate(id);
+        deleteMutation.mutate({ id });
     };
+
 
     const handleOpenDialog = (id: number) => {
         setDeleteId(id);
@@ -79,7 +81,7 @@ export default function NoticiasTable() {
                                 <TableCell>{row.title}</TableCell>
                                 <TableCell>{row.summary}</TableCell>
                                 <TableCell>
-                                    <img src={row.imageLink} alt={row.title} width="100" loading="lazy" />
+                                    <img src={row.imageLink ?? ''} alt={row.title} width="100" loading="lazy" />
                                 </TableCell>
                                 <TableCell>
                                     <Button

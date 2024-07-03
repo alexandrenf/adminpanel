@@ -3,6 +3,8 @@ import "~/styles/globals.css";
 import { GeistSans } from "geist/font/sans";
 
 import { TRPCReactProvider } from "~/trpc/react";
+import { getServerAuthSession } from "~/server/auth";
+import Navbar from "./_components/Navbar";
 
 export const metadata = {
   title: "Painel de Administrador da IFMSA Brazil",
@@ -10,15 +12,19 @@ export const metadata = {
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getServerAuthSession();
   return (
     <html lang="en" className={`${GeistSans.variable}`}>
       <body>
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <TRPCReactProvider>
+          {session && <Navbar />}
+          {children}
+        </TRPCReactProvider>
       </body>
     </html>
   );
