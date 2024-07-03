@@ -57,7 +57,7 @@ export default function NoticiasTable() {
             <Button
                 variant="contained"
                 color="primary"
-                onClick={() => router.push("/admin/noticias/create")}
+                onClick={() => router.push("/noticias/create")}
             >
                 Adicionar nova Notícia
             </Button>

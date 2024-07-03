@@ -4,8 +4,8 @@ import { TRPCError } from "@trpc/server";
 import fetch from 'node-fetch';
 import { env } from "~/env";
 
-const GITHUB_TOKEN = env.GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabtazil";
+const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
+const REPO_OWNER = "ifmsabrazil";
 const REPO_NAME = "dataifmsabrazil";
 const PLACEHOLDER_IMAGE_URL = "https://placehold.co/400";
 
@@ -14,7 +14,7 @@ export const fileRouter = createTRPCRouter({
     .input(z.object({
       id: z.string().min(1),
       markdown: z.string().min(1),
-      image: z.instanceof(File).nullable(),
+      image: z.string().nullable(), // Expecting base64 string or null
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, markdown, image } = input;
@@ -24,9 +24,20 @@ export const fileRouter = createTRPCRouter({
       const GITHUB_API_URL_IMAGE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/cover.png`;
 
       const fileContent = Buffer.from(markdown).toString("base64");
-      const imageContent = image ? Buffer.from(await image.arrayBuffer()).toString("base64") : null;
+      const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
 
       try {
+        // Check if markdown file exists and get its sha
+        const existingMarkdownResponse = await fetch(GITHUB_API_URL_MARKDOWN, {
+          method: "GET",
+          headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+        });
+        const existingMarkdownData = existingMarkdownResponse.ok ? await existingMarkdownResponse.json() : null;
+        const markdownSha = existingMarkdownData ? existingMarkdownData.sha : undefined;
+
         // Upload the markdown file
         const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN, {
           method: "PUT",
@@ -37,6 +48,7 @@ export const fileRouter = createTRPCRouter({
           body: JSON.stringify({
             message: COMMIT_MESSAGE,
             content: fileContent,
+            sha: markdownSha,
             committer: {
               name: "Your Name",
               email: "your-email@example.com",
@@ -56,6 +68,17 @@ export const fileRouter = createTRPCRouter({
         let imageUrl = PLACEHOLDER_IMAGE_URL;
 
         if (imageContent) {
+          // Check if image file exists and get its sha
+          const existingImageResponse = await fetch(GITHUB_API_URL_IMAGE, {
+            method: "GET",
+            headers: {
+              Authorization: `token ${GITHUB_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+          });
+          const existingImageData: { sha?: string } = existingImageResponse.ok ? await existingImageResponse.json() : {};
+          const imageSha = existingImageData ? existingImageData.sha : undefined;
+
           // Upload the image file
           const imageResponse = await fetch(GITHUB_API_URL_IMAGE, {
             method: "PUT",
@@ -66,6 +89,7 @@ export const fileRouter = createTRPCRouter({
             body: JSON.stringify({
               message: `Add image for ${id}`,
               content: imageContent,
+              sha: imageSha,
               committer: {
                 name: "Your Name",
                 email: "your-email@example.com",

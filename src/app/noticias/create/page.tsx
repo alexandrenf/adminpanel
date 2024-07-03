@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import "react-datepicker/dist/react-datepicker.css";
 import DatePicker from "react-datepicker";
 import { api } from "~/trpc/react";
+import { getSession } from "next-auth/react";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
@@ -51,9 +52,9 @@ export default function CreateNoticia() {
     const [date, setDate] = useState<Date | null>(null);
     const [markdown, setMarkdown] = useState("");
     const [resumo, setResumo] = useState("");
-    const [author, setAuthor] = useState("");
+    const [author, setAuthor] = useState(authorOptions[0]);
     const [otherAuthor, setOtherAuthor] = useState("");
-    const [image, setImage] = useState<File | null>(null);
+    const [image, setImage] = useState<string | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [forcarPaginaInicial, setForcarPaginaInicial] = useState(false);
     const router = useRouter();
@@ -62,25 +63,26 @@ export default function CreateNoticia() {
     const uploadFile = api.file.uploadFile.useMutation();
     const createNoticia = api.noticias.create.useMutation({
         onSuccess: () => {
-            router.push("/admin/noticias");
+            router.push("/noticias");
         },
     });
 
     useEffect(() => {
         if (image) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setImagePreview(reader.result as string);
-            };
-            reader.readAsDataURL(image);
+            setImagePreview(image);
         } else {
             setImagePreview(null);
         }
     }, [image]);
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setImage(e.target.files[0]);
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
         } else {
             setImage(null);
         }
@@ -95,13 +97,14 @@ export default function CreateNoticia() {
         }
 
         const nextId = latestBlogId.data + 1;
+        const session = await getSession();
 
         try {
             // Upload the files to GitHub
             const uploadResult = await uploadFile.mutateAsync({
                 id: nextId.toString(),
                 markdown,
-                image,
+                image: image ? image.split(",")[1] : null, // Remove the base64 header
             });
 
             // Create the noticia in the database
@@ -113,7 +116,7 @@ export default function CreateNoticia() {
                 link: uploadResult.markdownUrl,
                 imageLink: uploadResult.imageUrl,
                 forceHomePage: forcarPaginaInicial,
-                userId: "your-user-id", // Replace with actual user ID
+                userId: session?.user.id ?? "", // Replace with actual user ID
             });
         } catch (error) {
             console.error("Error creating noticia:", error);

@@ -1,4 +1,3 @@
-import { get } from "http";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 
@@ -23,7 +22,7 @@ export const noticiasRouter = createTRPCRouter({
     create: protectedProcedure
         .input(z.object({
             date: z.date(),
-            author: z.string(),
+            author: z.string().min(1),
             title: z.string(),
             summary: z.string(),
             link: z.string(),
@@ -32,6 +31,12 @@ export const noticiasRouter = createTRPCRouter({
             userId: z.string()
         }))
         .mutation(async ({ ctx, input }) => {
+            // Validate userId
+            const user = await ctx.db.user.findUnique({ where: { id: ctx.session.user.id } });
+            if (!user) {
+                throw new Error(`User with ID ${input.userId} not found`);
+            }
+
             // simulate a slow db call
             await new Promise((resolve) => setTimeout(resolve, 1000));
 
@@ -44,7 +49,7 @@ export const noticiasRouter = createTRPCRouter({
                     link: input.link,
                     imageLink: input.imageLink,
                     forceHomePage: input.forceHomePage,
-                    user: { connect: { id: input.userId } },
+                    user: { connect: { id: user.id } },
                 },
             });
         }),
