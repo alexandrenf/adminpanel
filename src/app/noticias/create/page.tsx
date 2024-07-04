@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -16,7 +16,7 @@ const CreateNoticia = () => {
     const [date, setDate] = useState<Date | null>(null);
     const [markdown, setMarkdown] = useState("");
     const [resumo, setResumo] = useState("");
-    const [author, setAuthor] = useState(authorOptions[0]); // Default to the first author option
+    const [author, setAuthor] = useState<string>(authorOptions[0] ?? ""); // Default to the first author option
     const [otherAuthor, setOtherAuthor] = useState("");
     const [image, setImage] = useState<string | null>(null);
     const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -29,6 +29,7 @@ const CreateNoticia = () => {
 
     const latestBlogId = api.noticias.latestBlogId.useQuery();
     const uploadFile = api.file.uploadFile.useMutation();
+    const updateFile = api.file.updateFile.useMutation();
     const createNoticia = api.noticias.create.useMutation({
         onSuccess: () => {
             router.push("/noticias");
@@ -121,14 +122,24 @@ const CreateNoticia = () => {
 
         if (isEditMode && noticiaId !== null) {
             try {
+                // First update the file on GitHub
+                const uploadResult = await updateFile.mutateAsync({
+                    id: noticiaId.toString(),
+                    markdown,
+                    image,
+                    contentLink: noticiaData?.link ?? "",
+                    imageLink: noticiaData?.imageLink ?? "",
+                });
+
+                // Then update the database with the new links
                 await updateNoticia.mutateAsync({
                     id: noticiaId,
                     date: date ? new Date(date) : new Date(),
                     author: author === "Outros" ? otherAuthor : author,
                     title,
                     summary: resumo,
-                    link: markdown,
-                    imageLink: imageSrc,
+                    link: uploadResult.markdownUrl,
+                    imageLink: uploadResult.imageUrl,
                     forceHomePage: forcarPaginaInicial,
                 });
             } catch (error) {
@@ -270,13 +281,13 @@ const CreateNoticia = () => {
                         <button
                             type="submit"
                             className="w-full bg-blue-900 text-white p-3 rounded-md hover:bg-blue-700"
-                            disabled={createNoticia.isPending || uploadFile.isPending || updateNoticia.isPending}
+                            disabled={createNoticia.isPending || uploadFile.isPending || updateFile.isPending || updateNoticia.isPending}
                         >
                             {isEditMode
-                                ? updateNoticia.isPending
+                                ? (updateFile.isPending || updateNoticia.isPending)
                                     ? "Atualizando..."
                                     : "Atualizar Notícia"
-                                : createNoticia.isPending || uploadFile.isPending
+                                : (createNoticia.isPending || uploadFile.isPending)
                                     ? "Criando..."
                                     : "Criar Notícia"}
                         </button>

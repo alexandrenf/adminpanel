@@ -155,7 +155,6 @@ export const noticiasRouter = createTRPCRouter({
             forceHomePage: z.boolean(),
         }))
         .mutation(async ({ ctx, input }) => {
-
             return ctx.db.blog.update({
                 where: { id: input.id },
                 data: {
