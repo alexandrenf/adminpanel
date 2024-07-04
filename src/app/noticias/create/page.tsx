@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import "react-datepicker/dist/react-datepicker.css";
 import DatePicker from "react-datepicker";
 import { api } from "~/trpc/react";
-import { getSession } from "next-auth/react";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
@@ -52,9 +51,9 @@ export default function CreateNoticia() {
     const [date, setDate] = useState<Date | null>(null);
     const [markdown, setMarkdown] = useState("");
     const [resumo, setResumo] = useState("");
-    const [author, setAuthor] = useState(authorOptions[0]);
+    const [author, setAuthor] = useState("");
     const [otherAuthor, setOtherAuthor] = useState("");
-    const [image, setImage] = useState<string | null>(null);
+    const [image, setImage] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [forcarPaginaInicial, setForcarPaginaInicial] = useState(false);
     const router = useRouter();
@@ -69,20 +68,19 @@ export default function CreateNoticia() {
 
     useEffect(() => {
         if (image) {
-            setImagePreview(image);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(image);
         } else {
             setImagePreview(null);
         }
     }, [image]);
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+        if (e.target.files) {
+            setImage(e.target.files[0]);
         } else {
             setImage(null);
         }
@@ -97,31 +95,41 @@ export default function CreateNoticia() {
         }
 
         const nextId = latestBlogId.data + 1;
-        const session = await getSession();
 
         try {
             // Upload the files to GitHub
             const uploadResult = await uploadFile.mutateAsync({
                 id: nextId.toString(),
                 markdown,
-                image: image ? image.split(",")[1] : null, // Remove the base64 header
+                image: image ? await toBase64(image) : null,
             });
+
+            // Determine the author value
+            const finalAuthor = author === "Presidente Nacional" ? null : (author === "Outros" ? otherAuthor : author);
 
             // Create the noticia in the database
             createNoticia.mutate({
                 date: date ? new Date(date) : new Date(),
-                author: author === "Outros" ? otherAuthor : author,
+                author: finalAuthor ?? "",
                 title,
                 summary: resumo,
                 link: uploadResult.markdownUrl,
                 imageLink: uploadResult.imageUrl,
                 forceHomePage: forcarPaginaInicial,
-                userId: session?.user.id ?? "", // Replace with actual user ID
             });
         } catch (error) {
             console.error("Error creating noticia:", error);
             alert("Failed to create noticia. Please try again.");
         }
+    };
+
+    const toBase64 = (file: File) => {
+        return new Promise<string | ArrayBuffer | null>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
     };
 
     return (

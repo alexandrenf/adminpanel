@@ -9,6 +9,12 @@ const REPO_OWNER = "ifmsabrazil";
 const REPO_NAME = "dataifmsabrazil";
 const PLACEHOLDER_IMAGE_URL = "https://placehold.co/400";
 
+// Define a type for the GitHub API response
+type GitHubFileResponse = {
+  sha: string;
+  [key: string]: any;
+};
+
 export const fileRouter = createTRPCRouter({
   uploadFile: protectedProcedure
     .input(z.object({
@@ -20,26 +26,34 @@ export const fileRouter = createTRPCRouter({
       const { id, markdown, image } = input;
 
       const COMMIT_MESSAGE = `Add new notícia: ${id}`;
-      const GITHUB_API_URL_MARKDOWN = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/content.md`;
-      const GITHUB_API_URL_IMAGE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/cover.png`;
+      let markdownFilename = `content.md`;
+      let imageFilename = `cover.png`;
+
+      const GITHUB_API_URL_MARKDOWN = (filename: string) => `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${filename}`;
+      const GITHUB_API_URL_IMAGE = (filename: string) => `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${filename}`;
 
       const fileContent = Buffer.from(markdown).toString("base64");
       const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
 
+      const randomSuffix = () => Math.floor(100 + Math.random() * 900).toString();
+
       try {
-        // Check if markdown file exists and get its sha
-        const existingMarkdownResponse = await fetch(GITHUB_API_URL_MARKDOWN, {
+        // Check if markdown file exists and generate new name if it does
+        const existingMarkdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
           method: "GET",
           headers: {
             Authorization: `token ${GITHUB_TOKEN}`,
             "Content-Type": "application/json",
           },
         });
-        const existingMarkdownData = existingMarkdownResponse.ok ? await existingMarkdownResponse.json() : null;
+        const existingMarkdownData: GitHubFileResponse | null = existingMarkdownResponse.ok ? await existingMarkdownResponse.json() as GitHubFileResponse | null : null;
         const markdownSha = existingMarkdownData ? existingMarkdownData.sha : undefined;
+        if (existingMarkdownData) {
+          markdownFilename = `content_${randomSuffix()}.md`;
+        }
 
         // Upload the markdown file
-        const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN, {
+        const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
           method: "PUT",
           headers: {
             Authorization: `token ${GITHUB_TOKEN}`,
@@ -68,19 +82,22 @@ export const fileRouter = createTRPCRouter({
         let imageUrl = PLACEHOLDER_IMAGE_URL;
 
         if (imageContent) {
-          // Check if image file exists and get its sha
-          const existingImageResponse = await fetch(GITHUB_API_URL_IMAGE, {
+          // Check if image file exists and generate new name if it does
+          const existingImageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename), {
             method: "GET",
             headers: {
               Authorization: `token ${GITHUB_TOKEN}`,
               "Content-Type": "application/json",
             },
           });
-          const existingImageData: { sha?: string } = existingImageResponse.ok ? await existingImageResponse.json() : {};
+          const existingImageData: GitHubFileResponse | null = existingImageResponse.ok ? await existingImageResponse.json() as GitHubFileResponse | null : null;
           const imageSha = existingImageData ? existingImageData.sha : undefined;
+          if (existingImageData) {
+            imageFilename = `cover_${randomSuffix()}.png`;
+          }
 
           // Upload the image file
-          const imageResponse = await fetch(GITHUB_API_URL_IMAGE, {
+          const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename), {
             method: "PUT",
             headers: {
               Authorization: `token ${GITHUB_TOKEN}`,
@@ -106,11 +123,11 @@ export const fileRouter = createTRPCRouter({
             });
           }
 
-          imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/cover.png`;
+          imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${imageFilename}`;
         }
 
         return {
-          markdownUrl: `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/content.md`,
+          markdownUrl: `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${markdownFilename}`,
           imageUrl,
         };
       } catch (error) {

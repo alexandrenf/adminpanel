@@ -22,18 +22,32 @@ export default function NoticiasTable() {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
     const { data: noticias, refetch } = api.noticias.getAll.useQuery();
 
     const deleteMutation = api.noticias.delete.useMutation({
         onSuccess: () => {
             refetch();
         },
+        onError: (error) => {
+            setDeleteError(error.message);
+            setOpen(true);
+        }
+    });
+
+    const deleteAnywayMutation = api.noticias.deleteAnyway.useMutation({
+        onSuccess: () => {
+            refetch();
+        }
     });
 
     const handleDelete = async (id: number) => {
         deleteMutation.mutate({ id });
     };
 
+    const handleDeleteAnyway = async (id: number) => {
+        deleteAnywayMutation.mutate({ id });
+    };
 
     const handleOpenDialog = (id: number) => {
         setDeleteId(id);
@@ -43,11 +57,19 @@ export default function NoticiasTable() {
     const handleCloseDialog = () => {
         setOpen(false);
         setDeleteId(null);
+        setDeleteError(null);
     };
 
     const confirmDelete = () => {
         if (deleteId !== null) {
             handleDelete(deleteId);
+        }
+        handleCloseDialog();
+    };
+
+    const confirmDeleteAnyway = () => {
+        if (deleteId !== null) {
+            handleDeleteAnyway(deleteId);
         }
         handleCloseDialog();
     };
@@ -106,16 +128,22 @@ export default function NoticiasTable() {
                 <DialogTitle id="alert-dialog-title">Confirm Delete</DialogTitle>
                 <DialogContent>
                     <DialogContentText id="alert-dialog-description">
-                        Are you sure you want to delete this noticia?
+                        {deleteError ? deleteError : "Are you sure you want to delete this noticia?"}
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog} color="primary">
-                        Cancel
+                        Cancelar
                     </Button>
-                    <Button onClick={confirmDelete} color="secondary" autoFocus>
-                        Delete
-                    </Button>
+                    {deleteError ? (
+                        <Button onClick={confirmDeleteAnyway} color="secondary" autoFocus>
+                            Confirmar
+                        </Button>
+                    ) : (
+                        <Button onClick={confirmDelete} color="secondary" autoFocus>
+                            Delete
+                        </Button>
+                    )}
                 </DialogActions>
             </Dialog>
         </div>
