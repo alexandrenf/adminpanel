@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -74,6 +74,10 @@ export default function NoticiasTable() {
         handleCloseDialog();
     };
 
+    const handleEdit = (id: number) => {
+        router.push(`/noticias/create?id=${id}`);
+    };
+
     return (
         <div>
             <Button
@@ -112,6 +116,14 @@ export default function NoticiasTable() {
                                         onClick={() => handleOpenDialog(row.id)}
                                     >
                                         Delete
+                                    </Button>
+                                    <Button
+                                        variant="contained"
+                                        color="warning"
+                                        onClick={() => handleEdit(row.id)}
+                                        style={{ marginLeft: "10px" }}
+                                    >
+                                        Edit
                                     </Button>
                                 </TableCell>
                             </TableRow>

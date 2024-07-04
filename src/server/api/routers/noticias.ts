@@ -142,4 +142,31 @@ export const noticiasRouter = createTRPCRouter({
         const latestBlog = await ctx.db.blog.findFirst({ orderBy: { id: "desc" } });
         return latestBlog?.id || 0;
     }),
+
+    update: protectedProcedure
+        .input(z.object({
+            id: z.number(),
+            date: z.date(),
+            author: z.string().min(1),
+            title: z.string(),
+            summary: z.string(),
+            link: z.string(),
+            imageLink: z.string().optional(),
+            forceHomePage: z.boolean(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+
+            return ctx.db.blog.update({
+                where: { id: input.id },
+                data: {
+                    date: input.date,
+                    author: input.author,
+                    title: input.title,
+                    summary: input.summary,
+                    link: input.link,
+                    imageLink: input.imageLink,
+                    forceHomePage: input.forceHomePage,
+                },
+            });
+        }),
 });

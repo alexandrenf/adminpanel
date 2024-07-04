@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import "react-datepicker/dist/react-datepicker.css";
 import DatePicker from "react-datepicker";
@@ -21,8 +21,11 @@ const CreateNoticia = () => {
     const [image, setImage] = useState<string | null>(null);
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [forcarPaginaInicial, setForcarPaginaInicial] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [noticiaId, setNoticiaId] = useState<number | null>(null);
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const searchParams = useSearchParams();
 
     const latestBlogId = api.noticias.latestBlogId.useQuery();
     const uploadFile = api.file.uploadFile.useMutation();
@@ -31,6 +34,51 @@ const CreateNoticia = () => {
             router.push("/noticias");
         },
     });
+    const updateNoticia = api.noticias.update.useMutation({
+        onSuccess: () => {
+            router.push("/noticias");
+        },
+    });
+    const { data: noticiaData } = api.noticias.getOne.useQuery(
+        { id: noticiaId ?? -1 },
+        {
+            enabled: isEditMode && noticiaId !== null,
+        }
+    );
+
+    useEffect(() => {
+        const id = searchParams.get("id");
+        if (id) {
+            setIsEditMode(true);
+            setNoticiaId(parseInt(id, 10));
+        }
+    }, [searchParams]);
+
+    useEffect(() => {
+        if (noticiaData) {
+            setTitle(noticiaData.title);
+            setDate(new Date(noticiaData.date));
+            fetchMarkdownFile(noticiaData.link);
+            setResumo(noticiaData.summary);
+            setAuthor(noticiaData.author);
+            setImageSrc(noticiaData.imageLink);
+            setForcarPaginaInicial(noticiaData.forceHomePage);
+        }
+    }, [noticiaData]);
+
+    const fetchMarkdownFile = async (url: string) => {
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                const markdownContent = await response.text();
+                setMarkdown(markdownContent);
+            } else {
+                console.error("Failed to fetch markdown file:", response.statusText);
+            }
+        } catch (error) {
+            console.error("Error fetching markdown file:", error);
+        }
+    };
 
     const onFileChange = async (file: File) => {
         const imageDataUrl = await readFile(file);
@@ -71,34 +119,52 @@ const CreateNoticia = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (latestBlogId.isLoading || !latestBlogId.data) {
-            alert("Loading latest blog ID, please wait.");
-            return;
-        }
+        if (isEditMode && noticiaId !== null) {
+            try {
+                await updateNoticia.mutateAsync({
+                    id: noticiaId,
+                    date: date ? new Date(date) : new Date(),
+                    author: author === "Outros" ? otherAuthor : author,
+                    title,
+                    summary: resumo,
+                    link: markdown,
+                    imageLink: imageSrc,
+                    forceHomePage: forcarPaginaInicial,
+                });
+            } catch (error) {
+                console.error("Error updating noticia:", error);
+                alert("Failed to update noticia. Please try again.");
+            }
+        } else {
+            if (latestBlogId.isLoading || !latestBlogId.data) {
+                alert("Loading latest blog ID, please wait.");
+                return;
+            }
 
-        const nextId = latestBlogId.data + 1;
+            const nextId = latestBlogId.data + 1;
 
-        try {
-            const finalAuthor = author === "Outros" ? otherAuthor : author;
+            try {
+                const finalAuthor = author === "Outros" ? otherAuthor : author;
 
-            const uploadResult = await uploadFile.mutateAsync({
-                id: nextId.toString(),
-                markdown,
-                image,
-            });
+                const uploadResult = await uploadFile.mutateAsync({
+                    id: nextId.toString(),
+                    markdown,
+                    image,
+                });
 
-            createNoticia.mutate({
-                date: date ? new Date(date) : new Date(),
-                author: finalAuthor ?? "",
-                title,
-                summary: resumo,
-                link: uploadResult.markdownUrl,
-                imageLink: uploadResult.imageUrl,
-                forceHomePage: forcarPaginaInicial,
-            });
-        } catch (error) {
-            console.error("Error creating noticia:", error);
-            alert("Failed to create noticia. Please try again.");
+                createNoticia.mutate({
+                    date: date ? new Date(date) : new Date(),
+                    author: finalAuthor ?? "",
+                    title,
+                    summary: resumo,
+                    link: uploadResult.markdownUrl,
+                    imageLink: uploadResult.imageUrl,
+                    forceHomePage: forcarPaginaInicial,
+                });
+            } catch (error) {
+                console.error("Error creating noticia:", error);
+                alert("Failed to create noticia. Please try again.");
+            }
         }
     };
 
@@ -106,7 +172,7 @@ const CreateNoticia = () => {
         <div className="container mx-auto p-6">
             <div className="bg-white shadow-md rounded-lg p-8 mt-8">
                 <h1 className="text-3xl font-bold text-center text-blue-900 mb-8">
-                    Criar nova notícia
+                    {isEditMode ? "Editar Notícia" : "Criar nova notícia"}
                 </h1>
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
@@ -204,9 +270,15 @@ const CreateNoticia = () => {
                         <button
                             type="submit"
                             className="w-full bg-blue-900 text-white p-3 rounded-md hover:bg-blue-700"
-                            disabled={createNoticia.isPending || uploadFile.isPending}
+                            disabled={createNoticia.isPending || uploadFile.isPending || updateNoticia.isPending}
                         >
-                            {createNoticia.isPending || uploadFile.isPending ? "Criando..." : "Criar Notícia"}
+                            {isEditMode
+                                ? updateNoticia.isPending
+                                    ? "Atualizando..."
+                                    : "Atualizar Notícia"
+                                : createNoticia.isPending || uploadFile.isPending
+                                    ? "Criando..."
+                                    : "Criar Notícia"}
                         </button>
                     </div>
                 </form>
