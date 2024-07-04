@@ -1,62 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import "react-datepicker/dist/react-datepicker.css";
 import DatePicker from "react-datepicker";
 import { api } from "~/trpc/react";
+import { authorOptions } from "~/app/constants/authorOptions";
 
+// Dynamic import for MDEditor
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
-const authorOptions: string[] = [
-    "Presidente Nacional",
-    "Vice Presidente para Assuntos Externos",
-    "Vice Presidente para Assuntos Internos",
-    "Secretário(a) Geral",
-    "Diretor Financeiro Interno",
-    "Diretor Financeiro Externo",
-    "Diretor Nacional de Comunicação e Marketing",
-    "Diretor Nacional de Capacity Building",
-    "Diretor Nacional de Educação Médica",
-    "Diretor Nacional de Saúde Pública",
-    "Diretor Nacional de Direitos Humanos e Paz",
-    "Diretor Nacional de Direitos Sexuais e Reprodutivos",
-    "Diretor Nacional de Intercâmbio Nacional para Assuntos Internos",
-    "Diretor Nacional de Intercâmbio Nacional para Assuntos Externos",
-    "Diretor Nacional de Intercâmbio Internacional Clínico-Cirúrgico para Incomings",
-    "Diretor Nacional de Intercâmbio Internacional Clínico-Cirúrgico para Outgoings",
-    "Diretor Nacional de Intercâmbio Internacional de Pesquisa para Incomings",
-    "Diretor Nacional de Intercâmbio Internacional de Pesquisa para Outgoings",
-    "Diretor Nacional de Programas e Atividades",
-    "Diretor Nacional de Publicação, Pesquisa e Extensão",
-    "Diretor Nacional de Alumni",
-    "Yellow Team",
-    "Divisão de Relações Públicas",
-    "Red Light Team",
-    "Green Lamp Team",
-    "White Team",
-    "Coordenadores Nacionais de Programas",
-    "Scientific Team",
-    "Capacity Building Team",
-    "Comissão de Reforma e Elaboração de Documentos",
-    "National Exchange Team",
-    "Time de Intercâmbios Nacionais",
-    "NSSB",
-    "Outros",
-];
-
-export default function CreateNoticia() {
+const CreateNoticia = () => {
     const [title, setTitle] = useState("");
     const [date, setDate] = useState<Date | null>(null);
     const [markdown, setMarkdown] = useState("");
     const [resumo, setResumo] = useState("");
-    const [author, setAuthor] = useState("");
+    const [author, setAuthor] = useState(authorOptions[0]); // Default to the first author option
     const [otherAuthor, setOtherAuthor] = useState("");
-    const [image, setImage] = useState<File | null>(null);
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [image, setImage] = useState<string | null>(null);
+    const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [forcarPaginaInicial, setForcarPaginaInicial] = useState(false);
     const router = useRouter();
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const latestBlogId = api.noticias.latestBlogId.useQuery();
     const uploadFile = api.file.uploadFile.useMutation();
@@ -66,23 +32,35 @@ export default function CreateNoticia() {
         },
     });
 
-    useEffect(() => {
-        if (image) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setImagePreview(reader.result as string);
-            };
-            reader.readAsDataURL(image);
-        } else {
-            setImagePreview(null);
-        }
-    }, [image]);
+    const onFileChange = async (file: File) => {
+        const imageDataUrl = await readFile(file);
+        const croppedImageDataUrl = await cropAndConvertImage(imageDataUrl);
+        setImageSrc(croppedImageDataUrl);
+        setImage(croppedImageDataUrl.split(",")[1]); // Extract the base64 string
+    };
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setImage(e.target.files[0]);
-        } else {
-            setImage(null);
+    const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+            await onFileChange(file);
+        }
+    };
+
+    const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            await onFileChange(file);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+    };
+
+    const handleButtonClick = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
         }
     };
 
@@ -97,17 +75,14 @@ export default function CreateNoticia() {
         const nextId = latestBlogId.data + 1;
 
         try {
-            // Upload the files to GitHub
+            const finalAuthor = author === "Outros" ? otherAuthor : author;
+
             const uploadResult = await uploadFile.mutateAsync({
                 id: nextId.toString(),
                 markdown,
-                image: image ? await toBase64(image) : null,
+                image,
             });
 
-            // Determine the author value
-            const finalAuthor = author === "Presidente Nacional" ? null : (author === "Outros" ? otherAuthor : author);
-
-            // Create the noticia in the database
             createNoticia.mutate({
                 date: date ? new Date(date) : new Date(),
                 author: finalAuthor ?? "",
@@ -121,15 +96,6 @@ export default function CreateNoticia() {
             console.error("Error creating noticia:", error);
             alert("Failed to create noticia. Please try again.");
         }
-    };
-
-    const toBase64 = (file: File) => {
-        return new Promise<string | ArrayBuffer | null>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
-        });
     };
 
     return (
@@ -192,24 +158,34 @@ export default function CreateNoticia() {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Conteúdo</label>
-                        <div data-color-mode="light" className="mt-2">
-                            <MDEditor value={markdown || ""} onChange={(value) => setMarkdown(value || "")} height={400} />
-                        </div>
+                        <MDEditor value={markdown} onChange={setMarkdown} />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Upload de Imagem</label>
-                        <input
-                            type="file"
-                            onChange={handleImageChange}
-                            className="mt-1 block w-full text-gray-900"
-                        />
-                        {imagePreview && (
-                            <img
-                                src={imagePreview}
-                                alt="Image Preview"
-                                className="mt-4 w-full max-w-xs mx-auto rounded-lg shadow-md"
-                            />
+                    <div className="flex items-start space-x-4">
+                        {imageSrc && (
+                            <div className="w-32 h-32 bg-gray-100 border border-gray-300 flex items-center justify-center">
+                                <img src={imageSrc} alt="Image preview" className="max-w-full h-auto" />
+                            </div>
                         )}
+                        <div
+                            className="flex-1 border-dashed border-2 border-gray-300 p-4 text-center"
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                        >
+                            <input
+                                type="file"
+                                onChange={handleFileInputChange}
+                                className="hidden"
+                                ref={fileInputRef}
+                                accept="image/*"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleButtonClick}
+                                className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                            >
+                                Upload or Drag & Drop Image
+                            </button>
+                        </div>
                     </div>
                     <div className="flex items-center">
                         <input
@@ -233,4 +209,40 @@ export default function CreateNoticia() {
             </div>
         </div>
     );
-}
+};
+
+const readFile = (file: File): Promise<string> =>
+    new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => resolve(reader.result as string), false);
+        reader.readAsDataURL(file);
+    });
+
+const cropAndConvertImage = (imageSrc: string): Promise<string> =>
+    new Promise((resolve) => {
+        const image = new Image();
+        image.src = imageSrc;
+        image.onload = () => {
+            const canvas = document.createElement("canvas");
+            const size = Math.min(image.width, image.height);
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+                ctx.drawImage(
+                    image,
+                    (image.width - size) / 2,
+                    (image.height - size) / 2,
+                    size,
+                    size,
+                    0,
+                    0,
+                    size,
+                    size
+                );
+                resolve(canvas.toDataURL("image/png")); // Convert to PNG
+            }
+        };
+    });
+
+export default CreateNoticia;
