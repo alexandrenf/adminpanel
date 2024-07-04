@@ -10,10 +10,10 @@ const REPO_NAME = "dataifmsabrazil";
 const PLACEHOLDER_IMAGE_URL = "https://placehold.co/400";
 
 // Define a type for the GitHub API response
-type GitHubFileResponse = {
+interface GitHubFileResponse {
   sha: string;
-  [key: string]: any;
-};
+  [key: string]: unknown;
+}
 
 export const fileRouter = createTRPCRouter({
   uploadFile: protectedProcedure
@@ -46,7 +46,7 @@ export const fileRouter = createTRPCRouter({
             "Content-Type": "application/json",
           },
         });
-        const existingMarkdownData: GitHubFileResponse | null = existingMarkdownResponse.ok ? await existingMarkdownResponse.json() as GitHubFileResponse | null : null;
+        const existingMarkdownData: GitHubFileResponse | null = existingMarkdownResponse.ok ? await existingMarkdownResponse.json() as GitHubFileResponse : null;
         const markdownSha = existingMarkdownData ? existingMarkdownData.sha : undefined;
         if (existingMarkdownData) {
           markdownFilename = `content_${randomSuffix()}.md`;
@@ -70,7 +70,7 @@ export const fileRouter = createTRPCRouter({
           }),
         });
 
-        const markdownResponseData = await markdownResponse.json();
+        const markdownResponseData: GitHubFileResponse = await markdownResponse.json() as GitHubFileResponse;
         if (!markdownResponse.ok) {
           console.error("Markdown response error:", markdownResponseData);
           throw new TRPCError({
@@ -90,7 +90,7 @@ export const fileRouter = createTRPCRouter({
               "Content-Type": "application/json",
             },
           });
-          const existingImageData: GitHubFileResponse | null = existingImageResponse.ok ? await existingImageResponse.json() as GitHubFileResponse | null : null;
+          const existingImageData: GitHubFileResponse | null = existingImageResponse.ok ? await existingImageResponse.json() as GitHubFileResponse : null;
           const imageSha = existingImageData ? existingImageData.sha : undefined;
           if (existingImageData) {
             imageFilename = `cover_${randomSuffix()}.png`;
@@ -114,7 +114,7 @@ export const fileRouter = createTRPCRouter({
             }),
           });
 
-          const imageResponseData = await imageResponse.json();
+          const imageResponseData: GitHubFileResponse = await imageResponse.json() as GitHubFileResponse;
           if (!imageResponse.ok) {
             console.error("Image response error:", imageResponseData);
             throw new TRPCError({

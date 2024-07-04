@@ -36,7 +36,7 @@ const CreateNoticia = () => {
         const imageDataUrl = await readFile(file);
         const croppedImageDataUrl = await cropAndConvertImage(imageDataUrl);
         setImageSrc(croppedImageDataUrl);
-        setImage(croppedImageDataUrl?.split(",")[1] || null); // Extract the base64 string
+        setImage(croppedImageDataUrl?.split(",")[1] ?? null); // Extract the base64 string
     };
 
     const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

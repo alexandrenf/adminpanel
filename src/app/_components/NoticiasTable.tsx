@@ -42,11 +42,11 @@ export default function NoticiasTable() {
     });
 
     const handleDelete = async (id: number) => {
-        deleteMutation.mutate({ id });
+        await deleteMutation.mutateAsync({ id });
     };
 
     const handleDeleteAnyway = async (id: number) => {
-        deleteAnywayMutation.mutate({ id });
+        await deleteAnywayMutation.mutateAsync({ id });
     };
 
     const handleOpenDialog = (id: number) => {
@@ -60,16 +60,16 @@ export default function NoticiasTable() {
         setDeleteError(null);
     };
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (deleteId !== null) {
-            handleDelete(deleteId);
+            await handleDelete(deleteId);
         }
         handleCloseDialog();
     };
 
-    const confirmDeleteAnyway = () => {
+    const confirmDeleteAnyway = async () => {
         if (deleteId !== null) {
-            handleDeleteAnyway(deleteId);
+            await handleDeleteAnyway(deleteId);
         }
         handleCloseDialog();
     };
