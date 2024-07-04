@@ -36,13 +36,15 @@ const CreateNoticia = () => {
         const imageDataUrl = await readFile(file);
         const croppedImageDataUrl = await cropAndConvertImage(imageDataUrl);
         setImageSrc(croppedImageDataUrl);
-        setImage(croppedImageDataUrl.split(",")[1]); // Extract the base64 string
+        setImage(croppedImageDataUrl?.split(",")[1] || null); // Extract the base64 string
     };
 
     const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
-            await onFileChange(file);
+            if (file !== undefined) {
+                await onFileChange(file);
+            }
         }
     };
 
@@ -50,7 +52,9 @@ const CreateNoticia = () => {
         e.preventDefault();
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const file = e.dataTransfer.files[0];
-            await onFileChange(file);
+            if (file !== undefined) {
+                await onFileChange(file);
+            }
         }
     };
 
@@ -158,7 +162,7 @@ const CreateNoticia = () => {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Conteúdo</label>
-                        <MDEditor value={markdown} onChange={setMarkdown} />
+                        <MDEditor value={markdown} onChange={(value) => setMarkdown(value || "")} />
                     </div>
                     <div className="flex items-start space-x-4">
                         {imageSrc && (
