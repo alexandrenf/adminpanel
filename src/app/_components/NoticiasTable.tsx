@@ -115,7 +115,7 @@ export default function NoticiasTable() {
                                         color="secondary"
                                         onClick={() => handleOpenDialog(row.id)}
                                     >
-                                        Delete
+                                        Deletar
                                     </Button>
                                     <Button
                                         variant="contained"
@@ -123,7 +123,7 @@ export default function NoticiasTable() {
                                         onClick={() => handleEdit(row.id)}
                                         style={{ marginLeft: "10px" }}
                                     >
-                                        Edit
+                                        Editar
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -137,7 +137,7 @@ export default function NoticiasTable() {
                 aria-labelledby="alert-dialog-title"
                 aria-describedby="alert-dialog-description"
             >
-                <DialogTitle id="alert-dialog-title">Confirm Delete</DialogTitle>
+                <DialogTitle id="alert-dialog-title">Confirma deletar?</DialogTitle>
                 <DialogContent>
                     <DialogContentText id="alert-dialog-description">
                         {deleteError ? deleteError : "Are you sure you want to delete this noticia?"}
@@ -153,7 +153,7 @@ export default function NoticiasTable() {
                         </Button>
                     ) : (
                         <Button onClick={confirmDelete} color="secondary" autoFocus>
-                            Delete
+                            Deletar
                         </Button>
                     )}
                 </DialogActions>

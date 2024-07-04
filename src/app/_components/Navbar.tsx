@@ -6,7 +6,11 @@ const Navbar: React.FC = () => {
     return (
         <nav className="w-full bg-blue-900 text-white py-4">
             <div className="container mx-auto flex justify-between items-center px-4">
-                <h1 className="text-xl font-bold">IFMSA Brazil Admin Portal</h1>
+                <h1 className="text-xl font-bold">
+                    <Link legacyBehavior href="/">
+                        <a className="hover:underline">IFMSA Brazil Admin</a>
+                    </Link>
+                </h1>
                 <ul className="flex space-x-4">
                     <li>
                         <Link legacyBehavior href="/noticias">
