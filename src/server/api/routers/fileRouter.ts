@@ -147,7 +147,7 @@ export const fileRouter = createTRPCRouter({
 
         if (imageContent) {
           // Upload the image file
-          const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename), {
+          const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
             method: "PUT",
             headers: {
               Authorization: `token ${GITHUB_TOKEN}`,
@@ -255,7 +255,7 @@ export const fileRouter = createTRPCRouter({
 
         if (imageContent) {
           // Upload the new image file
-          const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename), {
+          const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
             method: "PUT",
             headers: {
               Authorization: `token ${GITHUB_TOKEN}`,
