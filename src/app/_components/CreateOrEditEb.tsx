@@ -282,8 +282,7 @@ const resizeImage = (imageSrc: string): Promise<string> =>
             if (ctx) {
                 ctx.drawImage(image, 0, 0, 400, 400);
                 pica.resize(canvas, canvas, {
-                    quality: 3,
-                    alpha: true
+                    quality: 3
                 }).then((result: HTMLCanvasElement) => {
                     resolve(result.toDataURL("image/png")); // Convert to PNG
                 });
