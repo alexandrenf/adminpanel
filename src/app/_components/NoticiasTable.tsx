@@ -100,7 +100,7 @@ export default function NoticiasTable() {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {noticias?.map((row) => (
+                        {noticias?.map((row: any) => (
                             <TableRow key={row.id}>
                                 <TableCell>{new Date(row.date).toLocaleDateString()}</TableCell>
                                 <TableCell>{row.author}</TableCell>
