@@ -16,7 +16,6 @@ const CreateOrEditArquivo = () => {
     const [fileLink, setFileLink] = useState<string>("");
     const [isEditMode, setIsEditMode] = useState(false);
     const [arquivoId, setArquivoId] = useState<number | null>(null);
-    const [tryCount, setTryCount] = useState<number>(0);
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchParams = useSearchParams();
@@ -24,6 +23,12 @@ const CreateOrEditArquivo = () => {
 
     const typeObject = allowedTypes.find(type => type.href === tipo);
     const label = typeObject ? typeObject.label : "";
+
+    useEffect(() => {
+        if (!typeObject) {
+            router.push("/404");
+        }
+    }, [typeObject, router]);
 
     const latestArquivoId = api.arquivo.latestArquivoId.useQuery();
     const uploadPhoto = api.arquivo.uploadPhoto.useMutation();
@@ -70,13 +75,6 @@ const CreateOrEditArquivo = () => {
             setFileLink(arquivoData.fileLink ?? "");
         }
     }, [arquivoData]);
-
-    if (!typeObject) {
-        useEffect(() => {
-            router.push("/404");
-        }, []);
-        return null;
-    }
 
     const onFileChange = async (file: File) => {
         const imageDataUrl = await readFile(file);
@@ -283,7 +281,7 @@ const resizeAndCropImage = (imageSrc: string): Promise<string> =>
             let sourceWidth = image.width;
             let sourceHeight = image.height;
 
-            // Calculate cropping dimensions!
+            // Calculate cropping dimensions
             if (image.width > image.height) {
                 sourceX = (image.width - image.height) / 2;
                 sourceWidth = image.height;
