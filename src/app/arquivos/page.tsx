@@ -26,7 +26,9 @@ export default async function Noticias() {
                                 { href: "/arquivos/ressonancia-poetica", label: "Ressonância Poética" },
                                 { href: "/arquivos/brazilian-medical-students", label: "Brazilian Medical Students" },
                                 { href: "/arquivos/relatorios", label: "Relatórios" },
-                                { href: "/arquivos/declaracoes-de-politica", label: "Declarações de Política" }
+                                { href: "/arquivos/declaracoes-de-politica", label: "Declarações de Política" },
+                                { href: "/arquivos/intercambio-nac", label: "Intercâmbio Nacional" },
+                                { href: "/arquivos/intercambio-internacional", label: "Intercâmbio Internacional" },
                             ].map((item, index) => (
                                 <Link href={item.href} key={index} legacyBehavior>
                                     <a className="bg-blue-500 text-white rounded-full py-4 px-8 flex items-center justify-center shadow-md hover:bg-blue-600 transition-all transform hover:-translate-y-1">
