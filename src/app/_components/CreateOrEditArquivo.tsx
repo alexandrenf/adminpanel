@@ -23,12 +23,7 @@ const CreateOrEditArquivo = () => {
     const { tipo = "" } = useParams<{ tipo: string }>();
 
     const typeObject = allowedTypes.find(type => type.href === tipo);
-    if (!typeObject) {
-        router.push("/404");
-        return null;
-    }
-
-    const label = typeObject.label;
+    const label = typeObject ? typeObject.label : "";
 
     const latestArquivoId = api.arquivo.latestArquivoId.useQuery();
     const uploadPhoto = api.arquivo.uploadPhoto.useMutation();
@@ -75,6 +70,13 @@ const CreateOrEditArquivo = () => {
             setFileLink(arquivoData.fileLink ?? "");
         }
     }, [arquivoData]);
+
+    if (!typeObject) {
+        useEffect(() => {
+            router.push("/404");
+        }, []);
+        return null;
+    }
 
     const onFileChange = async (file: File) => {
         const imageDataUrl = await readFile(file);
