@@ -23,6 +23,11 @@ const Navbar: React.FC = () => {
                         </Link>
                     </li>
                     <li>
+                        <Link legacyBehavior href="/arquivos">
+                            <a className="hover:underline">Arquivos</a>
+                        </Link>
+                    </li>
+                    <li>
                         <Link legacyBehavior href="/config">
                             <a className="hover:underline">Configurações</a>
                         </Link>

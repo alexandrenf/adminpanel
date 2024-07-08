@@ -96,3 +96,13 @@ model EB {
     order     Int
     imageLink String?
 }
+
+model Arquivo {
+    id        Int      @id @default(autoincrement())
+    type      String
+    title     String
+    date      DateTime
+    author    String
+    imageLink String?
+    fileLink  String?
+}
