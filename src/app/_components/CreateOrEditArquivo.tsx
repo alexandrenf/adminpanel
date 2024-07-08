@@ -283,7 +283,7 @@ const resizeAndCropImage = (imageSrc: string): Promise<string> =>
             let sourceWidth = image.width;
             let sourceHeight = image.height;
 
-            // Calculate cropping dimensions
+            // Calculate cropping dimensions!
             if (image.width > image.height) {
                 sourceX = (image.width - image.height) / 2;
                 sourceWidth = image.height;
