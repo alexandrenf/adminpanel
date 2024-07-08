@@ -116,12 +116,18 @@ const CreateOrEditArquivo = () => {
 
         if (isEditMode && arquivoId !== null) {
             try {
-                const uploadResult = await updatePhoto.mutateAsync({
-                    id: arquivoId ?? 0,
-                    image: image ?? "", // Ensure image is provided
-                    tipo,
-                    imageLink: arquivoData?.imageLink ?? "",
-                });
+                let imageUrl = arquivoData?.imageLink ?? "";
+
+                if (image && !image.startsWith("http")) {
+                    console.log(image)
+                    const uploadResult = await updatePhoto.mutateAsync({
+                        id: arquivoId ?? 0,
+                        image: image ?? "", // Ensure image is provided
+                        tipo,
+                        imageLink: arquivoData?.imageLink ?? "",
+                    });
+                    imageUrl = uploadResult.imageUrl ?? arquivoData?.imageLink;
+                }
 
                 await updateArquivo.mutateAsync({
                     id: arquivoId ?? 0,
@@ -130,7 +136,7 @@ const CreateOrEditArquivo = () => {
                     date,
                     fileLink,
                     tipo,
-                    imageLink: uploadResult.imageUrl ?? arquivoData?.imageLink,
+                    imageLink: imageUrl,
                 });
             } catch (error) {
                 console.error("Erro atualizando Arquivo", error);

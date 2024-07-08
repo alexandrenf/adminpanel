@@ -102,7 +102,7 @@ export default function NoticiasTable() {
                     <TableBody>
                         {noticias?.map((row: any) => (
                             <TableRow key={row.id}>
-                                <TableCell>{new Date(row.date).toLocaleDateString()}</TableCell>
+                                <TableCell>{new Date(row.date).toLocaleDateString('en-GB', { timeZone: 'UTC' })}</TableCell>
                                 <TableCell>{row.author}</TableCell>
                                 <TableCell>{row.title}</TableCell>
                                 <TableCell>{row.summary}</TableCell>

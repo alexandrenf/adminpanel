@@ -119,7 +119,7 @@ export default function ArquivosTable({ type, label }: ArquivosTableProps) {
                         {arquivos.map((row) => (
                             <TableRow key={row.id}>
                                 <TableCell>{row.title}</TableCell>
-                                <TableCell>{new Date(row.date).toLocaleDateString()}</TableCell>
+                                <TableCell>{new Date(row.date).toLocaleDateString('en-GB', { timeZone: 'UTC' })}</TableCell>
                                 <TableCell>{row.author}</TableCell>
                                 <TableCell>
                                     {row.imageLink ? <img src={row.imageLink} alt={row.title} width="100" loading="lazy" /> : "N/A"}
