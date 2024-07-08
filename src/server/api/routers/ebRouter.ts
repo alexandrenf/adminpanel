@@ -75,7 +75,13 @@ const deleteFileFromGitHub = async (url: string | null) => {
 
 export const ebRouter = createTRPCRouter({
     getAll: protectedProcedure.query(({ ctx }) => {
-        return ctx.db.eB.findMany();
+        return ctx.db.eB.findMany(
+            {
+                orderBy: {
+                    order: 'asc'
+                }
+            }
+        );
     }),
 
     getOne: protectedProcedure

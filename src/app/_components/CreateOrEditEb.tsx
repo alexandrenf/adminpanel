@@ -17,6 +17,7 @@ const CreateOrEditEb = () => {
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [ebId, setEbId] = useState<number | null>(null);
+    const [tryCount, setTryCount] = useState<number>(0);
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchParams = useSearchParams();
@@ -26,8 +27,8 @@ const CreateOrEditEb = () => {
     const updateFile = api.ebPhoto.updateFile.useMutation();
     const createEb = api.eb.create.useMutation({
         onError: (error) => {
-            console.error("Error creating EB:", error);
-            alert("Failed to create EB. Please check the console for more details.");
+            console.error("Error creating EB", error);
+            alert("Falha em criar esse EB. Por favor tente novamente.");
         },
         onSuccess: () => {
             router.push("/eb");
@@ -35,8 +36,8 @@ const CreateOrEditEb = () => {
     });
     const updateEb = api.eb.update.useMutation({
         onError: (error) => {
-            console.error("Error updating EB:", error);
-            alert("Failed to update EB. Please check the console for more details.");
+            console.error("Error updating EB", error);
+            alert("Falha em atualizar EB. Por favor tente novamente.");
         },
         onSuccess: () => {
             router.push("/eb");
@@ -128,15 +129,19 @@ const CreateOrEditEb = () => {
                     imageLink: uploadResult.imageUrl,
                 });
             } catch (error) {
-                console.error("Error updating EB:", error);
-                alert("Failed to update EB. Please try again.");
+                console.error("Erro atualizando EB", error);
+                alert("Falha em atualizar EB. Por favor tente novamente.");
             }
         } else {
             try {
 
                 if (latestEBId.isLoading || !latestEBId.data) {
-                    alert("Loading latest blog ID, please wait.");
-                    return;
+                    alert("Carregando último ID de EB, por favor aguarde 10 segundos e tente novamente.");
+                    if (tryCount === 1) {
+                        latestEBId.data = 30;
+                    } else {
+                        return;
+                    }
                 }
 
                 const nextId = latestEBId.data + 1;
@@ -156,7 +161,7 @@ const CreateOrEditEb = () => {
                 });
             } catch (error) {
                 console.error("Error creating EB:", error);
-                alert("Failed to create EB. Please try again.");
+                alert("Falha em criar esse EB. Por favor tente novamente.");
             }
         }
     };
@@ -169,7 +174,7 @@ const CreateOrEditEb = () => {
                 </h1>
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Name</label>
+                        <label className="block text-sm font-medium text-gray-700">Nome</label>
                         <input
                             type="text"
                             value={name}
@@ -178,7 +183,7 @@ const CreateOrEditEb = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Acronym</label>
+                        <label className="block text-sm font-medium text-gray-700">Sigla (ex: CM-D)</label>
                         <input
                             type="text"
                             value={acronym}
@@ -187,7 +192,7 @@ const CreateOrEditEb = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Role</label>
+                        <label className="block text-sm font-medium text-gray-700">Cargo por extenso</label>
                         <input
                             type="text"
                             value={role}
@@ -204,17 +209,6 @@ const CreateOrEditEb = () => {
                             className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
                         />
                     </div>
-                    {!isEditMode && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Order</label>
-                            <input
-                                type="number"
-                                value={order ?? ""}
-                                onChange={(e) => setOrder(e.target.valueAsNumber)}
-                                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                            />
-                        </div>
-                    )}
                     <div className="flex items-start space-x-4">
                         {imageSrc && (
                             <div className="w-32 h-32 bg-gray-100 border border-gray-300 flex items-center justify-center">
