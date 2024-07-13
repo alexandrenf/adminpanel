@@ -41,6 +41,9 @@ export const gestaoRouter = createTRPCRouter({
                     gestaoId: input.id,
                     type: input.tipoCargo,
                 },
+                orderBy: {
+                    order: "asc",
+                },
             });
         }),
 });

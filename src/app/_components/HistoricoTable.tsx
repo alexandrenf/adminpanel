@@ -23,6 +23,22 @@ import {
     Typography,
     SelectChangeEvent
 } from "@mui/material";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { api } from "~/trpc/react";
 import ModalComponent from './ModalComponent';
 import GestaoForm from './GestaoForm';
@@ -38,6 +54,38 @@ interface Arquivado {
     order: number;
 }
 
+type SortableItemProps = {
+    id: string;
+    children: React.ReactNode;
+};
+
+export function SortableItem({ id, children }: SortableItemProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+    } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        padding: '8px',
+        margin: '4px 0',
+        border: '1px solid #ccc',
+        borderRadius: '4px',
+        backgroundColor: '#fff',
+        cursor: 'pointer',
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+            {children}
+        </div>
+    );
+}
+
 export default function HistoricoTable() {
     const router = useRouter();
     const [selectedGestao, setSelectedGestao] = useState("");
@@ -46,6 +94,8 @@ export default function HistoricoTable() {
     const [open, setOpen] = useState(false);
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [orderModalOpen, setOrderModalOpen] = useState(false);
+    const [arquivadosOrder, setArquivadosOrder] = useState<Arquivado[]>([]);
     const { data: gestoes, refetch: refetchGestoes, isLoading: isLoadingGestoes } = api.gestao.getAll.useQuery();
     const [arquivados, setArquivados] = useState<Arquivado[]>([]);
     const { data: arquivadosData, refetch: refetchArquivados, isLoading: isLoadingArquivados } = api.gestao.getAllArquivados.useQuery(
@@ -81,11 +131,20 @@ export default function HistoricoTable() {
         }
     });
 
-    const handleGestaoChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+    const updateOrderMutation = api.arquivado.updateOrder.useMutation({
+        onSuccess: () => {
+            refetchArquivados();
+        },
+        onError: (error) => {
+            console.error(error);
+        }
+    });
+
+    const handleGestaoChange = (event: SelectChangeEvent) => {
         setSelectedGestao(event.target.value as string);
     };
 
-    const handleTipoCargoChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+    const handleTipoCargoChange = (event: SelectChangeEvent) => {
         setSelectedTipoCargo(event.target.value as string);
     };
 
@@ -130,6 +189,43 @@ export default function HistoricoTable() {
         handleCloseDialog();
     };
 
+    const openOrderModal = () => {
+        if (arquivados) {
+            setArquivadosOrder(arquivados);
+            setOrderModalOpen(true);
+        }
+    };
+
+    const closeOrderModal = () => {
+        setOrderModalOpen(false);
+    };
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: any) => {
+        const { active, over } = event;
+
+        if (active.id !== over.id) {
+            setArquivadosOrder((items) => {
+                const oldIndex = items.findIndex(item => item.id === active.id);
+                const newIndex = items.findIndex(item => item.id === over.id);
+
+                return arrayMove(items, oldIndex, newIndex);
+            });
+        }
+    };
+
+    const handleUpdateOrder = async () => {
+        const newOrder = arquivadosOrder.map((item, index) => ({ id: parseInt(item.id, 10), order: index + 1 }));
+        await updateOrderMutation.mutateAsync(newOrder);
+        closeOrderModal();
+    };
+
     useEffect(() => {
         if (selectedGestao && selectedTipoCargo) {
             refetchArquivados();
@@ -159,7 +255,7 @@ export default function HistoricoTable() {
             <Box display="flex" alignItems="center" mb={2}>
                 <FormControl variant="filled" sx={{ m: 1, minWidth: 200 }}>
                     <InputLabel>Gestão</InputLabel>
-                    <Select value={selectedGestao} onChange={(event: SelectChangeEvent) => handleGestaoChange(event as unknown as ChangeEvent<{ value: unknown }>)}>
+                    <Select value={selectedGestao} onChange={handleGestaoChange}>
                         {gestoes?.map((gestao) => (
                             <MenuItem key={gestao.id} value={gestao.id}>
                                 {`${gestao.yearStart}-${gestao.yearEnd}`}
@@ -169,7 +265,7 @@ export default function HistoricoTable() {
                 </FormControl>
                 <FormControl variant="filled" sx={{ m: 1, minWidth: 200 }}>
                     <InputLabel>Tipo de Cargo</InputLabel>
-                    <Select value={selectedTipoCargo} onChange={(event: SelectChangeEvent) => handleTipoCargoChange(event as unknown as ChangeEvent<{ value: unknown }>)}>
+                    <Select value={selectedTipoCargo} onChange={handleTipoCargoChange}>
                         <MenuItem value="EB">EB</MenuItem>
                         <MenuItem value="CR">CR</MenuItem>
                     </Select>
@@ -191,6 +287,14 @@ export default function HistoricoTable() {
                 >
                     Adicionar novo Arquivado
                 </Button>
+                <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={openOrderModal}
+                    disabled={!selectedGestao || !selectedTipoCargo}
+                >
+                    Mudar ordem
+                </Button>
             </Box>
 
             <ModalComponent
@@ -198,7 +302,7 @@ export default function HistoricoTable() {
                 onClose={handleCloseGestaoModal}
                 title="Gerenciar Gestões" onSave={function (): void {
                     throw new Error("Function not implemented.");
-                }}>
+                }}            >
                 <GestaoForm onSave={handleSaveGestao} />
                 <GestaoTable gestoes={gestoes || []} onDelete={handleDeleteGestao} />
             </ModalComponent>
@@ -222,7 +326,6 @@ export default function HistoricoTable() {
                                     <TableCell>Sigla</TableCell>
                                     <TableCell>Nome</TableCell>
                                     <TableCell>Imagem</TableCell>
-                                    <TableCell>Ordem</TableCell>
                                     <TableCell>Ações</TableCell>
                                 </TableRow>
                             </TableHead>
@@ -236,7 +339,6 @@ export default function HistoricoTable() {
                                         <TableCell>
                                             <img src={row.imageLink ?? ''} alt={row.name} width="100" loading="lazy" />
                                         </TableCell>
-                                        <TableCell>{row.order}</TableCell>
                                         <TableCell>
                                             <Button
                                                 variant="contained"
@@ -285,6 +387,39 @@ export default function HistoricoTable() {
                             Deletar
                         </Button>
                     )}
+                </DialogActions>
+            </Dialog>
+            <Dialog
+                open={orderModalOpen}
+                onClose={closeOrderModal}
+                aria-labelledby="reorder-dialog-title"
+            >
+                <DialogTitle id="reorder-dialog-title">Mudar Ordem</DialogTitle>
+                <DialogContent>
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                    >
+                        <SortableContext
+                            items={arquivadosOrder.map(item => item.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            {arquivadosOrder.map(item => (
+                                <SortableItem key={item.id} id={item.id}>
+                                    {item.role}
+                                </SortableItem>
+                            ))}
+                        </SortableContext>
+                    </DndContext>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeOrderModal} color="primary">
+                        Cancelar
+                    </Button>
+                    <Button onClick={handleUpdateOrder} color="primary">
+                        Confirmar
+                    </Button>
                 </DialogActions>
             </Dialog>
         </div>
