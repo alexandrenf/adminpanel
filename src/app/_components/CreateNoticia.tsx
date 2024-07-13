@@ -147,12 +147,12 @@ const CreateNoticia = () => {
                 alert("Failed to update noticia. Please try again.");
             }
         } else {
-            if (latestBlogId.isLoading || !latestBlogId.data) {
+            if (latestBlogId.isLoading || !latestBlogId.data === null) {
                 alert("Loading latest blog ID, please wait.");
                 return;
             }
 
-            const nextId = latestBlogId.data + 1;
+            const nextId = (latestBlogId.data ?? 0) + 1;
 
             try {
                 const finalAuthor = author === "Outros" ? otherAuthor : author;

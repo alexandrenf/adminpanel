@@ -4,6 +4,9 @@ import { fileRouter } from "~/server/api/routers/fileRouter";
 import { ebRouter } from "~/server/api/routers/ebRouter";
 import { ebPhotoRouter } from "~/server/api/routers/ebPhoto";
 import { arquivoRouter } from "~/server/api/routers/arquivoRouter";
+import { photoRouter } from "~/server/api/routers/photoRouter";
+import { gestaoRouter } from "./routers/gestaoRouter";
+import { arquivadoRouter } from "./routers/arquivadoRouter";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 
 /**
@@ -18,6 +21,9 @@ export const appRouter = createTRPCRouter({
   eb: ebRouter,
   ebPhoto: ebPhotoRouter,
   arquivo: arquivoRouter,
+  photo: photoRouter,
+  gestao: gestaoRouter,
+  arquivado: arquivadoRouter,
 });
 
 // export type definition of API

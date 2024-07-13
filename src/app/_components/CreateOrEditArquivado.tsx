@@ -2,75 +2,82 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Box, Button, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
 import { api } from "~/trpc/react";
 import Pica from "pica";
 
 const pica = new Pica();
 
-const CreateOrEditEb = () => {
+const CreateOrEditArquivado = () => {
     const [name, setName] = useState("");
     const [acronym, setAcronym] = useState("");
     const [role, setRole] = useState("");
-    const [email, setEmail] = useState("");
     const [order, setOrder] = useState<number | null>(null);
     const [image, setImage] = useState<string | null>(null);
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
-    const [ebId, setEbId] = useState<number | null>(null);
-    const [tryCount, setTryCount] = useState<number>(0);
+    const [arquivadoId, setArquivadoId] = useState<string | null>(null);
+    const [type, setType] = useState<string | null>(null);
+    const [gestaoId, setGestaoId] = useState<string | null>(null);
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchParams = useSearchParams();
 
-    const latestEBId = api.eb.latestEbId.useQuery();
+    const latestArquivadoId = api.arquivado.latestArquivadoId.useQuery();
     const uploadPhoto = api.photo.uploadPhoto.useMutation();
     const updateFile = api.photo.updatePhoto.useMutation();
-    const createEb = api.eb.create.useMutation({
+    const createArquivado = api.arquivado.create.useMutation({
         onError: (error) => {
-            console.error("Error creating EB", error);
-            alert("Falha em criar esse EB. Por favor tente novamente.");
+            console.error("Error creating Arquivado", error);
+            alert("Falha em criar esse Arquivado. Por favor tente novamente.");
         },
         onSuccess: () => {
-            router.push("/eb");
+            router.push("/historico");
         },
     });
-    const updateEb = api.eb.update.useMutation({
+    const updateArquivado = api.arquivado.update.useMutation({
         onError: (error) => {
-            console.error("Error updating EB", error);
-            alert("Falha em atualizar EB. Por favor tente novamente.");
+            console.error("Error updating Arquivado", error);
+            alert("Falha em atualizar Arquivado. Por favor tente novamente.");
         },
         onSuccess: () => {
-            router.push("/eb");
+            router.push("/historico");
         },
     });
-    const { data: ebData } = api.eb.getOne.useQuery(
-        { id: ebId ?? -1 },
+    const { data: arquivadoData } = api.arquivado.getOne.useQuery(
+        { id: parseInt(arquivadoId ?? "0", 10) },
         {
-            enabled: isEditMode && ebId !== null,
+            enabled: isEditMode && arquivadoId !== null,
         }
     );
-    const { data: maxOrder } = api.eb.getMaxOrder.useQuery();
+    const { data: maxOrder } = api.arquivado.getMaxOrder.useQuery();
+    const { data: gestoes } = api.gestao.getAll.useQuery();
 
     useEffect(() => {
         const id = searchParams.get("id");
-        if (id) {
+        const type = searchParams.get("type");
+        const gestaoId = searchParams.get("gestaoId");
+        if (id && type && gestaoId) {
             setIsEditMode(true);
-            setEbId(parseInt(id, 10));
+            setArquivadoId(id);
+            setType(type);
+            setGestaoId(gestaoId);
         } else {
             setOrder((maxOrder ?? 0) + 1);
+            setType(searchParams.get("type") ?? "EB");
+            setGestaoId(searchParams.get("gestaoId"));
         }
     }, [searchParams, maxOrder]);
 
     useEffect(() => {
-        if (ebData) {
-            setName(ebData.name);
-            setAcronym(ebData.acronym);
-            setRole(ebData.role);
-            setEmail(ebData.email);
-            setOrder(ebData.order);
-            setImageSrc(ebData.imageLink);
+        if (arquivadoData) {
+            setName(arquivadoData.name);
+            setAcronym(arquivadoData.acronym);
+            setRole(arquivadoData.role);
+            setOrder(arquivadoData.order);
+            setImageSrc(arquivadoData.imageLink);
         }
-    }, [ebData]);
+    }, [arquivadoData]);
 
     const onFileChange = async (file: File) => {
         const imageDataUrl = await readFile(file);
@@ -111,59 +118,56 @@ const CreateOrEditEb = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (isEditMode && ebId !== null) {
+        if (isEditMode && arquivadoId !== null) {
             try {
                 const uploadResult = await updateFile.mutateAsync({
-                    id: ebId ?? 0,
+                    id: parseInt(arquivadoId ?? "0", 10),
                     image,
-                    imageLink: ebData?.imageLink ?? "",
-                    tipo: "eb",
+                    imageLink: arquivadoData?.imageLink ?? "",
+                    tipo: "arquivado",
                 });
 
-                await updateEb.mutateAsync({
-                    id: ebId ?? 0,
+                await updateArquivado.mutateAsync({
+                    id: parseInt(arquivadoId ?? "0", 10),
                     name,
                     acronym,
                     role,
-                    email,
-                    order: ebData?.order ?? 0,
+                    order: arquivadoData?.order ?? 0,
                     imageLink: uploadResult.imageUrl,
+                    type: type ?? "EB",
+                    gestaoId: parseInt(gestaoId ?? "0", 10),
                 });
             } catch (error) {
-                console.error("Erro atualizando EB", error);
-                alert("Falha em atualizar EB. Por favor tente novamente.");
+                console.error("Erro atualizando Arquivado", error);
+                alert("Falha em atualizar Arquivado. Por favor tente novamente.");
             }
         } else {
             try {
-
-                if (latestEBId.isLoading || !latestEBId.data === null) {
-                    alert("Carregando último ID de EB, por favor aguarde 10 segundos e tente novamente.");
-                    if (tryCount === 1) {
-                        latestEBId.data = 30;
-                    } else {
-                        return;
-                    }
+                if (latestArquivadoId.isLoading || !latestArquivadoId.data === null) {
+                    alert("Carregando último ID de Arquivado, por favor aguarde 10 segundos e tente novamente.");
+                    return;
                 }
 
-                const nextId = (latestEBId.data ?? 0) + 1;
+                const nextId = (latestArquivadoId.data ?? 0) + 1;
 
                 const uploadResult = await uploadPhoto.mutateAsync({
                     id: nextId, // Generate a unique ID
                     image,
-                    tipo: "eb",
+                    tipo: "arquivado",
                 });
 
-                await createEb.mutateAsync({
+                await createArquivado.mutateAsync({
                     name,
                     acronym,
                     role,
-                    email,
                     order: order ?? 0,
                     imageLink: uploadResult.imageUrl,
+                    type: type ?? "EB",
+                    gestaoId: parseInt(gestaoId ?? "0", 10),
                 });
             } catch (error) {
-                console.error("Error creating EB:", error);
-                alert("Falha em criar esse EB. Por favor tente novamente.");
+                console.error("Error creating Arquivado:", error);
+                alert("Falha em criar esse Arquivado. Por favor tente novamente.");
             }
         }
     };
@@ -172,7 +176,7 @@ const CreateOrEditEb = () => {
         <div className="container mx-auto p-6">
             <div className="bg-white shadow-md rounded-lg p-8 mt-8">
                 <h1 className="text-3xl font-bold text-center text-blue-900 mb-8">
-                    {isEditMode ? "Editar EB" : "Criar novo EB"}
+                    {isEditMode ? "Editar Arquivado" : "Criar novo Arquivado"}
                 </h1>
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
@@ -181,7 +185,7 @@ const CreateOrEditEb = () => {
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-black"
                         />
                     </div>
                     <div>
@@ -190,7 +194,7 @@ const CreateOrEditEb = () => {
                             type="text"
                             value={acronym}
                             onChange={(e) => setAcronym(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-black"
                         />
                     </div>
                     <div>
@@ -199,16 +203,7 @@ const CreateOrEditEb = () => {
                             type="text"
                             value={role}
                             onChange={(e) => setRole(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Email</label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-black"
                         />
                     </div>
                     <div className="flex items-start space-x-4">
@@ -242,15 +237,15 @@ const CreateOrEditEb = () => {
                         <button
                             type="submit"
                             className="w-full bg-blue-900 text-white p-3 rounded-md hover:bg-blue-700"
-                            disabled={createEb.isPending || uploadPhoto.isPending || updateFile.isPending || updateEb.isPending}
+                            disabled={createArquivado.isPending || uploadPhoto.isPending || updateFile.isPending || updateArquivado.isPending}
                         >
                             {isEditMode
-                                ? (updateFile.isPending || updateEb.isPending)
+                                ? (updateFile.isPending || updateArquivado.isPending)
                                     ? "Atualizando..."
-                                    : "Atualizar EB"
-                                : (createEb.isPending || uploadPhoto.isPending)
+                                    : "Atualizar Arquivado"
+                                : (createArquivado.isPending || uploadPhoto.isPending)
                                     ? "Criando..."
-                                    : "Criar EB"}
+                                    : "Criar Arquivado"}
                         </button>
                     </div>
                 </form>
@@ -286,4 +281,4 @@ const resizeImage = (imageSrc: string): Promise<string> =>
         };
     });
 
-export default CreateOrEditEb;
+export default CreateOrEditArquivado;

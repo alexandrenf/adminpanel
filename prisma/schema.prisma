@@ -72,37 +72,56 @@ model VerificationToken {
 }
 
 model Blog {
-    id            Int      @id @default(autoincrement())
-    date          DateTime
-    author        String
-    title         String
-    summary       String
-    link          String
-    imageLink     String?
-    forceHomePage Boolean
-    userId        String
+    id              Int      @id @default(autoincrement())
+    date            DateTime
+    author          String
+    title           String
+    summary         String
+    link            String
+    imageLink       String?
+    forceHomePage   Boolean
+    userId          String
 
-    user          User     @relation(fields: [userId], references: [id])
+    user            User     @relation(fields: [userId], references: [id])
 
     @@index([title])
 }
 
 model EB {
-    id        Int      @id @default(autoincrement())
-    role      String
-    acronym   String
-    name      String
-    email     String
-    order     Int
-    imageLink String?
+    id          Int      @id @default(autoincrement())
+    role        String
+    acronym     String
+    name        String
+    email       String
+    order       Int
+    imageLink   String?
 }
 
 model Arquivo {
-    id        Int      @id @default(autoincrement())
-    type      String
-    title     String
-    date      DateTime
-    author    String
-    imageLink String?
-    fileLink  String?
+    id          Int      @id @default(autoincrement())
+    type        String
+    title       String
+    date        DateTime
+    author      String
+    imageLink   String?
+    fileLink    String?
+}
+
+model Gestao {
+    id          Int      @id @default(autoincrement())
+    yearStart   Int
+    yearEnd     Int
+    arquivados  Arquivado[]
+}
+
+model Arquivado {
+    id          Int      @id @default(autoincrement())
+    role        String
+    type        String
+    acronym     String
+    name        String
+    order       Int
+    imageLink   String?
+    gestaoId    Int
+    gestao      Gestao   @relation(fields: [gestaoId], references: [id], onDelete: Cascade)
 }

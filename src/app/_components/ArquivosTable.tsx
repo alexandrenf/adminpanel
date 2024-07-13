@@ -81,11 +81,11 @@ export default function ArquivosTable({ type, label }: ArquivosTableProps) {
     };
 
     const handleEdit = (id: number) => {
-        router.push(`/arquivos/${type}/create?id=${id}&edit=true`);
+        router.push(`/documentos/${type}/create?id=${id}&edit=true`);
     };
 
     const handleAdd = () => {
-        router.push(`/arquivos/${type}/create`);
+        router.push(`/documentos/${type}/create`);
     };
 
     if (error) {

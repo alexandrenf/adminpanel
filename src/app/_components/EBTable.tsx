@@ -173,11 +173,11 @@ export default function EbTable() {
                 <Table>
                     <TableHead>
                         <TableRow>
-                            <TableCell>Role</TableCell>
-                            <TableCell>Acronym</TableCell>
-                            <TableCell>Name</TableCell>
+                            <TableCell>Cargo</TableCell>
+                            <TableCell>Sigla</TableCell>
+                            <TableCell>Nome</TableCell>
                             <TableCell>Email</TableCell>
-                            <TableCell>Image</TableCell>
+                            <TableCell>Imagem</TableCell>
                             <TableCell>Ordem</TableCell>
                             <TableCell>Ações</TableCell>
                         </TableRow>
