@@ -9,7 +9,7 @@ const pica = new Pica();
 
 const CreateOrEditEb = () => {
     const [name, setName] = useState("");
-    const [acronym, setAcronym] = useState("");
+    const [acronym, setAcronym] = useState<string | undefined>(undefined);
     const [role, setRole] = useState("");
     const [email, setEmail] = useState("");
     const [order, setOrder] = useState<number | null>(null);
@@ -64,7 +64,7 @@ const CreateOrEditEb = () => {
     useEffect(() => {
         if (ebData) {
             setName(ebData.name);
-            setAcronym(ebData.acronym);
+            setAcronym(ebData?.acronym ?? "");
             setRole(ebData.role);
             setEmail(ebData.email);
             setOrder(ebData.order);

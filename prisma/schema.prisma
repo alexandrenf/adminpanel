@@ -90,7 +90,7 @@ model Blog {
 model EB {
     id          Int      @id @default(autoincrement())
     role        String
-    acronym     String
+    acronym     String?
     name        String
     email       String
     order       Int

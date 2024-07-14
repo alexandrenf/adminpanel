@@ -132,7 +132,7 @@ export const ebRouter = createTRPCRouter({
     create: protectedProcedure
         .input(z.object({
             role: z.string(),
-            acronym: z.string(),
+            acronym: z.string().optional(),
             name: z.string(),
             email: z.string(),
             order: z.number(),
@@ -148,7 +148,7 @@ export const ebRouter = createTRPCRouter({
         .input(z.object({
             id: z.number(),
             role: z.string(),
-            acronym: z.string(),
+            acronym: z.string().optional(),
             name: z.string(),
             email: z.string(),
             order: z.number(),

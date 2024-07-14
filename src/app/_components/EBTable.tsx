@@ -36,7 +36,7 @@ import { api } from "~/trpc/react";
 type Eb = {
     id: number;
     role: string;
-    acronym: string;
+    acronym: string | null;
     name: string;
     email: string;
     imageLink: string | null;
@@ -186,7 +186,7 @@ export default function EbTable() {
                         {eb?.map((row: Eb) => (
                             <TableRow key={row.id}>
                                 <TableCell>{row.role}</TableCell>
-                                <TableCell>{row.acronym}</TableCell>
+                                <TableCell>{row.acronym ? row.acronym : "Sem sigla"}</TableCell>
                                 <TableCell>{row.name}</TableCell>
                                 <TableCell>{row.email}</TableCell>
                                 <TableCell>

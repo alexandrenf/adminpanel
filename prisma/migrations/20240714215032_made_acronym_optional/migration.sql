@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `EB` MODIFY `acronym` VARCHAR(191) NULL;
