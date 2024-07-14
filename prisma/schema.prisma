@@ -95,6 +95,42 @@ model EB {
     email       String
     order       Int
     imageLink   String?
+    times       TimeRegional[]
+}
+
+model CR {
+    id          Int      @id @default(autoincrement())
+    role        String
+    acronym     String
+    name        String
+    email       String
+    order       Int
+    imageLink   String?
+    regionalID  Int
+    regional    Regional   @relation(fields: [regionalID], references: [id], onDelete: Cascade)
+}
+
+model Regional {
+    id          Int      @id @default(autoincrement())
+    name        String
+    acronym     String
+    crs         CR[]
+}
+
+model TimeRegional {
+    id          Int      @id @default(autoincrement())
+    name        String
+    ebID        Int
+    eb          EB   @relation(fields: [ebID], references: [id], onDelete: Cascade)
+    membros     MembroTime[]
+}
+
+model MembroTime {
+    id          Int      @id @default(autoincrement())
+    name        String
+    role        String
+    timeID      Int
+    time        TimeRegional   @relation(fields: [timeID], references: [id], onDelete: Cascade)
 }
 
 model Arquivo {

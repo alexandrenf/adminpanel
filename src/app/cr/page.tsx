@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { getServerAuthSession } from "~/server/auth";
+import CRTable from "~/app/_components/CRTable";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
 
-export default async function Regionais() {
+export default async function Noticias() {
     const session = await getServerAuthSession();
 
     if (!session) {
@@ -16,10 +17,11 @@ export default async function Regionais() {
         );
     } else {
         return (
-            <main className="flex flex-col min-h-screen bg-gradient-to-b from-slate-300 to-slate-50 text-black">
+
+            <main className="flex flex-col min-h-screen bg-gradient-to-b from-slate-300 to-slate-50 text-white">
                 <div className="flex-grow flex items-center justify-center">
                     <div className="container mx-auto px-6 py-12">
-                        Ainda implementando!
+                        <CRTable />
                     </div>
                 </div>
             </main>

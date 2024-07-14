@@ -44,7 +44,7 @@ const Navbar: React.FC = () => {
                     </li>
                     <li>
                         <Link legacyBehavior href="/eb">
-                            <a className="hover:underline">EB</a>
+                            <a className="hover:underline">EBs</a>
                         </Link>
                     </li>
                     <li>
@@ -58,8 +58,13 @@ const Navbar: React.FC = () => {
                         </Link>
                     </li>
                     <li>
-                        <Link legacyBehavior href="/regionais">
-                            <a className="hover:underline">Regionais</a>
+                        <Link legacyBehavior href="/cr">
+                            <a className="hover:underline">CRs</a>
+                        </Link>
+                    </li>
+                    <li>
+                        <Link legacyBehavior href="/times">
+                            <a className="hover:underline">Times</a>
                         </Link>
                     </li>
                     <li>
@@ -83,7 +88,7 @@ const Navbar: React.FC = () => {
                     </li>
                     <li>
                         <Link legacyBehavior href="/eb">
-                            <a className="block text-white hover:underline">EB</a>
+                            <a className="block text-white hover:underline">EBs</a>
                         </Link>
                     </li>
                     <li>
@@ -97,8 +102,13 @@ const Navbar: React.FC = () => {
                         </Link>
                     </li>
                     <li>
-                        <Link legacyBehavior href="/regionais">
-                            <a className="block text-white hover:underline">Regionais</a>
+                        <Link legacyBehavior href="/cr">
+                            <a className="block text-white hover:underline">CRs</a>
+                        </Link>
+                    </li>
+                    <li>
+                        <Link legacyBehavior href="/times">
+                            <a className="block text-white hover:underline">Times</a>
                         </Link>
                     </li>
                     <li>
