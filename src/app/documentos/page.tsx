@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getServerAuthSession } from "~/server/auth";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
+import { allowedTypes } from "../_components/allowedTypes";
 
 export default async function Noticias() {
     const session = await getServerAuthSession();
@@ -29,6 +30,7 @@ export default async function Noticias() {
                                 { href: "/documentos/declaracoes-de-politica", label: "Declarações de Política" },
                                 { href: "/documentos/intercambio-nac", label: "Intercâmbio Nacional" },
                                 { href: "/documentos/intercambio-internacional", label: "Intercâmbio Internacional" },
+                                { href: "/documentos/regulamento", label: "Regulamento de Intercâmbios" },
                             ].map((item, index) => (
                                 <Link href={item.href} key={index} legacyBehavior>
                                     <a className="bg-blue-500 text-white rounded-full py-4 px-8 flex items-center justify-center shadow-md hover:bg-blue-600 transition-all transform hover:-translate-y-1">

@@ -7,4 +7,5 @@ export const allowedTypes = [
     { href: "declaracoes-de-politica", label: "Declarações de Política" },
     { href: "intercambio-nac", label: "Intercâmbio Nacional" },
     { href: "intercambio-internacional", label: "Intercâmbio Internacional" },
+    { href: "regulamento", label: "Regulamento de Intercâmbios" },
 ];
