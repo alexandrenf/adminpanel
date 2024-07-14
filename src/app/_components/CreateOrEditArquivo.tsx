@@ -39,7 +39,7 @@ const CreateOrEditArquivo = () => {
             alert("Falha em criar esse Arquivo. Por favor tente novamente.");
         },
         onSuccess: () => {
-            router.push(`/arquivos/${tipo}`);
+            router.push(`/documentos/${tipo}`);
         },
     });
     const updateArquivo = api.arquivo.update.useMutation({
@@ -48,7 +48,7 @@ const CreateOrEditArquivo = () => {
             alert("Falha em atualizar Arquivo. Por favor tente novamente.");
         },
         onSuccess: () => {
-            router.push(`/arquivos/${tipo}`);
+            router.push(`/documentos/${tipo}`);
         },
     });
     const { data: arquivoData } = api.arquivo.getOne.useQuery(
