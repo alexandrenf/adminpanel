@@ -95,7 +95,8 @@ model EB {
     email       String
     order       Int
     imageLink   String?
-    times       TimeRegional[]
+    timeID      Int?
+    time        TimeRegional? @relation(fields: [timeID], references: [id], onDelete: Cascade)
 }
 
 model CR {
@@ -120,8 +121,8 @@ model Regional {
 model TimeRegional {
     id          Int      @id @default(autoincrement())
     name        String
-    ebID        Int
-    eb          EB   @relation(fields: [ebID], references: [id], onDelete: Cascade)
+    type        String
+    ebs         EB[]
     membros     MembroTime[]
 }
 
@@ -129,6 +130,7 @@ model MembroTime {
     id          Int      @id @default(autoincrement())
     name        String
     role        String
+    imageLink   String?
     timeID      Int
     time        TimeRegional   @relation(fields: [timeID], references: [id], onDelete: Cascade)
 }

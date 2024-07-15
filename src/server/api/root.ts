@@ -7,6 +7,7 @@ import { arquivoRouter } from "~/server/api/routers/arquivoRouter";
 import { photoRouter } from "~/server/api/routers/photoRouter";
 import { gestaoRouter } from "./routers/gestaoRouter";
 import { arquivadoRouter } from "./routers/arquivadoRouter";
+import { timesRouter } from "./routers/timesRouter";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { crRouter } from "./routers/crRouter";
 import { regionalRouter } from "./routers/regionalRouter";
@@ -28,6 +29,7 @@ export const appRouter = createTRPCRouter({
   arquivado: arquivadoRouter,
   cr: crRouter,
   regional: regionalRouter,
+  times: timesRouter,
 });
 
 // export type definition of API
