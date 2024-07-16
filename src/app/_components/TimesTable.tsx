@@ -116,7 +116,7 @@ export default function TimesTable({ type, label }: TimesTableProps) {
                 onClick={handleAdd}
                 className="mb-6"
             >
-                Adicionar {label}
+                Adicionar membro {type.toUpperCase()}
             </Button>
             <Paper style={{ marginTop: "20px", overflowX: "auto" }}>
                 <Table>

@@ -4,12 +4,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import TimesTable from "~/app/_components/TimesTable";
 
-type ArquivosTableWrapperProps = {
+type TimesTableWrapperProps = {
     type: string;
     label: string;
 };
 
-export default function ArquivosTableWrapper({ type, label }: ArquivosTableWrapperProps) {
+export default function TimesTableWrapper({ type, label }: TimesTableWrapperProps) {
     const router = useRouter();
 
     useEffect(() => {

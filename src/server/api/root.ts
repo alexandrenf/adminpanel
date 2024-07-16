@@ -11,6 +11,7 @@ import { timesRouter } from "./routers/timesRouter";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { crRouter } from "./routers/crRouter";
 import { regionalRouter } from "./routers/regionalRouter";
+import { configRouter } from "./routers/configRouter";
 
 /**
  * This is the primary router for your server.
@@ -30,6 +31,7 @@ export const appRouter = createTRPCRouter({
   cr: crRouter,
   regional: regionalRouter,
   times: timesRouter,
+  config: configRouter,
 });
 
 // export type definition of API

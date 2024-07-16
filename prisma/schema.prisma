@@ -163,3 +163,17 @@ model Arquivado {
     gestaoId    Int
     gestao      Gestao   @relation(fields: [gestaoId], references: [id], onDelete: Cascade)
 }
+
+model Config {
+    id              Int      @id @default(autoincrement())
+    toggleDate      Boolean?
+    dateStart       DateTime?
+    dateEnd         DateTime?
+    toggleMessage   Boolean?
+    message         String?
+    toggleButton    Boolean?
+    buttonText      String?
+    buttonUrl       String?
+    toggleColor     Boolean?
+    color           String?
+}
