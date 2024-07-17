@@ -8,27 +8,26 @@ import {
 
 export const configRouter = createTRPCRouter({
 
-    get: protectedProcedure
+  get: protectedProcedure
     .query(async ({ ctx }) => {
-        return ctx.db.config.findMany();
-        }),
+      return ctx.db.config.findMany();
+    }),
 
-  update: protectedProcedure 
-  .input(z.object({
-    id: z.number(),
-    toggleDate: z.boolean().optional(),
-    dateStart: z.string().optional(),
-    dateEnd: z.string().optional(),
-    toggleMessage: z.boolean().optional(),
-    message: z.string().optional(),
-    toggleButton: z.boolean().optional(),
-    buttonText: z.string().optional(),
-    buttonUrl: z.string().optional(),
-    toggleColor: z.boolean().optional(),
-    color: z.string().optional(),    
-  }))
-  .mutation(async ({ input, ctx }) => {
-    return ctx.db.config.update({
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      toggleDate: z.boolean().optional(),
+      dateStart: z.string().optional(),
+      dateEnd: z.string().optional(),
+      toggleMessage: z.boolean().optional(),
+      message: z.string().optional(),
+      toggleButton: z.boolean().optional(),
+      buttonText: z.string().optional(),
+      buttonUrl: z.string().optional(),
+      title: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.db.config.update({
         where: { id: input.id },
         data: {
           toggleDate: input.toggleDate,
@@ -39,10 +38,9 @@ export const configRouter = createTRPCRouter({
           toggleButton: input.toggleButton,
           buttonText: input.buttonText,
           buttonUrl: input.buttonUrl,
-          toggleColor: input.toggleColor,
-          color: input.color,
+          title: input.title,
         },
-  })
-}),
+      })
+    }),
 });
 

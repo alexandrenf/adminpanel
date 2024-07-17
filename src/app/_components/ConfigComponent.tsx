@@ -16,8 +16,7 @@ export default function ConfigComponent() {
     toggleButton: false,
     buttonText: '',
     buttonUrl: '',
-    toggleColor: false,
-    color: ''
+    title: ''
   });
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -38,8 +37,7 @@ export default function ConfigComponent() {
         toggleButton: firstConfig?.toggleButton || false,
         buttonText: firstConfig?.buttonText || '',
         buttonUrl: firstConfig?.buttonUrl || '',
-        toggleColor: firstConfig?.toggleColor || false,
-        color: firstConfig?.color || '',
+        title: firstConfig?.title || '',
       });
     }
   }, [initialConfig]);
@@ -192,29 +190,12 @@ export default function ConfigComponent() {
               fullWidth
             />
           </Grid>
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Switch
-                  id="toggleColor"
-                  checked={config.toggleColor}
-                  onChange={handleChange}
-                />
-              }
-              label={
-                <div>
-                  <Typography variant="subtitle1">Cor de Fundo do Aviso</Typography>
-                  <Typography variant="body2" color="textSecondary">Habilite para definir uma cor de fundo personalizada.</Typography>
-                </div>
-              }
-              labelPlacement="start"
-            />
-          </Grid>
+
           <Grid item xs={12}>
             <TextField
-              label="Cor de Fundo"
-              id="color"
-              value={config.color}
+              label="Título"
+              id="title"
+              value={config.title}
               onChange={handleChange}
               fullWidth
             />
