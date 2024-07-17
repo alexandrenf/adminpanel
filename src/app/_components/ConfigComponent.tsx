@@ -123,6 +123,15 @@ export default function ConfigComponent() {
             />
           </Grid>
           <Grid item xs={12}>
+            <TextField
+              label="Título"
+              id="title"
+              value={config.title}
+              onChange={handleChange}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={12}>
             <FormControlLabel
               control={
                 <Switch
@@ -191,15 +200,7 @@ export default function ConfigComponent() {
             />
           </Grid>
 
-          <Grid item xs={12}>
-            <TextField
-              label="Título"
-              id="title"
-              value={config.title}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
+
         </Grid>
       </CardContent>
       <CardActions style={{ justifyContent: 'flex-end', gap: '1rem' }}>
