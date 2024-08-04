@@ -45,27 +45,37 @@ export default function TimesTable({ type, label }: TimesTableProps) {
     const [deleteId, setDeleteId] = useState<number | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
-    const { data, error, refetch } = api.times.getByType.useQuery({ type }, { enabled: true });
-    const { data: dataMembro, error: errorMembro, refetch: refetchMembro } = api.times.getMembros.useQuery(
-        { id: time[0]?.id ?? -1 },
-        { enabled: time.length > 0 }
+    const { data: timeData, error: timeError, refetch: refetchTime } = api.times.getByType.useQuery({ type });
+
+    const [membroQueryId, setMembroQueryId] = useState<number | null>(null);
+
+    const { data: membrosData, error: membrosError, refetch: refetchMembros } = api.times.getMembros.useQuery(
+        { id: membroQueryId ?? -1 },
+        { enabled: membroQueryId !== null }
     );
 
     useEffect(() => {
-        if (data) {
-            setTime(data);
+        if (timeData) {
+            setTime(timeData);
+            if (timeData.length > 0) {
+                const firstTime = timeData[0];
+                if (firstTime) {
+                    setMembroQueryId(firstTime.id - 1);
+                }
+            }
         }
-    }, [data]);
+    }, [timeData]);
 
     useEffect(() => {
-        if (dataMembro) {
-            setMembros(dataMembro);
+        if (membrosData) {
+            setMembros(membrosData);
         }
-    }, [dataMembro]);
+    }, [membrosData]);
 
     const deleteMutation = api.times.delete.useMutation({
         onSuccess: () => {
-            refetch();
+            refetchTime();
+            refetchMembros();
         },
         onError: (error) => {
             setDeleteError(error.message);
@@ -103,7 +113,7 @@ export default function TimesTable({ type, label }: TimesTableProps) {
         router.push(`/times/${type}/create`);
     };
 
-    if (error) {
+    if (timeError || membrosError) {
         return <p>Error loading data...</p>;
     }
 
