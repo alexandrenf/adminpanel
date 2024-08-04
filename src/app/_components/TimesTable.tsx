@@ -50,7 +50,7 @@ export default function TimesTable({ type, label }: TimesTableProps) {
     const [membroQueryId, setMembroQueryId] = useState<number | null>(null);
 
     const { data: membrosData, error: membrosError, refetch: refetchMembros } = api.times.getMembros.useQuery(
-        { id: membroQueryId ?? -1 },
+        { id: membroQueryId },
         { enabled: membroQueryId !== null }
     );
 
@@ -60,7 +60,7 @@ export default function TimesTable({ type, label }: TimesTableProps) {
             if (timeData.length > 0) {
                 const firstTime = timeData[0];
                 if (firstTime) {
-                    setMembroQueryId(firstTime.id - 1);
+                    setMembroQueryId(firstTime.id);
                 }
             }
         }

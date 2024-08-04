@@ -31,6 +31,7 @@ const CreateOrEditMembroTime = () => {
     const latestMembroId = api.times.latestTimeMembroId.useQuery();
     const uploadPhoto = api.photo.uploadPhoto.useMutation();
     const updatePhoto = api.photo.updatePhoto.useMutation();
+    const timeType = api.times.getByType.useQuery({ type: tipo });
     const createMembro = api.times.createTimeMembro.useMutation({
         onError: (error: any) => {
             console.error("Error creating Membro", error);
@@ -152,7 +153,7 @@ const CreateOrEditMembroTime = () => {
                     name,
                     role,
                     imageLink: uploadResult.imageUrl,
-                    timeID: nextId,
+                    timeID: timeType.data?.[0]?.id ?? 0,
                 });
             } catch (error) {
                 console.error("Error creating Membro:", error);
