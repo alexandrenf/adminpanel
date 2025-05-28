@@ -215,12 +215,7 @@ export default function TimesTable({ type, label }: TimesTableProps) {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
-                                                {membro.imageLink ? (
-                                                    <div className="flex items-center space-x-2">
-                                                        <ImageIcon className="w-4 h-4 text-green-600" />
-                                                        <span className="text-sm text-green-600 font-medium">Disponível</span>
-                                                    </div>
-                                                ) : (
+                                                {!membro.imageLink && (
                                                     <div className="flex items-center space-x-2">
                                                         <ImageIcon className="w-4 h-4 text-gray-400" />
                                                         <span className="text-sm text-gray-500">Não disponível</span>

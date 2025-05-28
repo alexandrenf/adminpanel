@@ -193,10 +193,6 @@ export default function ArquivosTable({ type, label }: ArquivosTableProps) {
                                                             className="w-12 h-12 object-cover rounded-lg border"
                                                             loading="lazy" 
                                                         />
-                                                        <div className="flex items-center space-x-1">
-                                                            <ImageIcon className="w-4 h-4 text-green-600" />
-                                                            <span className="text-xs text-green-600 font-medium">Disponível</span>
-                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <div className="flex items-center space-x-2">
