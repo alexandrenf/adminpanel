@@ -57,7 +57,7 @@ const Navbar: React.FC = () => {
     }
 
     const navLinks = [
-        { href: "/comites-locais", label: "Comitês Locais", icon: Users },
+        { href: "/comites-locais", label: "LCs", icon: Users },
         { href: "/noticias", label: "Notícias", icon: Newspaper },
         { href: "/eb", label: "EBs", icon: UserCheck },
         { href: "/documentos", label: "Documentos", icon: FileText },
@@ -83,9 +83,6 @@ const Navbar: React.FC = () => {
                     {/* Logo */}
                     <div className="flex-shrink-0 flex items-center">
                         <Link href="/" className="flex items-center space-x-3 group">
-                            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg group-hover:shadow-xl transition-all duration-300">
-                                <Shield className="w-6 h-6 text-white" />
-                            </div>
                             <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
                                 Admin Panel
                             </span>
