@@ -17,6 +17,7 @@ export const registrosRouter = createTRPCRouter({
 
     // If no record exists, create one with a default URL
     if (!registros) {
+      console.log("No registros record found, creating new one");
       registros = await ctx.db.registros.create({
         data: {
           url: "", // Empty URL as default
@@ -31,6 +32,8 @@ export const registrosRouter = createTRPCRouter({
           },
         },
       });
+    } else {
+      console.log("Found registros record with URL:", registros.url);
     }
 
     return registros;
@@ -44,6 +47,7 @@ export const registrosRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      console.log("Updating URL:", input.url);
 
       // Format Google Drive URL to CSV format
       // Regex to capture fileId and optionally gid
@@ -52,6 +56,7 @@ export const registrosRouter = createTRPCRouter({
       const match = input.url.match(regex);
 
       if (!match || !match[1]) { // Ensure fileId is captured
+        console.error("Invalid Google Drive URL:", input.url);
         throw new Error("Invalid Google Drive URL. Could not extract File ID.");
       }
       const fileId = match[1];
@@ -61,6 +66,8 @@ export const registrosRouter = createTRPCRouter({
       if (gid) {
         csvUrl += `&gid=${gid}`;
       }
+      
+      console.log("Generated CSV URL:", csvUrl);
       
       // Update or create the record
       const registros = await ctx.db.registros.upsert({
@@ -83,6 +90,7 @@ export const registrosRouter = createTRPCRouter({
         },
       });
 
+      console.log("Updated registros record:", registros);
       return registros;
     }),
 }); 

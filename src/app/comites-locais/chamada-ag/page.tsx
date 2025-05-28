@@ -91,53 +91,91 @@ export default function ChamadaAGPage() {
     useEffect(() => {
         const fetchCSVData = async () => {
             if (!registrosData) {
+                console.log("No registros data available");
                 setError("URL do CSV não configurada");
                 setLoading(false);
                 return;
             }
 
             if (!registrosData.url) {
+                console.log("No URL in registros data");
                 setError("URL do CSV não configurada");
                 setLoading(false);
                 return;
             }
 
             try {
+                console.log("Fetching CSV from URL:", registrosData.url);
                 const response = await fetch(registrosData.url);
                 if (!response.ok) {
-                    throw new Error("Erro ao buscar dados do CSV");
+                    console.error("Failed to fetch CSV:", response.status, response.statusText);
+                    throw new Error(`Erro ao buscar dados do CSV: ${response.status} ${response.statusText}`);
                 }
                 
                 const csvText = await response.text();
-                const lines = csvText.split('\n').filter(line => line.trim());
+                console.log("CSV content length:", csvText.length);
+                console.log("First 100 characters of CSV:", csvText.substring(0, 100));
+                
+                if (!csvText.trim()) {
+                    console.error("Empty CSV content");
+                    throw new Error("O arquivo CSV está vazio");
+                }
+
+                // Handle potential BOM and different line endings
+                const cleanText = csvText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+                const lines = cleanText.split('\n').filter(line => line.trim());
+                console.log("Number of lines in CSV:", lines.length);
+                
+                if (lines.length < 2) {
+                    console.error("CSV has no data lines");
+                    throw new Error("O arquivo CSV não contém dados");
+                }
                 
                 // Skip header line
                 const dataLines = lines.slice(1);
+                console.log("First data line:", dataLines[0]);
                 
-                const comites: ComiteLocal[] = dataLines.map(line => {
-                    const columns = line.split(',').map(col => col.trim().replace(/"/g, ''));
-                    
-                    // Normalize the status text for comparison
-                    const normalizedStatus = (columns[5] || '').toLowerCase()
-                        .normalize('NFD')
-                        .replace(/[\u0300-\u036f]/g, '') // Remove accents
-                        .replace(/[^a-z0-9]/g, '') // Remove special characters
-                        .trim();
-                    
-                    // Check if the normalized status contains "pleno"
-                    const isPleno = normalizedStatus.includes('pleno');
-                    
-                    return {
-                        name: columns[0] || '',
-                        escola: columns[1] || '',
-                        regional: columns[2] || '',
-                        cidade: columns[3] || '',
-                        uf: columns[4] || '',
-                        status: (isPleno ? 'Pleno' : 'Não-pleno') as "Pleno" | "Não-pleno",
-                        agFiliacao: columns[6] || '',
-                        attendance: "not-counting" as AttendanceState
-                    };
-                }).filter(comite => comite.name); // Filter out empty names
+                const comites: ComiteLocal[] = dataLines.map((line, index) => {
+                    try {
+                        // Handle potential quoted fields
+                        const columns = line.split(',').map(col => {
+                            const trimmed = col.trim();
+                            // Remove quotes if they wrap the entire field
+                            return trimmed.startsWith('"') && trimmed.endsWith('"') 
+                                ? trimmed.slice(1, -1).trim() 
+                                : trimmed;
+                        });
+                        
+                        console.log(`Processing line ${index + 1}:`, columns);
+                        
+                        // Normalize the status text for comparison
+                        const normalizedStatus = (columns[5] || '').toLowerCase()
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '') // Remove accents
+                            .replace(/[^a-z0-9]/g, '') // Remove special characters
+                            .trim();
+                        
+                        // Check if the normalized status contains "pleno"
+                        const isPleno = normalizedStatus.includes('pleno');
+                        
+                        return {
+                            name: columns[0] || '',
+                            escola: columns[1] || '',
+                            regional: columns[2] || '',
+                            cidade: columns[3] || '',
+                            uf: columns[4] || '',
+                            status: (isPleno ? 'Pleno' : 'Não-pleno') as "Pleno" | "Não-pleno",
+                            agFiliacao: columns[6] || '',
+                            attendance: "not-counting" as AttendanceState
+                        };
+                    } catch (err) {
+                        console.error(`Error processing line ${index + 1}:`, err);
+                        return null;
+                    }
+                }).filter((comite): comite is ComiteLocal => comite !== null && comite.name !== '');
+
+                console.log("Number of comites parsed:", comites.length);
+                console.log("First comite:", comites[0]);
 
                 // Sort alphabetically by name
                 comites.sort((a, b) => a.name.localeCompare(b.name));
@@ -146,7 +184,7 @@ export default function ChamadaAGPage() {
                 setLoading(false);
             } catch (err) {
                 console.error("Error fetching CSV:", err);
-                setError("Erro ao carregar dados do CSV");
+                setError(err instanceof Error ? err.message : "Erro ao carregar dados do CSV");
                 setLoading(false);
             }
         };
