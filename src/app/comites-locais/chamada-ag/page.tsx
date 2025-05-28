@@ -26,8 +26,8 @@ import { api } from "~/trpc/react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { useSession } from "next-auth/react";
-import { api as convexApi } from "convex/_generated/api";
-import type { Id } from "convex/_generated/dataModel";
+import { api as convexApi } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
