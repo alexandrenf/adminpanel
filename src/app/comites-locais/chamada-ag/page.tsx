@@ -107,51 +107,41 @@ export default function ChamadaAGPage() {
             }
 
             if (!registrosData) {
-                console.log("No registros data available");
                 setError("URL do CSV não configurada");
                 setLoading(false);
                 return;
             }
 
             if (!registrosData.url) {
-                console.log("No URL in registros data");
                 setError("URL do CSV não configurada");
                 setLoading(false);
                 return;
             }
 
             try {
-                console.log("Fetching CSV from URL:", registrosData.url);
                 const response = await fetch(registrosData.url, {
                     redirect: 'follow',
                 });
                 if (!response.ok) {
-                    console.error("Failed to fetch CSV:", response.status, response.statusText);
                     throw new Error(`Erro ao buscar dados do CSV: ${response.status} ${response.statusText}`);
                 }
                 
                 const csvText = await response.text();
-                console.log("CSV content length:", csvText.length);
-                console.log("First 100 characters of CSV:", csvText.substring(0, 100));
                 
                 if (!csvText.trim()) {
-                    console.error("Empty CSV content");
                     throw new Error("O arquivo CSV está vazio");
                 }
 
                 // Handle potential BOM and different line endings
                 const cleanText = csvText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
                 const lines = cleanText.split('\n').filter(line => line.trim());
-                console.log("Number of lines in CSV:", lines.length);
                 
                 if (lines.length < 2) {
-                    console.error("CSV has no data lines");
                     throw new Error("O arquivo CSV não contém dados");
                 }
                 
                 // Skip header line
                 const dataLines = lines.slice(1);
-                console.log("First data line:", dataLines[0]);
                 
                 const comites: ComiteLocal[] = dataLines.map((line, index) => {
                     try {
@@ -163,8 +153,6 @@ export default function ChamadaAGPage() {
                                 ? trimmed.slice(1, -1).trim() 
                                 : trimmed;
                         });
-                        
-                        console.log(`Processing line ${index + 1}:`, columns);
                         
                         // Normalize the status text for comparison
                         const statusText = (columns[5] || '').toLowerCase()
@@ -192,13 +180,9 @@ export default function ChamadaAGPage() {
                             attendance: "not-counting" as AttendanceState
                         };
                     } catch (err) {
-                        console.error(`Error processing line ${index + 1}:`, err);
                         return null;
                     }
                 }).filter((comite): comite is ComiteLocal => comite !== null && comite.name !== '');
-
-                console.log("Number of comites parsed:", comites.length);
-                console.log("First comite:", comites[0]);
 
                 // Sort alphabetically by name
                 comites.sort((a, b) => a.name.localeCompare(b.name));
@@ -206,7 +190,6 @@ export default function ChamadaAGPage() {
                 setComitesLocais(comites);
                 setLoading(false);
             } catch (err) {
-                console.error("Error fetching CSV:", err);
                 setError(err instanceof Error ? err.message : "Erro ao carregar dados do CSV");
                 setLoading(false);
             }
