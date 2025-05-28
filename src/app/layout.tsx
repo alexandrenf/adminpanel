@@ -7,6 +7,7 @@ import { getServerAuthSession } from "~/server/auth";
 import Navbar from "./_components/Navbar";
 import Loading from "~/app/_components/Loading";
 import { Providers } from "./_components/Providers";
+import { Toaster } from "../components/ui/toaster";
 
 export const metadata = {
   title: "Painel de Administrador da IFMSA Brazil",
@@ -39,6 +40,7 @@ export default async function RootLayout({
           <Suspense fallback={<Loading />}>
             {children}
           </Suspense>
+          <Toaster />
         </Providers>
       </body>
     </html>

@@ -2,12 +2,25 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '~/trpc/react';
-import { Card, CardHeader, CardContent, CardActions, Typography, Grid, TextField, Switch, Button, FormControlLabel, Snackbar, CircularProgress } from '@mui/material';
-import Alert from '@mui/material/Alert';
+import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Textarea } from "../../components/ui/textarea";
+import { Switch } from "../../components/ui/switch";
+import { useToast } from "../../hooks/use-toast";
+import { 
+  Settings, 
+  Calendar, 
+  MessageSquare, 
+  Link as LinkIcon, 
+  Save,
+  Loader2
+} from "lucide-react";
 
 export default function ConfigComponent() {
   const [config, setConfig] = useState({
-    id: 1,  // Assuming there's only one config item and its ID is 1
+    id: 1,
     toggleDate: false,
     dateStart: '',
     dateEnd: '',
@@ -19,7 +32,7 @@ export default function ConfigComponent() {
     title: ''
   });
   const [isSaving, setIsSaving] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+  const { toast } = useToast();
 
   const { data: initialConfig, isLoading } = api.config.get.useQuery();
   const updateConfigMutation = api.config.update.useMutation();
@@ -42,11 +55,17 @@ export default function ConfigComponent() {
     }
   }, [initialConfig]);
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value, type, checked } = event.target;
+  const handleInputChange = (field: string, value: string) => {
     setConfig((prevConfig) => ({
       ...prevConfig,
-      [id]: type === 'checkbox' ? checked : value
+      [field]: value
+    }));
+  };
+
+  const handleSwitchChange = (field: string, checked: boolean) => {
+    setConfig((prevConfig) => ({
+      ...prevConfig,
+      [field]: checked
     }));
   };
 
@@ -59,165 +78,207 @@ export default function ConfigComponent() {
     };
 
     updateConfigMutation.mutate(updatedConfig, {
-      onSuccess: (response) => {
+      onSuccess: () => {
         setIsSaving(false);
-        setSuccessMessage('Configuração salva com sucesso!');
+        toast({
+          title: "Configuração salva!",
+          description: "As configurações foram atualizadas com sucesso.",
+        });
       },
       onError: (error) => {
         setIsSaving(false);
+        toast({
+          title: "Erro ao salvar",
+          description: "Ocorreu um erro ao salvar as configurações. Tente novamente.",
+          variant: "destructive",
+        });
         console.error('Erro ao salvar configuração:', error);
       }
     });
   };
 
   if (isLoading) {
-    return <div>Carregando...</div>;
+    return (
+      <Card className="w-full max-w-4xl mx-auto">
+        <CardContent className="flex items-center justify-center py-12">
+          <div className="flex items-center space-x-3">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            <span className="text-lg font-medium text-gray-700">Carregando configurações...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
-    <Card style={{ width: '100%', maxWidth: '4xl' }}>
-      <CardHeader
-        title="Configuração de Aviso"
-        subheader="Configure os detalhes do aviso."
-      />
-      <CardContent>
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Switch
-                  id="toggleDate"
-                  checked={config.toggleDate}
-                  onChange={handleChange}
-                />
-              }
-              label={
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center space-x-4">
+        <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+          <Settings className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
+            Configurações do Sistema
+          </h2>
+          <p className="text-gray-600">Configure avisos e notificações do sistema</p>
+        </div>
+      </div>
+
+      <Card className="w-full max-w-4xl shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <MessageSquare className="w-5 h-5 text-blue-600" />
+            <span>Configuração de Avisos</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-8">
+          {/* Date Configuration */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <Calendar className="w-5 h-5 text-blue-600" />
                 <div>
-                  <Typography variant="subtitle1">Agendar Aviso</Typography>
-                  <Typography variant="body2" color="textSecondary">Habilite para definir datas de início e término.</Typography>
+                  <Label className="text-base font-semibold">Agendar Aviso</Label>
+                  <p className="text-sm text-gray-600">Habilite para definir datas de início e término</p>
                 </div>
-              }
-              labelPlacement="start"
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Data de Início"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              id="dateStart"
-              value={config.dateStart}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Data de Término"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              id="dateEnd"
-              value={config.dateEnd}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Título"
+              </div>
+              <Switch
+                checked={config.toggleDate}
+                onCheckedChange={(checked) => handleSwitchChange('toggleDate', checked)}
+              />
+            </div>
+            
+            {config.toggleDate && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-8">
+                <div className="space-y-2">
+                  <Label htmlFor="dateStart">Data de Início</Label>
+                  <Input
+                    id="dateStart"
+                    type="date"
+                    value={config.dateStart}
+                    onChange={(e) => handleInputChange('dateStart', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dateEnd">Data de Término</Label>
+                  <Input
+                    id="dateEnd"
+                    type="date"
+                    value={config.dateEnd}
+                    onChange={(e) => handleInputChange('dateEnd', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Title Configuration */}
+          <div className="space-y-2">
+            <Label htmlFor="title" className="text-base font-semibold">Título do Aviso</Label>
+            <Input
               id="title"
+              placeholder="Digite o título do aviso"
               value={config.title}
-              onChange={handleChange}
-              fullWidth
+              onChange={(e) => handleInputChange('title', e.target.value)}
             />
-          </Grid>
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Switch
-                  id="toggleMessage"
-                  checked={config.toggleMessage}
-                  onChange={handleChange}
-                />
-              }
-              label={
-                <div>
-                  <Typography variant="subtitle1">Mensagem do Aviso</Typography>
-                  <Typography variant="body2" color="textSecondary">Habilite para definir a mensagem do aviso.</Typography>
-                </div>
-              }
-              labelPlacement="start"
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Mensagem"
-              placeholder="Digite sua mensagem de aviso"
-              id="message"
-              value={config.message}
-              onChange={handleChange}
-              multiline
-              rows={4}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Switch
-                  id="toggleButton"
-                  checked={config.toggleButton}
-                  onChange={handleChange}
-                />
-              }
-              label={
-                <div>
-                  <Typography variant="subtitle1">Botão do Aviso</Typography>
-                  <Typography variant="body2" color="textSecondary">Habilite para personalizar o botão.</Typography>
-                </div>
-              }
-              labelPlacement="start"
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Texto do Botão"
-              placeholder="Saiba Mais"
-              id="buttonText"
-              value={config.buttonText}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="URL do Botão"
-              placeholder="https://exemplo.com"
-              id="buttonUrl"
-              value={config.buttonUrl}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
+          </div>
 
+          {/* Message Configuration */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <MessageSquare className="w-5 h-5 text-blue-600" />
+                <div>
+                  <Label className="text-base font-semibold">Mensagem do Aviso</Label>
+                  <p className="text-sm text-gray-600">Habilite para definir a mensagem do aviso</p>
+                </div>
+              </div>
+              <Switch
+                checked={config.toggleMessage}
+                onCheckedChange={(checked) => handleSwitchChange('toggleMessage', checked)}
+              />
+            </div>
+            
+            {config.toggleMessage && (
+              <div className="space-y-2 pl-8">
+                <Label htmlFor="message">Mensagem</Label>
+                <Textarea
+                  id="message"
+                  placeholder="Digite sua mensagem de aviso"
+                  value={config.message}
+                  onChange={(e) => handleInputChange('message', e.target.value)}
+                  rows={4}
+                />
+              </div>
+            )}
+          </div>
 
-        </Grid>
-      </CardContent>
-      <CardActions style={{ justifyContent: 'flex-end', gap: '1rem' }}>
-        <Button variant="outlined">Cancelar</Button>
-        <Button variant="contained" onClick={handleSave} disabled={isSaving}>
-          {isSaving ? <CircularProgress size={24} /> : 'Salvar Alterações'}
-        </Button>
-      </CardActions>
-      <Snackbar
-        open={Boolean(successMessage)}
-        autoHideDuration={6000}
-        onClose={() => setSuccessMessage('')}
-      >
-        <Alert onClose={() => setSuccessMessage('')} severity="success">
-          {successMessage}
-        </Alert>
-      </Snackbar>
-    </Card>
+          {/* Button Configuration */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <LinkIcon className="w-5 h-5 text-blue-600" />
+                <div>
+                  <Label className="text-base font-semibold">Botão do Aviso</Label>
+                  <p className="text-sm text-gray-600">Habilite para personalizar o botão</p>
+                </div>
+              </div>
+              <Switch
+                checked={config.toggleButton}
+                onCheckedChange={(checked) => handleSwitchChange('toggleButton', checked)}
+              />
+            </div>
+            
+            {config.toggleButton && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-8">
+                <div className="space-y-2">
+                  <Label htmlFor="buttonText">Texto do Botão</Label>
+                  <Input
+                    id="buttonText"
+                    placeholder="Saiba Mais"
+                    value={config.buttonText}
+                    onChange={(e) => handleInputChange('buttonText', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="buttonUrl">URL do Botão</Label>
+                  <Input
+                    id="buttonUrl"
+                    placeholder="https://exemplo.com"
+                    value={config.buttonUrl}
+                    onChange={(e) => handleInputChange('buttonUrl', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end space-x-4 pt-6 border-t">
+            <Button variant="outline" disabled={isSaving}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSave} 
+              disabled={isSaving}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Salvar Alterações
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
