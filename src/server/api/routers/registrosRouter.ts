@@ -3,7 +3,8 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 
 export const registrosRouter = createTRPCRouter({
   get: protectedProcedure.query(async ({ ctx }) => {
-    const registros = await ctx.db.registros.findFirst({
+    // First try to find an existing record
+    let registros = await ctx.db.registros.findFirst({
       include: {
         updatedBy: {
           select: {
@@ -13,6 +14,25 @@ export const registrosRouter = createTRPCRouter({
         },
       },
     });
+
+    // If no record exists, create one with a default URL
+    if (!registros) {
+      registros = await ctx.db.registros.create({
+        data: {
+          url: "", // Empty URL as default
+          updatedById: ctx.session.user.id,
+        },
+        include: {
+          updatedBy: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+    }
+
     return registros;
   }),
 
