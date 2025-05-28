@@ -18,11 +18,12 @@ import {
     Download,
     Upload,
     RotateCcw,
-    Save
+    Save,
+    Search
 } from "lucide-react";
 import { api } from "~/trpc/react";
 
-type AttendanceState = "present" | "absent" | "not-counting";
+type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
 type ComiteLocal = {
     name: string;
@@ -65,6 +66,7 @@ export default function ChamadaAGPage() {
     const [crMembers, setCrMembers] = useState<CrMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
 
     // Fetch data
     const { data: registrosData } = api.registros.get.useQuery();
@@ -209,7 +211,8 @@ export default function ChamadaAGPage() {
             switch (current) {
                 case "not-counting": return "present";
                 case "present": return "absent";
-                case "absent": return "not-counting";
+                case "absent": return "excluded";
+                case "excluded": return "not-counting";
                 default: return "not-counting";
             }
         };
@@ -235,6 +238,8 @@ export default function ChamadaAGPage() {
                 return <CheckCircle className="w-5 h-5 text-green-600" />;
             case "absent":
                 return <XCircle className="w-5 h-5 text-red-600" />;
+            case "excluded":
+                return <XCircle className="w-5 h-5 text-orange-600" />;
             case "not-counting":
                 return <Minus className="w-5 h-5 text-gray-400" />;
         }
@@ -246,6 +251,8 @@ export default function ChamadaAGPage() {
                 return "bg-green-50 border-green-200 hover:bg-green-100";
             case "absent":
                 return "bg-red-50 border-red-200 hover:bg-red-100";
+            case "excluded":
+                return "bg-orange-50 border-orange-200 hover:bg-orange-100";
             case "not-counting":
                 return "bg-gray-50 border-gray-200 hover:bg-gray-100";
         }
@@ -254,14 +261,37 @@ export default function ChamadaAGPage() {
     const getStats = (members: { attendance: AttendanceState }[]) => {
         const present = members.filter(m => m.attendance === "present").length;
         const absent = members.filter(m => m.attendance === "absent").length;
+        const excluded = members.filter(m => m.attendance === "excluded").length;
         const notCounting = members.filter(m => m.attendance === "not-counting").length;
         const total = members.length;
-        const quorumPercentage = total > 0 ? (present / total) * 100 : 0;
-        return { present, absent, notCounting, total, quorumPercentage };
+        const eligibleForQuorum = total - excluded; // Exclude "excluded" members from quorum calculation
+        const quorumPercentage = eligibleForQuorum > 0 ? (present / eligibleForQuorum) * 100 : 0;
+        return { present, absent, excluded, notCounting, total, eligibleForQuorum, quorumPercentage };
     };
 
     const comitesPlenos = comitesLocais.filter(c => c.status === "Pleno");
     const comitesNaoPlenos = comitesLocais.filter(c => c.status === "Não-pleno");
+
+    // Search filtering functions
+    const filterBySearch = <T extends { name: string }>(items: T[]): T[] => {
+        if (!searchTerm.trim()) return items;
+        
+        const searchLower = searchTerm.toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, ''); // Remove accents for search
+        
+        return items.filter(item => 
+            item.name.toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .includes(searchLower)
+        );
+    };
+
+    const filteredEbMembers = filterBySearch(ebMembers);
+    const filteredCrMembers = filterBySearch(crMembers);
+    const filteredComitesPlenos = filterBySearch(comitesPlenos);
+    const filteredComitesNaoPlenos = filterBySearch(comitesNaoPlenos);
 
     // Save/Load/Reset functions
     const saveAttendanceState = () => {
@@ -319,9 +349,9 @@ export default function ChamadaAGPage() {
 
     const resetAttendanceState = () => {
         if (confirm('Tem certeza que deseja resetar todos os estados de presença?')) {
-            setEbMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" })));
-            setCrMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" })));
-            setComitesLocais(prev => prev.map(comite => ({ ...comite, attendance: "not-counting" })));
+            setEbMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
+            setCrMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
+            setComitesLocais(prev => prev.map(comite => ({ ...comite, attendance: "not-counting" as AttendanceState })));
         }
     };
 
@@ -332,21 +362,24 @@ export default function ChamadaAGPage() {
         // Add EB members
         ebMembers.forEach(member => {
             const status = member.attendance === "present" ? "Presente" : 
-                          member.attendance === "absent" ? "Ausente" : "Não contabilizado";
+                          member.attendance === "absent" ? "Ausente" : 
+                          member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado";
             csvContent += `EB,"${member.name}","${member.role}","${status}"\n`;
         });
         
         // Add CR members
         crMembers.forEach(member => {
             const status = member.attendance === "present" ? "Presente" : 
-                          member.attendance === "absent" ? "Ausente" : "Não contabilizado";
+                          member.attendance === "absent" ? "Ausente" : 
+                          member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado";
             csvContent += `CR,"${member.name}","${member.role}","${status}"\n`;
         });
         
         // Add Comitês
         comitesLocais.forEach(comite => {
             const status = comite.attendance === "present" ? "Presente" : 
-                          comite.attendance === "absent" ? "Ausente" : "Não contabilizado";
+                          comite.attendance === "absent" ? "Ausente" : 
+                          comite.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado";
             csvContent += `${comite.status},"${comite.name}","${comite.cidade}, ${comite.uf}","${status}"\n`;
         });
         
@@ -462,8 +495,29 @@ export default function ChamadaAGPage() {
                                         Resetar
                                     </Button>
                                 </div>
-                                <div className="text-sm text-gray-600">
-                                    <p>Use os botões para gerenciar o estado da chamada</p>
+                                <div className="flex items-center gap-4">
+                                    {/* Search Bar */}
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar membro..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200 w-64"
+                                        />
+                                        {searchTerm && (
+                                            <button
+                                                onClick={() => setSearchTerm("")}
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                            >
+                                                ×
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="text-sm text-gray-600">
+                                        <p>Use os botões para gerenciar o estado da chamada</p>
+                                    </div>
                                 </div>
                             </div>
                             {/* Hidden file input */}
@@ -493,6 +547,10 @@ export default function ChamadaAGPage() {
                                         <span className="text-red-700">Ausente</span>
                                     </div>
                                     <div className="flex items-center space-x-2">
+                                        <XCircle className="w-4 h-4 text-orange-600" />
+                                        <span className="text-orange-700">Excluído do quórum</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
                                         <Minus className="w-4 h-4 text-gray-400" />
                                         <span className="text-gray-600">Não contabilizado</span>
                                     </div>
@@ -513,7 +571,7 @@ export default function ChamadaAGPage() {
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         {(() => {
-                                            const stats = getStats(ebMembers);
+                                            const stats = getStats(filteredEbMembers);
                                             const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.eb * 100;
                                             return (
                                                 <>
@@ -523,9 +581,12 @@ export default function ChamadaAGPage() {
                                                     <Badge variant="outline" className="text-red-600 border-red-200">
                                                         {stats.absent} ausentes
                                                     </Badge>
+                                                    <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                        {stats.excluded} excluídos
+                                                    </Badge>
                                                     <Badge 
                                                         variant="outline" 
-                                                        className={`${hasQuorum ? 'text-green-600 border-green-200' : 'text-amber-600 border-amber-200'}`}
+                                                        className="text-green-600 border-green-200"
                                                     >
                                                         {stats.quorumPercentage.toFixed(1)}% quórum
                                                         {hasQuorum ? ' ✓' : ' ✗'}
@@ -538,21 +599,24 @@ export default function ChamadaAGPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                                    {ebMembers.map((member, index) => (
-                                        <button
-                                            key={member.id}
-                                            onClick={() => toggleAttendance('eb', index)}
-                                            className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(member.attendance)}`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-medium">{member.name}</p>
-                                                    <p className="text-sm text-gray-600">{member.role}</p>
+                                    {filteredEbMembers.map((member) => {
+                                        const originalIndex = ebMembers.findIndex(m => m.id === member.id);
+                                        return (
+                                            <button
+                                                key={member.id}
+                                                onClick={() => toggleAttendance('eb', originalIndex)}
+                                                className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(member.attendance)}`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-medium">{member.name}</p>
+                                                        <p className="text-sm text-gray-600">{member.role}</p>
+                                                    </div>
+                                                    {getAttendanceIcon(member.attendance)}
                                                 </div>
-                                                {getAttendanceIcon(member.attendance)}
-                                            </div>
-                                        </button>
-                                    ))}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </CardContent>
                         </Card>
@@ -567,7 +631,7 @@ export default function ChamadaAGPage() {
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         {(() => {
-                                            const stats = getStats(crMembers);
+                                            const stats = getStats(filteredCrMembers);
                                             const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.cr * 100;
                                             return (
                                                 <>
@@ -577,9 +641,12 @@ export default function ChamadaAGPage() {
                                                     <Badge variant="outline" className="text-red-600 border-red-200">
                                                         {stats.absent} ausentes
                                                     </Badge>
+                                                    <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                        {stats.excluded} excluídos
+                                                    </Badge>
                                                     <Badge 
                                                         variant="outline" 
-                                                        className={`${hasQuorum ? 'text-green-600 border-green-200' : 'text-amber-600 border-amber-200'}`}
+                                                        className="text-green-600 border-green-200"
                                                     >
                                                         {stats.quorumPercentage.toFixed(1)}% quórum
                                                         {hasQuorum ? ' ✓' : ' ✗'}
@@ -592,21 +659,24 @@ export default function ChamadaAGPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                                    {crMembers.map((member, index) => (
-                                        <button
-                                            key={member.id}
-                                            onClick={() => toggleAttendance('cr', index)}
-                                            className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(member.attendance)}`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-medium">{member.name}</p>
-                                                    <p className="text-sm text-gray-600">{member.role}</p>
+                                    {filteredCrMembers.map((member) => {
+                                        const originalIndex = crMembers.findIndex(m => m.id === member.id);
+                                        return (
+                                            <button
+                                                key={member.id}
+                                                onClick={() => toggleAttendance('cr', originalIndex)}
+                                                className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(member.attendance)}`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-medium">{member.name}</p>
+                                                        <p className="text-sm text-gray-600">{member.role}</p>
+                                                    </div>
+                                                    {getAttendanceIcon(member.attendance)}
                                                 </div>
-                                                {getAttendanceIcon(member.attendance)}
-                                            </div>
-                                        </button>
-                                    ))}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </CardContent>
                         </Card>
@@ -621,7 +691,7 @@ export default function ChamadaAGPage() {
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         {(() => {
-                                            const stats = getStats(comitesPlenos);
+                                            const stats = getStats(filteredComitesPlenos);
                                             const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.comitesPlenos * 100;
                                             return (
                                                 <>
@@ -631,9 +701,12 @@ export default function ChamadaAGPage() {
                                                     <Badge variant="outline" className="text-red-600 border-red-200">
                                                         {stats.absent} ausentes
                                                     </Badge>
+                                                    <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                        {stats.excluded} excluídos
+                                                    </Badge>
                                                     <Badge 
                                                         variant="outline" 
-                                                        className={`${hasQuorum ? 'text-green-600 border-green-200' : 'text-amber-600 border-amber-200'}`}
+                                                        className="text-green-600 border-green-200"
                                                     >
                                                         {stats.quorumPercentage.toFixed(1)}% quórum
                                                         {hasQuorum ? ' ✓' : ' ✗'}
@@ -646,7 +719,7 @@ export default function ChamadaAGPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                                    {comitesPlenos.map((comite, index) => {
+                                    {filteredComitesPlenos.map((comite, index) => {
                                         const originalIndex = comitesLocais.findIndex(c => c.name === comite.name);
                                         return (
                                             <button
@@ -678,7 +751,7 @@ export default function ChamadaAGPage() {
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         {(() => {
-                                            const stats = getStats(comitesNaoPlenos);
+                                            const stats = getStats(filteredComitesNaoPlenos);
                                             const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.comitesNaoPlenos * 100;
                                             return (
                                                 <>
@@ -688,9 +761,12 @@ export default function ChamadaAGPage() {
                                                     <Badge variant="outline" className="text-red-600 border-red-200">
                                                         {stats.absent} ausentes
                                                     </Badge>
+                                                    <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                        {stats.excluded} excluídos
+                                                    </Badge>
                                                     <Badge 
                                                         variant="outline" 
-                                                        className={`${hasQuorum ? 'text-green-600 border-green-200' : 'text-amber-600 border-amber-200'}`}
+                                                        className="text-green-600 border-green-200"
                                                     >
                                                         {stats.quorumPercentage.toFixed(1)}% quórum
                                                         {hasQuorum ? ' ✓' : ' ✗'}
@@ -703,7 +779,7 @@ export default function ChamadaAGPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                                    {comitesNaoPlenos.map((comite, index) => {
+                                    {filteredComitesNaoPlenos.map((comite, index) => {
                                         const originalIndex = comitesLocais.findIndex(c => c.name === comite.name);
                                         return (
                                             <button
@@ -737,10 +813,10 @@ export default function ChamadaAGPage() {
                         <CardContent>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                 {[
-                                    { label: "EBs", data: ebMembers, color: "blue", requirement: QUORUM_REQUIREMENTS.eb },
-                                    { label: "CRs", data: crMembers, color: "purple", requirement: QUORUM_REQUIREMENTS.cr },
-                                    { label: "Comitês Plenos", data: comitesPlenos, color: "green", requirement: QUORUM_REQUIREMENTS.comitesPlenos },
-                                    { label: "Comitês Não Plenos", data: comitesNaoPlenos, color: "orange", requirement: QUORUM_REQUIREMENTS.comitesNaoPlenos }
+                                    { label: "EBs", data: filteredEbMembers, color: "blue", requirement: QUORUM_REQUIREMENTS.eb },
+                                    { label: "CRs", data: filteredCrMembers, color: "purple", requirement: QUORUM_REQUIREMENTS.cr },
+                                    { label: "Comitês Plenos", data: filteredComitesPlenos, color: "green", requirement: QUORUM_REQUIREMENTS.comitesPlenos },
+                                    { label: "Comitês Não Plenos", data: filteredComitesNaoPlenos, color: "orange", requirement: QUORUM_REQUIREMENTS.comitesNaoPlenos }
                                 ].map(({ label, data, color, requirement }) => {
                                     const stats = getStats(data);
                                     const hasQuorum = stats.quorumPercentage >= requirement * 100;
@@ -757,10 +833,14 @@ export default function ChamadaAGPage() {
                                                     <span className="text-sm text-red-700">{stats.absent}</span>
                                                 </div>
                                                 <div className="flex items-center justify-center space-x-1">
+                                                    <XCircle className="w-4 h-4 text-orange-600" />
+                                                    <span className="text-sm text-orange-700">{stats.excluded}</span>
+                                                </div>
+                                                <div className="flex items-center justify-center space-x-1">
                                                     <Minus className="w-4 h-4 text-gray-400" />
                                                     <span className="text-sm text-gray-600">{stats.notCounting}</span>
                                                 </div>
-                                                <div className={`mt-2 text-sm ${hasQuorum ? 'text-green-600' : 'text-amber-600'}`}>
+                                                <div className="mt-2 text-sm text-green-600">
                                                     {stats.quorumPercentage.toFixed(1)}% quórum
                                                     {hasQuorum ? ' ✓' : ' ✗'}
                                                 </div>
