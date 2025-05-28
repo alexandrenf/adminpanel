@@ -1,10 +1,12 @@
 import "~/styles/globals.css";
 
 import { GeistSans } from "geist/font/sans";
+import { Suspense } from "react";
 
 import { TRPCReactProvider } from "~/trpc/react";
 import { getServerAuthSession } from "~/server/auth";
 import Navbar from "./_components/Navbar";
+import Loading from "~/app/_components/Loading";
 
 export const metadata = {
   title: "Painel de Administrador da IFMSA Brazil",
@@ -34,7 +36,9 @@ export default async function RootLayout({
       <body>
         <TRPCReactProvider>
           {session && <Navbar />}
-          {children}
+          <Suspense fallback={<Loading />}>
+            {children}
+          </Suspense>
         </TRPCReactProvider>
       </body>
     </html>
