@@ -19,7 +19,8 @@ import {
     Upload,
     RotateCcw,
     Save,
-    Search
+    Search,
+    BarChart3
 } from "lucide-react";
 import { api } from "~/trpc/react";
 
@@ -66,7 +67,10 @@ export default function ChamadaAGPage() {
     const [crMembers, setCrMembers] = useState<CrMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [searchEb, setSearchEb] = useState("");
+    const [searchCr, setSearchCr] = useState("");
+    const [searchPlenos, setSearchPlenos] = useState("");
+    const [searchNaoPlenos, setSearchNaoPlenos] = useState("");
 
     // Fetch data
     const { data: registrosData } = api.registros.get.useQuery();
@@ -206,32 +210,6 @@ export default function ChamadaAGPage() {
         fetchCSVData();
     }, [registrosData]);
 
-    const toggleAttendance = (type: 'eb' | 'cr' | 'comite', index: number) => {
-        const nextState = (current: AttendanceState): AttendanceState => {
-            switch (current) {
-                case "not-counting": return "present";
-                case "present": return "absent";
-                case "absent": return "excluded";
-                case "excluded": return "not-counting";
-                default: return "not-counting";
-            }
-        };
-
-        if (type === 'eb') {
-            setEbMembers(prev => prev.map((member, i) => 
-                i === index ? { ...member, attendance: nextState(member.attendance) } : member
-            ));
-        } else if (type === 'cr') {
-            setCrMembers(prev => prev.map((member, i) => 
-                i === index ? { ...member, attendance: nextState(member.attendance) } : member
-            ));
-        } else if (type === 'comite') {
-            setComitesLocais(prev => prev.map((comite, i) => 
-                i === index ? { ...comite, attendance: nextState(comite.attendance) } : comite
-            ));
-        }
-    };
-
     const getAttendanceIcon = (state: AttendanceState) => {
         switch (state) {
             case "present":
@@ -273,7 +251,7 @@ export default function ChamadaAGPage() {
     const comitesNaoPlenos = comitesLocais.filter(c => c.status === "Não-pleno");
 
     // Search filtering functions
-    const filterBySearch = <T extends { name: string }>(items: T[]): T[] => {
+    const filterBySearch = <T extends { name: string }>(items: T[], searchTerm: string): T[] => {
         if (!searchTerm.trim()) return items;
         
         const searchLower = searchTerm.toLowerCase()
@@ -288,10 +266,10 @@ export default function ChamadaAGPage() {
         );
     };
 
-    const filteredEbMembers = filterBySearch(ebMembers);
-    const filteredCrMembers = filterBySearch(crMembers);
-    const filteredComitesPlenos = filterBySearch(comitesPlenos);
-    const filteredComitesNaoPlenos = filterBySearch(comitesNaoPlenos);
+    const filteredEbMembers = filterBySearch(ebMembers, searchEb);
+    const filteredCrMembers = filterBySearch(crMembers, searchCr);
+    const filteredComitesPlenos = filterBySearch(comitesPlenos, searchPlenos);
+    const filteredComitesNaoPlenos = filterBySearch(comitesNaoPlenos, searchNaoPlenos);
 
     // Save/Load/Reset functions
     const saveAttendanceState = () => {
@@ -496,25 +474,6 @@ export default function ChamadaAGPage() {
                                     </Button>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    {/* Search Bar */}
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar membro..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200 w-64"
-                                        />
-                                        {searchTerm && (
-                                            <button
-                                                onClick={() => setSearchTerm("")}
-                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                            >
-                                                ×
-                                            </button>
-                                        )}
-                                    </div>
                                     <div className="text-sm text-gray-600">
                                         <p>Use os botões para gerenciar o estado da chamada</p>
                                     </div>
@@ -560,14 +519,14 @@ export default function ChamadaAGPage() {
                     </Card>
 
                     {/* Grid Layout */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* EBs Section */}
                         <Card className="shadow-lg border-0">
                             <CardHeader>
                                 <CardTitle className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                         <Users className="w-5 h-5 text-blue-600" />
-                                        <span>Executiva Brasileira</span>
+                                        <span className="text-lg">Diretoria Executiva</span>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         {(() => {
@@ -575,46 +534,104 @@ export default function ChamadaAGPage() {
                                             const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.eb * 100;
                                             return (
                                                 <>
-                                                    <Badge variant="outline" className="text-green-600 border-green-200">
+                                                    <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
                                                         {stats.present} presentes
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-red-600 border-red-200">
+                                                    <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
                                                         {stats.absent} ausentes
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                    <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
                                                         {stats.excluded} excluídos
                                                     </Badge>
                                                     <Badge 
                                                         variant="outline" 
-                                                        className="text-green-600 border-green-200"
+                                                        className="text-gray-600 border-gray-200 text-xs"
                                                     >
                                                         {stats.quorumPercentage.toFixed(1)}% quórum
-                                                        {hasQuorum ? ' ✓' : ' ✗'}
                                                     </Badge>
                                                 </>
                                             );
                                         })()}
                                     </div>
                                 </CardTitle>
+                                {/* Search bar for EB */}
+                                <div className="relative mt-2">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar na Diretoria Executiva..."
+                                        value={searchEb}
+                                        onChange={(e) => setSearchEb(e.target.value)}
+                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
+                                    />
+                                </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                <div className="space-y-2 max-h-80 overflow-y-auto">
                                     {filteredEbMembers.map((member) => {
                                         const originalIndex = ebMembers.findIndex(m => m.id === member.id);
                                         return (
-                                            <button
+                                            <div
                                                 key={member.id}
-                                                onClick={() => toggleAttendance('eb', originalIndex)}
-                                                className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(member.attendance)}`}
+                                                className={`group relative p-3 rounded-lg border transition-colors ${getAttendanceColor(member.attendance)}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div>
-                                                        <p className="font-medium">{member.name}</p>
-                                                        <p className="text-sm text-gray-600">{member.role}</p>
+                                                        <p className="font-medium text-sm">{member.name}</p>
+                                                        <p className="text-xs text-gray-600">{member.role}</p>
                                                     </div>
-                                                    {getAttendanceIcon(member.attendance)}
+                                                    <div className="flex items-center space-x-2">
+                                                        {getAttendanceIcon(member.attendance)}
+                                                        {/* Hover buttons */}
+                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEbMembers(prev => prev.map((m, i) => 
+                                                                        i === originalIndex ? { ...m, attendance: "present" } : m
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
+                                                                title="Presente"
+                                                            >
+                                                                <CheckCircle className="w-3 h-3 text-green-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEbMembers(prev => prev.map((m, i) => 
+                                                                        i === originalIndex ? { ...m, attendance: "absent" } : m
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
+                                                                title="Ausente"
+                                                            >
+                                                                <XCircle className="w-3 h-3 text-red-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEbMembers(prev => prev.map((m, i) => 
+                                                                        i === originalIndex ? { ...m, attendance: "excluded" } : m
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
+                                                                title="Excluído do quórum"
+                                                            >
+                                                                <XCircle className="w-3 h-3 text-orange-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEbMembers(prev => prev.map((m, i) => 
+                                                                        i === originalIndex ? { ...m, attendance: "not-counting" } : m
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
+                                                                title="Não contabilizado"
+                                                            >
+                                                                <Minus className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </button>
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -627,7 +644,7 @@ export default function ChamadaAGPage() {
                                 <CardTitle className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                         <UserCheck className="w-5 h-5 text-purple-600" />
-                                        <span>Coordenadores Regionais</span>
+                                        <span className="text-lg">Coordenadores Regionais</span>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         {(() => {
@@ -635,46 +652,104 @@ export default function ChamadaAGPage() {
                                             const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.cr * 100;
                                             return (
                                                 <>
-                                                    <Badge variant="outline" className="text-green-600 border-green-200">
+                                                    <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
                                                         {stats.present} presentes
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-red-600 border-red-200">
+                                                    <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
                                                         {stats.absent} ausentes
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                    <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
                                                         {stats.excluded} excluídos
                                                     </Badge>
                                                     <Badge 
                                                         variant="outline" 
-                                                        className="text-green-600 border-green-200"
+                                                        className="text-gray-600 border-gray-200 text-xs"
                                                     >
                                                         {stats.quorumPercentage.toFixed(1)}% quórum
-                                                        {hasQuorum ? ' ✓' : ' ✗'}
                                                     </Badge>
                                                 </>
                                             );
                                         })()}
                                     </div>
                                 </CardTitle>
+                                {/* Search bar for CR */}
+                                <div className="relative mt-2">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar nos Coordenadores Regionais..."
+                                        value={searchCr}
+                                        onChange={(e) => setSearchCr(e.target.value)}
+                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
+                                    />
+                                </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                <div className="space-y-2 max-h-80 overflow-y-auto">
                                     {filteredCrMembers.map((member) => {
                                         const originalIndex = crMembers.findIndex(m => m.id === member.id);
                                         return (
-                                            <button
+                                            <div
                                                 key={member.id}
-                                                onClick={() => toggleAttendance('cr', originalIndex)}
-                                                className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(member.attendance)}`}
+                                                className={`group relative p-3 rounded-lg border transition-colors ${getAttendanceColor(member.attendance)}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div>
-                                                        <p className="font-medium">{member.name}</p>
-                                                        <p className="text-sm text-gray-600">{member.role}</p>
+                                                        <p className="font-medium text-sm">{member.name}</p>
+                                                        <p className="text-xs text-gray-600">{member.role}</p>
                                                     </div>
-                                                    {getAttendanceIcon(member.attendance)}
+                                                    <div className="flex items-center space-x-2">
+                                                        {getAttendanceIcon(member.attendance)}
+                                                        {/* Hover buttons */}
+                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setCrMembers(prev => prev.map((m, i) => 
+                                                                        i === originalIndex ? { ...m, attendance: "present" } : m
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
+                                                                title="Presente"
+                                                            >
+                                                                <CheckCircle className="w-3 h-3 text-green-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setCrMembers(prev => prev.map((m, i) => 
+                                                                        i === originalIndex ? { ...m, attendance: "absent" } : m
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
+                                                                title="Ausente"
+                                                            >
+                                                                <XCircle className="w-3 h-3 text-red-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setCrMembers(prev => prev.map((m, i) => 
+                                                                        i === originalIndex ? { ...m, attendance: "excluded" } : m
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
+                                                                title="Excluído do quórum"
+                                                            >
+                                                                <XCircle className="w-3 h-3 text-orange-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setCrMembers(prev => prev.map((m, i) => 
+                                                                        i === originalIndex ? { ...m, attendance: "not-counting" } : m
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
+                                                                title="Não contabilizado"
+                                                            >
+                                                                <Minus className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </button>
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -687,7 +762,7 @@ export default function ChamadaAGPage() {
                                 <CardTitle className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                         <Building className="w-5 h-5 text-green-600" />
-                                        <span>Comitês Plenos</span>
+                                        <span className="text-lg">Comitês Plenos</span>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         {(() => {
@@ -695,46 +770,104 @@ export default function ChamadaAGPage() {
                                             const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.comitesPlenos * 100;
                                             return (
                                                 <>
-                                                    <Badge variant="outline" className="text-green-600 border-green-200">
+                                                    <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
                                                         {stats.present} presentes
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-red-600 border-red-200">
+                                                    <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
                                                         {stats.absent} ausentes
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                    <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
                                                         {stats.excluded} excluídos
                                                     </Badge>
                                                     <Badge 
                                                         variant="outline" 
-                                                        className="text-green-600 border-green-200"
+                                                        className="text-gray-600 border-gray-200 text-xs"
                                                     >
                                                         {stats.quorumPercentage.toFixed(1)}% quórum
-                                                        {hasQuorum ? ' ✓' : ' ✗'}
                                                     </Badge>
                                                 </>
                                             );
                                         })()}
                                     </div>
                                 </CardTitle>
+                                {/* Search bar for Comitês Plenos */}
+                                <div className="relative mt-2">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar nos Comitês Plenos..."
+                                        value={searchPlenos}
+                                        onChange={(e) => setSearchPlenos(e.target.value)}
+                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
+                                    />
+                                </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-2 max-h-96 overflow-y-auto">
-                                    {filteredComitesPlenos.map((comite, index) => {
+                                <div className="space-y-2 max-h-80 overflow-y-auto">
+                                    {filteredComitesPlenos.map((comite) => {
                                         const originalIndex = comitesLocais.findIndex(c => c.name === comite.name);
                                         return (
-                                            <button
+                                            <div
                                                 key={comite.name}
-                                                onClick={() => toggleAttendance('comite', originalIndex)}
-                                                className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(comite.attendance)}`}
+                                                className={`group relative p-3 rounded-lg border transition-colors ${getAttendanceColor(comite.attendance)}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div>
-                                                        <p className="font-medium">{comite.name}</p>
-                                                        <p className="text-sm text-gray-600">{comite.cidade}, {comite.uf}</p>
+                                                        <p className="font-medium text-sm">{comite.name}</p>
+                                                        <p className="text-xs text-gray-600">{comite.cidade}, {comite.uf}</p>
                                                     </div>
-                                                    {getAttendanceIcon(comite.attendance)}
+                                                    <div className="flex items-center space-x-2">
+                                                        {getAttendanceIcon(comite.attendance)}
+                                                        {/* Hover buttons */}
+                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setComitesLocais(prev => prev.map((c, i) => 
+                                                                        i === originalIndex ? { ...c, attendance: "present" } : c
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
+                                                                title="Presente"
+                                                            >
+                                                                <CheckCircle className="w-3 h-3 text-green-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setComitesLocais(prev => prev.map((c, i) => 
+                                                                        i === originalIndex ? { ...c, attendance: "absent" } : c
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
+                                                                title="Ausente"
+                                                            >
+                                                                <XCircle className="w-3 h-3 text-red-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setComitesLocais(prev => prev.map((c, i) => 
+                                                                        i === originalIndex ? { ...c, attendance: "excluded" } : c
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
+                                                                title="Excluído do quórum"
+                                                            >
+                                                                <XCircle className="w-3 h-3 text-orange-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setComitesLocais(prev => prev.map((c, i) => 
+                                                                        i === originalIndex ? { ...c, attendance: "not-counting" } : c
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
+                                                                title="Não contabilizado"
+                                                            >
+                                                                <Minus className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </button>
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -747,7 +880,7 @@ export default function ChamadaAGPage() {
                                 <CardTitle className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                         <Building2 className="w-5 h-5 text-orange-600" />
-                                        <span>Comitês Não Plenos</span>
+                                        <span className="text-lg">Comitês Não Plenos</span>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         {(() => {
@@ -755,46 +888,104 @@ export default function ChamadaAGPage() {
                                             const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.comitesNaoPlenos * 100;
                                             return (
                                                 <>
-                                                    <Badge variant="outline" className="text-green-600 border-green-200">
+                                                    <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
                                                         {stats.present} presentes
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-red-600 border-red-200">
+                                                    <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
                                                         {stats.absent} ausentes
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                    <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
                                                         {stats.excluded} excluídos
                                                     </Badge>
                                                     <Badge 
                                                         variant="outline" 
-                                                        className="text-green-600 border-green-200"
+                                                        className="text-gray-600 border-gray-200 text-xs"
                                                     >
                                                         {stats.quorumPercentage.toFixed(1)}% quórum
-                                                        {hasQuorum ? ' ✓' : ' ✗'}
                                                     </Badge>
                                                 </>
                                             );
                                         })()}
                                     </div>
                                 </CardTitle>
+                                {/* Search bar for Comitês Não Plenos */}
+                                <div className="relative mt-2">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar nos Comitês Não Plenos..."
+                                        value={searchNaoPlenos}
+                                        onChange={(e) => setSearchNaoPlenos(e.target.value)}
+                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
+                                    />
+                                </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-2 max-h-96 overflow-y-auto">
-                                    {filteredComitesNaoPlenos.map((comite, index) => {
+                                <div className="space-y-2 max-h-80 overflow-y-auto">
+                                    {filteredComitesNaoPlenos.map((comite) => {
                                         const originalIndex = comitesLocais.findIndex(c => c.name === comite.name);
                                         return (
-                                            <button
+                                            <div
                                                 key={comite.name}
-                                                onClick={() => toggleAttendance('comite', originalIndex)}
-                                                className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(comite.attendance)}`}
+                                                className={`group relative p-3 rounded-lg border transition-colors ${getAttendanceColor(comite.attendance)}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div>
-                                                        <p className="font-medium">{comite.name}</p>
-                                                        <p className="text-sm text-gray-600">{comite.cidade}, {comite.uf}</p>
+                                                        <p className="font-medium text-sm">{comite.name}</p>
+                                                        <p className="text-xs text-gray-600">{comite.cidade}, {comite.uf}</p>
                                                     </div>
-                                                    {getAttendanceIcon(comite.attendance)}
+                                                    <div className="flex items-center space-x-2">
+                                                        {getAttendanceIcon(comite.attendance)}
+                                                        {/* Hover buttons */}
+                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setComitesLocais(prev => prev.map((c, i) => 
+                                                                        i === originalIndex ? { ...c, attendance: "present" } : c
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
+                                                                title="Presente"
+                                                            >
+                                                                <CheckCircle className="w-3 h-3 text-green-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setComitesLocais(prev => prev.map((c, i) => 
+                                                                        i === originalIndex ? { ...c, attendance: "absent" } : c
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
+                                                                title="Ausente"
+                                                            >
+                                                                <XCircle className="w-3 h-3 text-red-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setComitesLocais(prev => prev.map((c, i) => 
+                                                                        i === originalIndex ? { ...c, attendance: "excluded" } : c
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
+                                                                title="Excluído do quórum"
+                                                            >
+                                                                <XCircle className="w-3 h-3 text-orange-600" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setComitesLocais(prev => prev.map((c, i) => 
+                                                                        i === originalIndex ? { ...c, attendance: "not-counting" } : c
+                                                                    ));
+                                                                }}
+                                                                className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
+                                                                title="Não contabilizado"
+                                                            >
+                                                                <Minus className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </button>
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -802,55 +993,66 @@ export default function ChamadaAGPage() {
                         </Card>
                     </div>
 
-                    {/* Summary */}
-                    <Card className="shadow-lg border-0">
-                        <CardHeader>
-                            <CardTitle className="flex items-center space-x-2">
-                                <ClipboardCheck className="w-5 h-5 text-green-600" />
-                                <span>Resumo Geral</span>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                {[
-                                    { label: "EBs", data: filteredEbMembers, color: "blue", requirement: QUORUM_REQUIREMENTS.eb },
-                                    { label: "CRs", data: filteredCrMembers, color: "purple", requirement: QUORUM_REQUIREMENTS.cr },
-                                    { label: "Comitês Plenos", data: filteredComitesPlenos, color: "green", requirement: QUORUM_REQUIREMENTS.comitesPlenos },
-                                    { label: "Comitês Não Plenos", data: filteredComitesNaoPlenos, color: "orange", requirement: QUORUM_REQUIREMENTS.comitesNaoPlenos }
-                                ].map(({ label, data, color, requirement }) => {
-                                    const stats = getStats(data);
-                                    const hasQuorum = stats.quorumPercentage >= requirement * 100;
-                                    return (
-                                        <div key={label} className="text-center">
-                                            <h4 className="font-semibold text-gray-900 mb-2">{label}</h4>
-                                            <div className="space-y-1">
-                                                <div className="flex items-center justify-center space-x-1">
-                                                    <CheckCircle className="w-4 h-4 text-green-600" />
-                                                    <span className="text-sm text-green-700">{stats.present}</span>
-                                                </div>
-                                                <div className="flex items-center justify-center space-x-1">
-                                                    <XCircle className="w-4 h-4 text-red-600" />
-                                                    <span className="text-sm text-red-700">{stats.absent}</span>
-                                                </div>
-                                                <div className="flex items-center justify-center space-x-1">
-                                                    <XCircle className="w-4 h-4 text-orange-600" />
-                                                    <span className="text-sm text-orange-700">{stats.excluded}</span>
-                                                </div>
-                                                <div className="flex items-center justify-center space-x-1">
-                                                    <Minus className="w-4 h-4 text-gray-400" />
-                                                    <span className="text-sm text-gray-600">{stats.notCounting}</span>
-                                                </div>
-                                                <div className="mt-2 text-sm text-green-600">
-                                                    {stats.quorumPercentage.toFixed(1)}% quórum
-                                                    {hasQuorum ? ' ✓' : ' ✗'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                    {/* Floating Summary Menu */}
+                    <div className="fixed right-6 top-1/2 transform -translate-y-1/2 z-50">
+                        <div className="group">
+                            {/* Summary Icon */}
+                            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full p-3 shadow-lg cursor-pointer transition-all duration-300 hover:shadow-xl">
+                                <BarChart3 className="w-6 h-6 text-white" />
                             </div>
-                        </CardContent>
-                    </Card>
+                            
+                            {/* Expandable Summary Panel */}
+                            <div className="absolute right-16 top-0 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-4 group-hover:translate-x-0 pointer-events-none group-hover:pointer-events-auto">
+                                <Card className="shadow-xl border-0 w-80">
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="flex items-center space-x-2 text-lg">
+                                            <BarChart3 className="w-5 h-5 text-blue-600" />
+                                            <span>Resumo Geral</span>
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="pt-0">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {[
+                                                { label: "Diretoria Executiva", data: filteredEbMembers, color: "blue", requirement: QUORUM_REQUIREMENTS.eb },
+                                                { label: "Coordenadores Regionais", data: filteredCrMembers, color: "purple", requirement: QUORUM_REQUIREMENTS.cr },
+                                                { label: "Comitês Plenos", data: filteredComitesPlenos, color: "green", requirement: QUORUM_REQUIREMENTS.comitesPlenos },
+                                                { label: "Comitês Não Plenos", data: filteredComitesNaoPlenos, color: "orange", requirement: QUORUM_REQUIREMENTS.comitesNaoPlenos }
+                                            ].map(({ label, data, color, requirement }) => {
+                                                const stats = getStats(data);
+                                                const hasQuorum = stats.quorumPercentage >= requirement * 100;
+                                                return (
+                                                    <div key={label} className="text-center p-3 bg-gray-50 rounded-lg">
+                                                        <h4 className="font-semibold text-gray-900 mb-2 text-sm">{label}</h4>
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center justify-center space-x-1">
+                                                                <CheckCircle className="w-3 h-3 text-green-600" />
+                                                                <span className="text-xs text-green-700">{stats.present}</span>
+                                                            </div>
+                                                            <div className="flex items-center justify-center space-x-1">
+                                                                <XCircle className="w-3 h-3 text-red-600" />
+                                                                <span className="text-xs text-red-700">{stats.absent}</span>
+                                                            </div>
+                                                            <div className="flex items-center justify-center space-x-1">
+                                                                <XCircle className="w-3 h-3 text-orange-600" />
+                                                                <span className="text-xs text-orange-700">{stats.excluded}</span>
+                                                            </div>
+                                                            <div className="flex items-center justify-center space-x-1">
+                                                                <Minus className="w-3 h-3 text-gray-400" />
+                                                                <span className="text-xs text-gray-600">{stats.notCounting}</span>
+                                                            </div>
+                                                            <div className="mt-2 text-xs text-gray-600">
+                                                                {stats.quorumPercentage.toFixed(1)}% quórum
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
