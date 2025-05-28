@@ -2,6 +2,7 @@ import "~/styles/globals.css";
 
 import { GeistSans } from "geist/font/sans";
 import { Suspense } from "react";
+import { SessionProvider } from "next-auth/react";
 
 import { TRPCReactProvider } from "~/trpc/react";
 import { getServerAuthSession } from "~/server/auth";
@@ -34,12 +35,14 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable}`}>
       <body>
-        <TRPCReactProvider>
-          {session && <Navbar />}
-          <Suspense fallback={<Loading />}>
-            {children}
-          </Suspense>
-        </TRPCReactProvider>
+        <SessionProvider session={session}>
+          <TRPCReactProvider>
+            {session && <Navbar />}
+            <Suspense fallback={<Loading />}>
+              {children}
+            </Suspense>
+          </TRPCReactProvider>
+        </SessionProvider>
       </body>
     </html>
   );
