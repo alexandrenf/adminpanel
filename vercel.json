@@ -1,0 +1,8 @@
+{
+  "buildCommand": "npm run build",
+  "env": {
+    "CONVEX_DEPLOYMENT": "@convex_deployment",
+    "CONVEX_DEPLOY_KEY": "@convex_deploy_key",
+    "NEXT_PUBLIC_CONVEX_URL": "@next_public_convex_url"
+  }
+} 
