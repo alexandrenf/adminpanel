@@ -2,6 +2,28 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Textarea } from "../../components/ui/textarea";
+import { 
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "../../components/ui/select";
+import { Checkbox } from "../../components/ui/checkbox";
+import { 
+    Newspaper, 
+    Upload, 
+    Save, 
+    Loader2,
+    ArrowLeft,
+    Calendar,
+    User
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import "react-datepicker/dist/react-datepicker.css";
 import DatePicker from "react-datepicker";
@@ -179,122 +201,206 @@ const CreateNoticia = () => {
         }
     };
 
+    const isLoading = createNoticia.isPending || uploadFile.isPending || updateFile.isPending || updateNoticia.isPending;
+
     return (
-        <div className="container mx-auto p-6">
-            <div className="bg-white shadow-md rounded-lg p-8 mt-8">
-                <h1 className="text-3xl font-bold text-center text-blue-900 mb-8">
-                    {isEditMode ? "Editar Notícia" : "Criar nova notícia"}
-                </h1>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Título</label>
-                        <input
-                            type="text"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Autor</label>
-                        <select
-                            value={author}
-                            onChange={(e) => setAuthor(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+        <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+            <div className="container mx-auto px-6 py-12">
+                <div className="max-w-4xl mx-auto space-y-6">
+                    {/* Header */}
+                    <div className="flex items-center space-x-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => router.push("/noticias")}
+                            className="hover:bg-gray-50"
                         >
-                            {authorOptions.map((option) => (
-                                <option key={option} value={option}>
-                                    {option}
-                                </option>
-                            ))}
-                        </select>
-                        {author === "Outros" && (
-                            <input
-                                type="text"
-                                value={otherAuthor}
-                                onChange={(e) => setOtherAuthor(e.target.value)}
-                                placeholder="Especifique o Autor"
-                                className="mt-2 block w-full p-2 border border-gray-300 rounded-md"
-                            />
-                        )}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Data</label>
-                        <DatePicker
-                            selected={date}
-                            onChange={(newDate) => setDate(newDate)}
-                            dateFormat="dd/MM/yyyy"
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                            placeholderText="Selecione uma data"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Resumo</label>
-                        <textarea
-                            value={resumo}
-                            onChange={(e) => setResumo(e.target.value)}
-                            maxLength={150}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Conteúdo</label>
-                        <MDEditor value={markdown} onChange={(value) => setMarkdown(value || "")} />
-                    </div>
-                    <div className="flex items-start space-x-4">
-                        {imageSrc && (
-                            <div className="w-32 h-32 bg-gray-100 border border-gray-300 flex items-center justify-center">
-                                <img src={imageSrc} alt="Image preview" className="max-w-full h-auto" />
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            Voltar
+                        </Button>
+                        <div className="flex items-center space-x-4">
+                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                                <Newspaper className="w-6 h-6 text-white" />
                             </div>
-                        )}
-                        <div
-                            className="flex-1 border-dashed border-2 border-gray-300 p-4 text-center"
-                            onDrop={handleDrop}
-                            onDragOver={handleDragOver}
-                        >
-                            <input
-                                type="file"
-                                onChange={handleFileInputChange}
-                                className="hidden"
-                                ref={fileInputRef}
-                                accept="image/*"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleButtonClick}
-                                className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                            >
-                                Selecionar ou Arrastar Imagem
-                            </button>
+                            <div>
+                                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
+                                    {isEditMode ? "Editar Notícia" : "Criar nova notícia"}
+                                </h1>
+                                <p className="text-gray-600">
+                                    {isEditMode ? "Atualize as informações da notícia" : "Adicione uma nova notícia ao portal"}
+                                </p>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex items-center">
-                        <input
-                            type="checkbox"
-                            checked={forcarPaginaInicial}
-                            onChange={(e) => setForcarPaginaInicial(e.target.checked)}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                        />
-                        <label className="ml-2 block text-sm text-gray-900">Forçar Página Inicial</label>
-                    </div>
-                    <div>
-                        <button
-                            type="submit"
-                            className="w-full bg-blue-900 text-white p-3 rounded-md hover:bg-blue-700"
-                            disabled={createNoticia.isPending || uploadFile.isPending || updateFile.isPending || updateNoticia.isPending}
-                        >
-                            {isEditMode
-                                ? (updateFile.isPending || updateNoticia.isPending)
-                                    ? "Atualizando..."
-                                    : "Atualizar Notícia"
-                                : (createNoticia.isPending || uploadFile.isPending)
-                                    ? "Criando..."
-                                    : "Criar Notícia"}
-                        </button>
-                    </div>
-                </form>
+
+                    {/* Form */}
+                    <Card className="shadow-lg border-0">
+                        <CardHeader>
+                            <CardTitle className="flex items-center space-x-2">
+                                <Newspaper className="w-5 h-5 text-blue-600" />
+                                <span>Informações da Notícia</span>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="space-y-2">
+                                    <Label htmlFor="title">Título</Label>
+                                    <Input
+                                        id="title"
+                                        type="text"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        placeholder="Digite o título da notícia"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="author">Autor</Label>
+                                        <Select value={author} onValueChange={setAuthor}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione um autor" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {authorOptions.map((option) => (
+                                                    <SelectItem key={option} value={option}>
+                                                        <div className="flex items-center space-x-2">
+                                                            <User className="w-4 h-4 text-gray-400" />
+                                                            <span>{option}</span>
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {author === "Outros" && (
+                                            <Input
+                                                type="text"
+                                                value={otherAuthor}
+                                                onChange={(e) => setOtherAuthor(e.target.value)}
+                                                placeholder="Especifique o Autor"
+                                                className="mt-2"
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="date">Data</Label>
+                                        <div className="relative">
+                                            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
+                                            <DatePicker
+                                                selected={date}
+                                                onChange={(newDate) => setDate(newDate)}
+                                                dateFormat="dd/MM/yyyy"
+                                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                placeholderText="Selecione uma data"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="resumo">Resumo</Label>
+                                    <Textarea
+                                        id="resumo"
+                                        value={resumo}
+                                        onChange={(e) => setResumo(e.target.value)}
+                                        maxLength={150}
+                                        placeholder="Digite um resumo da notícia (máximo 150 caracteres)"
+                                        className="min-h-[80px]"
+                                    />
+                                    <p className="text-xs text-gray-500">{resumo.length}/150 caracteres</p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="content">Conteúdo</Label>
+                                    <div className="border rounded-md overflow-hidden">
+                                        <MDEditor value={markdown} onChange={(value) => setMarkdown(value || "")} />
+                                    </div>
+                                </div>
+
+                                {/* Image Upload */}
+                                <div className="space-y-4">
+                                    <Label>Imagem de Capa</Label>
+                                    <div className="flex items-start space-x-6">
+                                        {imageSrc && (
+                                            <div className="w-32 h-32 bg-gray-100 border-2 border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                                <img 
+                                                    src={imageSrc} 
+                                                    alt="Preview da imagem" 
+                                                    className="w-full h-full object-cover" 
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="flex-1">
+                                            <div
+                                                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
+                                                onDrop={handleDrop}
+                                                onDragOver={handleDragOver}
+                                                onClick={handleButtonClick}
+                                            >
+                                                <input
+                                                    type="file"
+                                                    onChange={handleFileInputChange}
+                                                    className="hidden"
+                                                    ref={fileInputRef}
+                                                    accept="image/*"
+                                                />
+                                                <div className="flex flex-col items-center space-y-3">
+                                                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                                        <Upload className="w-6 h-6 text-blue-600" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-900">
+                                                            Clique para selecionar ou arraste uma imagem
+                                                        </p>
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            PNG, JPG até 10MB
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Checkbox */}
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="forcarPaginaInicial"
+                                        checked={forcarPaginaInicial}
+                                        onCheckedChange={setForcarPaginaInicial}
+                                    />
+                                    <Label htmlFor="forcarPaginaInicial" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                        Forçar Página Inicial
+                                    </Label>
+                                </div>
+
+                                {/* Submit Button */}
+                                <div className="pt-6">
+                                    <Button
+                                        type="submit"
+                                        disabled={isLoading}
+                                        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                                        size="lg"
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                                {isEditMode ? "Atualizando..." : "Criando..."}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save className="w-5 h-5 mr-2" />
+                                                {isEditMode ? "Atualizar Notícia" : "Criar Notícia"}
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
-        </div>
+        </main>
     );
 };
 
