@@ -367,7 +367,7 @@ const CreateNoticia = () => {
                                     <Checkbox
                                         id="forcarPaginaInicial"
                                         checked={forcarPaginaInicial}
-                                        onCheckedChange={setForcarPaginaInicial}
+                                        onCheckedChange={(checked) => setForcarPaginaInicial(checked === true)}
                                     />
                                     <Label htmlFor="forcarPaginaInicial" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                         Forçar Página Inicial
