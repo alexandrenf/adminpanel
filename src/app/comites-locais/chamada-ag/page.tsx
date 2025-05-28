@@ -45,6 +45,14 @@ type CrMember = {
     attendance: AttendanceState;
 };
 
+// Add quorum requirements
+const QUORUM_REQUIREMENTS = {
+    eb: 0.5, // 50% of EB members
+    cr: 0.5, // 50% of CR members
+    comitesPlenos: 0.5, // 50% of Pleno committees
+    comitesNaoPlenos: 0.5, // 50% of Não-pleno committees
+} as const;
+
 export default function ChamadaAGPage() {
     const router = useRouter();
     const [comitesLocais, setComitesLocais] = useState<ComiteLocal[]>([]);
@@ -82,7 +90,13 @@ export default function ChamadaAGPage() {
 
     useEffect(() => {
         const fetchCSVData = async () => {
-            if (!registrosData?.url) {
+            if (!registrosData) {
+                setError("URL do CSV não configurada");
+                setLoading(false);
+                return;
+            }
+
+            if (!registrosData.url) {
                 setError("URL do CSV não configurada");
                 setLoading(false);
                 return;
@@ -131,6 +145,7 @@ export default function ChamadaAGPage() {
                 setComitesLocais(comites);
                 setLoading(false);
             } catch (err) {
+                console.error("Error fetching CSV:", err);
                 setError("Erro ao carregar dados do CSV");
                 setLoading(false);
             }
@@ -190,7 +205,9 @@ export default function ChamadaAGPage() {
         const present = members.filter(m => m.attendance === "present").length;
         const absent = members.filter(m => m.attendance === "absent").length;
         const notCounting = members.filter(m => m.attendance === "not-counting").length;
-        return { present, absent, notCounting };
+        const total = members.length;
+        const quorumPercentage = total > 0 ? (present / total) * 100 : 0;
+        return { present, absent, notCounting, total, quorumPercentage };
     };
 
     const comitesPlenos = comitesLocais.filter(c => c.status === "Pleno");
@@ -295,6 +312,7 @@ export default function ChamadaAGPage() {
                                     <div className="flex items-center space-x-2">
                                         {(() => {
                                             const stats = getStats(ebMembers);
+                                            const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.eb * 100;
                                             return (
                                                 <>
                                                     <Badge variant="outline" className="text-green-600 border-green-200">
@@ -302,6 +320,13 @@ export default function ChamadaAGPage() {
                                                     </Badge>
                                                     <Badge variant="outline" className="text-red-600 border-red-200">
                                                         {stats.absent} ausentes
+                                                    </Badge>
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={`${hasQuorum ? 'text-green-600 border-green-200' : 'text-amber-600 border-amber-200'}`}
+                                                    >
+                                                        {stats.quorumPercentage.toFixed(1)}% quórum
+                                                        {hasQuorum ? ' ✓' : ' ✗'}
                                                     </Badge>
                                                 </>
                                             );
@@ -341,6 +366,7 @@ export default function ChamadaAGPage() {
                                     <div className="flex items-center space-x-2">
                                         {(() => {
                                             const stats = getStats(crMembers);
+                                            const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.cr * 100;
                                             return (
                                                 <>
                                                     <Badge variant="outline" className="text-green-600 border-green-200">
@@ -348,6 +374,13 @@ export default function ChamadaAGPage() {
                                                     </Badge>
                                                     <Badge variant="outline" className="text-red-600 border-red-200">
                                                         {stats.absent} ausentes
+                                                    </Badge>
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={`${hasQuorum ? 'text-green-600 border-green-200' : 'text-amber-600 border-amber-200'}`}
+                                                    >
+                                                        {stats.quorumPercentage.toFixed(1)}% quórum
+                                                        {hasQuorum ? ' ✓' : ' ✗'}
                                                     </Badge>
                                                 </>
                                             );
@@ -387,6 +420,7 @@ export default function ChamadaAGPage() {
                                     <div className="flex items-center space-x-2">
                                         {(() => {
                                             const stats = getStats(comitesPlenos);
+                                            const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.comitesPlenos * 100;
                                             return (
                                                 <>
                                                     <Badge variant="outline" className="text-green-600 border-green-200">
@@ -394,6 +428,13 @@ export default function ChamadaAGPage() {
                                                     </Badge>
                                                     <Badge variant="outline" className="text-red-600 border-red-200">
                                                         {stats.absent} ausentes
+                                                    </Badge>
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={`${hasQuorum ? 'text-green-600 border-green-200' : 'text-amber-600 border-amber-200'}`}
+                                                    >
+                                                        {stats.quorumPercentage.toFixed(1)}% quórum
+                                                        {hasQuorum ? ' ✓' : ' ✗'}
                                                     </Badge>
                                                 </>
                                             );
@@ -436,6 +477,7 @@ export default function ChamadaAGPage() {
                                     <div className="flex items-center space-x-2">
                                         {(() => {
                                             const stats = getStats(comitesNaoPlenos);
+                                            const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.comitesNaoPlenos * 100;
                                             return (
                                                 <>
                                                     <Badge variant="outline" className="text-green-600 border-green-200">
@@ -443,6 +485,13 @@ export default function ChamadaAGPage() {
                                                     </Badge>
                                                     <Badge variant="outline" className="text-red-600 border-red-200">
                                                         {stats.absent} ausentes
+                                                    </Badge>
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={`${hasQuorum ? 'text-green-600 border-green-200' : 'text-amber-600 border-amber-200'}`}
+                                                    >
+                                                        {stats.quorumPercentage.toFixed(1)}% quórum
+                                                        {hasQuorum ? ' ✓' : ' ✗'}
                                                     </Badge>
                                                 </>
                                             );
@@ -486,12 +535,13 @@ export default function ChamadaAGPage() {
                         <CardContent>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                 {[
-                                    { label: "EBs", data: ebMembers, color: "blue" },
-                                    { label: "CRs", data: crMembers, color: "purple" },
-                                    { label: "Comitês Plenos", data: comitesPlenos, color: "green" },
-                                    { label: "Comitês Não Plenos", data: comitesNaoPlenos, color: "orange" }
-                                ].map(({ label, data, color }) => {
+                                    { label: "EBs", data: ebMembers, color: "blue", requirement: QUORUM_REQUIREMENTS.eb },
+                                    { label: "CRs", data: crMembers, color: "purple", requirement: QUORUM_REQUIREMENTS.cr },
+                                    { label: "Comitês Plenos", data: comitesPlenos, color: "green", requirement: QUORUM_REQUIREMENTS.comitesPlenos },
+                                    { label: "Comitês Não Plenos", data: comitesNaoPlenos, color: "orange", requirement: QUORUM_REQUIREMENTS.comitesNaoPlenos }
+                                ].map(({ label, data, color, requirement }) => {
                                     const stats = getStats(data);
+                                    const hasQuorum = stats.quorumPercentage >= requirement * 100;
                                     return (
                                         <div key={label} className="text-center">
                                             <h4 className="font-semibold text-gray-900 mb-2">{label}</h4>
@@ -507,6 +557,10 @@ export default function ChamadaAGPage() {
                                                 <div className="flex items-center justify-center space-x-1">
                                                     <Minus className="w-4 h-4 text-gray-400" />
                                                     <span className="text-sm text-gray-600">{stats.notCounting}</span>
+                                                </div>
+                                                <div className={`mt-2 text-sm ${hasQuorum ? 'text-green-600' : 'text-amber-600'}`}>
+                                                    {stats.quorumPercentage.toFixed(1)}% quórum
+                                                    {hasQuorum ? ' ✓' : ' ✗'}
                                                 </div>
                                             </div>
                                         </div>
