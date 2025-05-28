@@ -2,28 +2,47 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import {
     Table,
     TableBody,
     TableCell,
     TableHead,
+    TableHeader,
     TableRow,
-    Paper,
-    Button,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-} from "@mui/material";
+} from "../../components/ui/table";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "../../components/ui/alert-dialog";
+import { Badge } from "../../components/ui/badge";
+import { 
+    Newspaper, 
+    Plus, 
+    Edit, 
+    Trash2, 
+    Image as ImageIcon,
+    Calendar,
+    User,
+    FileText
+} from "lucide-react";
 import { api } from "~/trpc/react";
 
 export default function NoticiasTable() {
     const router = useRouter();
-    const [open, setOpen] = useState(false);
-    const [deleteId, setDeleteId] = useState<number | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
-    const { data: noticias, refetch } = api.noticias.getAll.useQuery();
+    const { data: noticiasData, refetch } = api.noticias.getAll.useQuery();
+
+    // Sort noticias by date (newest first)
+    const noticias = noticiasData?.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const deleteMutation = api.noticias.delete.useMutation({
         onSuccess: () => {
@@ -31,7 +50,6 @@ export default function NoticiasTable() {
         },
         onError: (error) => {
             setDeleteError(error.message);
-            setOpen(true);
         }
     });
 
@@ -42,6 +60,7 @@ export default function NoticiasTable() {
     });
 
     const handleDelete = async (id: number) => {
+        setDeleteError(null);
         await deleteMutation.mutateAsync({ id });
     };
 
@@ -49,115 +68,194 @@ export default function NoticiasTable() {
         await deleteAnywayMutation.mutateAsync({ id });
     };
 
-    const handleOpenDialog = (id: number) => {
-        setDeleteId(id);
-        setOpen(true);
-    };
-
-    const handleCloseDialog = () => {
-        setOpen(false);
-        setDeleteId(null);
-        setDeleteError(null);
-    };
-
-    const confirmDelete = async () => {
-        if (deleteId !== null) {
-            await handleDelete(deleteId);
-        }
-        handleCloseDialog();
-    };
-
-    const confirmDeleteAnyway = async () => {
-        if (deleteId !== null) {
-            await handleDeleteAnyway(deleteId);
-        }
-        handleCloseDialog();
-    };
-
     const handleEdit = (id: number) => {
         router.push(`/noticias/create?id=${id}`);
     };
 
+    const handleAdd = () => {
+        router.push("/noticias/create");
+    };
+
     return (
-        <div>
-            <Button
-                variant="contained"
-                color="primary"
-                onClick={() => router.push("/noticias/create")}
-            >
-                Adicionar nova Notícia
-            </Button>
-            <Paper style={{ marginTop: "20px", overflowX: "auto" }}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Data</TableCell>
-                            <TableCell>Autor</TableCell>
-                            <TableCell>Título</TableCell>
-                            <TableCell>Resumo</TableCell>
-                            <TableCell>Imagem</TableCell>
-                            <TableCell>Ações</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {noticias?.map((row: any) => (
-                            <TableRow key={row.id}>
-                                <TableCell>{new Date(row.date).toLocaleDateString('en-GB', { timeZone: 'UTC' })}</TableCell>
-                                <TableCell>{row.author}</TableCell>
-                                <TableCell>{row.title}</TableCell>
-                                <TableCell>{row.summary}</TableCell>
-                                <TableCell>
-                                    <img src={row.imageLink ?? ''} alt={row.title} width="100" loading="lazy" />
-                                </TableCell>
-                                <TableCell>
-                                    <Button
-                                        variant="contained"
-                                        color="secondary"
-                                        onClick={() => handleOpenDialog(row.id)}
-                                    >
-                                        Deletar
-                                    </Button>
-                                    <Button
-                                        variant="contained"
-                                        color="warning"
-                                        onClick={() => handleEdit(row.id)}
-                                        style={{ marginLeft: "10px" }}
-                                    >
-                                        Editar
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </Paper>
-            <Dialog
-                open={open}
-                onClose={handleCloseDialog}
-                aria-labelledby="alert-dialog-title"
-                aria-describedby="alert-dialog-description"
-            >
-                <DialogTitle id="alert-dialog-title">Confirma deletar?</DialogTitle>
-                <DialogContent>
-                    <DialogContentText id="alert-dialog-description">
-                        {deleteError ? deleteError : "Are you sure you want to delete this noticia?"}
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog} color="primary">
-                        Cancelar
-                    </Button>
-                    {deleteError ? (
-                        <Button onClick={confirmDeleteAnyway} color="secondary" autoFocus>
-                            Confirmar
-                        </Button>
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                    <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                        <Newspaper className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
+                            Notícias
+                        </h2>
+                        <p className="text-gray-600">Gerencie as notícias do sistema</p>
+                    </div>
+                </div>
+                <Button 
+                    onClick={handleAdd}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nova Notícia
+                </Button>
+            </div>
+
+            {/* News Table */}
+            <Card className="shadow-lg border-0">
+                <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                        <span>Lista de Notícias</span>
+                        <Badge variant="secondary" className="ml-2">
+                            {noticias?.length || 0} {(noticias?.length || 0) === 1 ? 'notícia' : 'notícias'}
+                        </Badge>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {!noticias || noticias.length === 0 ? (
+                        <div className="text-center py-12">
+                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Newspaper className="w-8 h-8 text-gray-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhuma notícia encontrada</h3>
+                            <p className="text-gray-600 mb-4">Ainda não há notícias cadastradas no sistema.</p>
+                            <Button onClick={handleAdd} variant="outline">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Adicionar primeira notícia
+                            </Button>
+                        </div>
                     ) : (
-                        <Button onClick={confirmDelete} color="secondary" autoFocus>
-                            Deletar
-                        </Button>
+                        <div className="rounded-lg border overflow-hidden">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50/50">
+                                        <TableHead className="font-semibold">Data</TableHead>
+                                        <TableHead className="font-semibold">Autor</TableHead>
+                                        <TableHead className="font-semibold">Título</TableHead>
+                                        <TableHead className="font-semibold">Resumo</TableHead>
+                                        <TableHead className="font-semibold">Imagem</TableHead>
+                                        <TableHead className="font-semibold text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {noticias?.map((row: any) => (
+                                        <TableRow key={row.id} className="hover:bg-gray-50/50 transition-colors">
+                                            <TableCell>
+                                                <div className="flex items-center space-x-2">
+                                                    <Calendar className="w-4 h-4 text-gray-400" />
+                                                    <span className="text-sm">
+                                                        {new Date(row.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center space-x-2">
+                                                    <User className="w-4 h-4 text-gray-400" />
+                                                    <span className="font-medium">{row.author}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="max-w-xs">
+                                                    <p className="font-medium text-gray-900 truncate" title={row.title}>
+                                                        {row.title}
+                                                    </p>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="max-w-sm">
+                                                    <p className="text-sm text-gray-600 line-clamp-2" title={row.summary}>
+                                                        {row.summary}
+                                                    </p>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {row.imageLink ? (
+                                                    <div className="flex items-center space-x-2">
+                                                        <img 
+                                                            src={row.imageLink} 
+                                                            alt={row.title} 
+                                                            className="w-12 h-12 object-cover rounded-lg border"
+                                                            loading="lazy" 
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="w-12 h-12 bg-gray-100 rounded-lg border flex items-center justify-center">
+                                                            <ImageIcon className="w-6 h-6 text-gray-400" />
+                                                        </div>
+                                                        <span className="text-xs text-gray-500">Sem imagem</span>
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end space-x-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleEdit(row.id)}
+                                                        className="hover:bg-blue-50 hover:border-blue-200"
+                                                    >
+                                                        <Edit className="w-4 h-4" />
+                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="hover:bg-red-50 hover:border-red-200 text-red-600 hover:text-red-700"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    {deleteError ? (
+                                                                        <div className="space-y-2">
+                                                                            <span className="text-red-600">{deleteError}</span>
+                                                                            <p>Deseja forçar a exclusão mesmo assim?</p>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <>
+                                                                                                                                                         Tem certeza que deseja excluir a notícia <strong>&ldquo;{row.title}&rdquo;</strong>? 
+                                                                             Esta ação não pode ser desfeita.
+                                                                        </>
+                                                                    )}
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel onClick={() => setDeleteError(null)}>
+                                                                    Cancelar
+                                                                </AlertDialogCancel>
+                                                                {deleteError ? (
+                                                                    <AlertDialogAction
+                                                                        onClick={() => handleDeleteAnyway(row.id)}
+                                                                        className="bg-red-600 hover:bg-red-700"
+                                                                    >
+                                                                        Forçar Exclusão
+                                                                    </AlertDialogAction>
+                                                                ) : (
+                                                                    <AlertDialogAction
+                                                                        onClick={() => handleDelete(row.id)}
+                                                                        className="bg-red-600 hover:bg-red-700"
+                                                                    >
+                                                                        Excluir
+                                                                    </AlertDialogAction>
+                                                                )}
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
                     )}
-                </DialogActions>
-            </Dialog>
+                </CardContent>
+            </Card>
         </div>
     );
 }

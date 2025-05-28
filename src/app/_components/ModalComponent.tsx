@@ -1,5 +1,10 @@
 import React from 'react';
-import { Dialog, DialogActions, DialogContent, DialogTitle, Button } from '@mui/material';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "../../components/ui/dialog";
 
 interface ModalComponentProps {
     open: boolean;
@@ -11,14 +16,15 @@ interface ModalComponentProps {
 
 const ModalComponent: React.FC<ModalComponentProps> = ({ open, onClose, title, children, onSave }) => {
     return (
-        <Dialog open={open} onClose={onClose}>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogContent>{children}</DialogContent>
-            <DialogActions>
-                <Button onClick={onClose} color="primary">
-                    Fechar
-                </Button>
-            </DialogActions>
+        <Dialog open={open} onOpenChange={onClose}>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                    {children}
+                </div>
+            </DialogContent>
         </Dialog>
     );
 };

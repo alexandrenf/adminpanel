@@ -2,6 +2,17 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { 
+    Users, 
+    Upload, 
+    Save, 
+    Loader2,
+    ArrowLeft
+} from "lucide-react";
 import { api } from "~/trpc/react";
 import Pica from "pica";
 
@@ -168,94 +179,168 @@ const CreateOrEditEb = () => {
         }
     };
 
+    const isLoading = createEb.isPending || uploadPhoto.isPending || updateFile.isPending || updateEb.isPending;
+
     return (
-        <div className="container mx-auto p-6">
-            <div className="bg-white shadow-md rounded-lg p-8 mt-8">
-                <h1 className="text-3xl font-bold text-center text-blue-900 mb-8">
-                    {isEditMode ? "Editar EB" : "Criar novo EB"}
-                </h1>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Nome</label>
-                        <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Sigla (ex: CM-D)</label>
-                        <input
-                            type="text"
-                            value={acronym}
-                            onChange={(e) => setAcronym(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Cargo por extenso</label>
-                        <input
-                            type="text"
-                            value={role}
-                            onChange={(e) => setRole(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Email</label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                        />
-                    </div>
-                    <div className="flex items-start space-x-4">
-                        {imageSrc && (
-                            <div className="w-32 h-32 bg-gray-100 border border-gray-300 flex items-center justify-center">
-                                <img src={imageSrc} alt="Image preview" className="max-w-full h-auto" />
-                            </div>
-                        )}
-                        <div
-                            className="flex-1 border-dashed border-2 border-gray-300 p-4 text-center"
-                            onDrop={handleDrop}
-                            onDragOver={handleDragOver}
+        <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+            <div className="container mx-auto px-6 py-12">
+                <div className="max-w-2xl mx-auto space-y-6">
+                    {/* Header */}
+                    <div className="flex items-center space-x-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => router.push("/eb")}
+                            className="hover:bg-gray-50"
                         >
-                            <input
-                                type="file"
-                                onChange={handleFileInputChange}
-                                className="hidden"
-                                ref={fileInputRef}
-                                accept="image/*"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleButtonClick}
-                                className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                            >
-                                Selecionar ou Arrastar Imagem
-                            </button>
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            Voltar
+                        </Button>
+                        <div className="flex items-center space-x-4">
+                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                                <Users className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
+                                    {isEditMode ? "Editar EB" : "Criar novo EB"}
+                                </h1>
+                                <p className="text-gray-600">
+                                    {isEditMode ? "Atualize as informações do membro" : "Adicione um novo membro à executiva brasileira"}
+                                </p>
+                            </div>
                         </div>
                     </div>
-                    <div>
-                        <button
-                            type="submit"
-                            className="w-full bg-blue-900 text-white p-3 rounded-md hover:bg-blue-700"
-                            disabled={createEb.isPending || uploadPhoto.isPending || updateFile.isPending || updateEb.isPending}
-                        >
-                            {isEditMode
-                                ? (updateFile.isPending || updateEb.isPending)
-                                    ? "Atualizando..."
-                                    : "Atualizar EB"
-                                : (createEb.isPending || uploadPhoto.isPending)
-                                    ? "Criando..."
-                                    : "Criar EB"}
-                        </button>
-                    </div>
-                </form>
+
+                    {/* Form */}
+                    <Card className="shadow-lg border-0">
+                        <CardHeader>
+                            <CardTitle className="flex items-center space-x-2">
+                                <Users className="w-5 h-5 text-blue-600" />
+                                <span>Informações do Membro</span>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="name">Nome Completo</Label>
+                                        <Input
+                                            id="name"
+                                            type="text"
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value)}
+                                            placeholder="Digite o nome completo"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="acronym">Sigla</Label>
+                                        <Input
+                                            id="acronym"
+                                            type="text"
+                                            value={acronym || ""}
+                                            onChange={(e) => setAcronym(e.target.value)}
+                                            placeholder="Ex: CM-D (opcional)"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="role">Cargo por Extenso</Label>
+                                        <Input
+                                            id="role"
+                                            type="text"
+                                            value={role}
+                                            onChange={(e) => setRole(e.target.value)}
+                                            placeholder="Digite o cargo completo"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="email">Email</Label>
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            placeholder="Digite o email"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Image Upload */}
+                                <div className="space-y-4">
+                                    <Label>Imagem do Perfil</Label>
+                                    <div className="flex items-start space-x-6">
+                                        {imageSrc && (
+                                            <div className="w-32 h-32 bg-gray-100 border-2 border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                                <img 
+                                                    src={imageSrc} 
+                                                    alt="Preview da imagem" 
+                                                    className="w-full h-full object-cover" 
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="flex-1">
+                                            <div
+                                                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
+                                                onDrop={handleDrop}
+                                                onDragOver={handleDragOver}
+                                                onClick={handleButtonClick}
+                                            >
+                                                <input
+                                                    type="file"
+                                                    onChange={handleFileInputChange}
+                                                    className="hidden"
+                                                    ref={fileInputRef}
+                                                    accept="image/*"
+                                                />
+                                                <div className="flex flex-col items-center space-y-3">
+                                                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                                        <Upload className="w-6 h-6 text-blue-600" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-900">
+                                                            Clique para selecionar ou arraste uma imagem
+                                                        </p>
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            PNG, JPG até 10MB
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Submit Button */}
+                                <div className="pt-6">
+                                    <Button
+                                        type="submit"
+                                        disabled={isLoading}
+                                        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                                        size="lg"
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                                {isEditMode ? "Atualizando..." : "Criando..."}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save className="w-5 h-5 mr-2" />
+                                                {isEditMode ? "Atualizar EB" : "Criar EB"}
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
-        </div>
+        </main>
     );
 };
 

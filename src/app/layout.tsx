@@ -1,10 +1,13 @@
 import "~/styles/globals.css";
 
 import { GeistSans } from "geist/font/sans";
+import { Suspense } from "react";
 
-import { TRPCReactProvider } from "~/trpc/react";
 import { getServerAuthSession } from "~/server/auth";
 import Navbar from "./_components/Navbar";
+import Loading from "~/app/_components/Loading";
+import { Providers } from "./_components/Providers";
+import { Toaster } from "../components/ui/toaster";
 
 export const metadata = {
   title: "Painel de Administrador da IFMSA Brazil",
@@ -32,10 +35,13 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable}`}>
       <body>
-        <TRPCReactProvider>
+        <Providers session={session}>
           {session && <Navbar />}
-          {children}
-        </TRPCReactProvider>
+          <Suspense fallback={<Loading />}>
+            {children}
+          </Suspense>
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );

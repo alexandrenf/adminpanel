@@ -61,6 +61,7 @@ model User {
     sessions      Session[]
     posts         Post[]
     blogs         Blog[]
+    registros     Registros[]
 }
 
 model VerificationToken {
@@ -175,4 +176,14 @@ model Config {
     buttonText      String?
     buttonUrl       String?
     title           String?
+}
+
+model Registros {
+    id          Int      @id @default(autoincrement())
+    url         String   @db.Text
+    updatedAt   DateTime @updatedAt
+    updatedBy   User     @relation(fields: [updatedById], references: [id])
+    updatedById String
+
+    @@index([updatedById])
 }

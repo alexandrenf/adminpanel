@@ -19,16 +19,16 @@ export function SortableItem({ id, children }: SortableItemProps) {
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        padding: '8px',
-        margin: '4px 0',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        backgroundColor: '#fff',
-        cursor: 'pointer',
     };
 
     return (
-        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+        <div 
+            ref={setNodeRef} 
+            style={style} 
+            {...attributes} 
+            {...listeners}
+            className="p-3 m-1 border border-gray-200 rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition-colors shadow-sm hover:shadow-md"
+        >
             {children}
         </div>
     );
