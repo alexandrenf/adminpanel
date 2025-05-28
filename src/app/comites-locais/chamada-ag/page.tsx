@@ -106,7 +106,10 @@ export default function ChamadaAGPage() {
 
             try {
                 console.log("Fetching CSV from URL:", registrosData.url);
-                const response = await fetch(registrosData.url);
+                const response = await fetch(registrosData.url, {
+                    redirect: 'follow',
+                    credentials: 'include',
+                });
                 if (!response.ok) {
                     console.error("Failed to fetch CSV:", response.status, response.statusText);
                     throw new Error(`Erro ao buscar dados do CSV: ${response.status} ${response.statusText}`);
@@ -149,14 +152,19 @@ export default function ChamadaAGPage() {
                         console.log(`Processing line ${index + 1}:`, columns);
                         
                         // Normalize the status text for comparison
-                        const normalizedStatus = (columns[5] || '').toLowerCase()
+                        const statusText = (columns[5] || '').toLowerCase()
                             .normalize('NFD')
                             .replace(/[\u0300-\u036f]/g, '') // Remove accents
                             .replace(/[^a-z0-9]/g, '') // Remove special characters
                             .trim();
                         
-                        // Check if the normalized status contains "pleno"
-                        const isPleno = normalizedStatus.includes('pleno');
+                        // Check if the status is "Não-pleno" first
+                        const isNaoPleno = statusText.includes('naopleno') || 
+                                          statusText.includes('nao pleno') || 
+                                          statusText.includes('nao-pleno');
+                        
+                        // If it's not "Não-pleno", then check if it's "Pleno"
+                        const isPleno = !isNaoPleno && statusText.includes('pleno');
                         
                         return {
                             name: columns[0] || '',
@@ -164,7 +172,7 @@ export default function ChamadaAGPage() {
                             regional: columns[2] || '',
                             cidade: columns[3] || '',
                             uf: columns[4] || '',
-                            status: (isPleno ? 'Pleno' : 'Não-pleno') as "Pleno" | "Não-pleno",
+                            status: isNaoPleno ? 'Não-pleno' : (isPleno ? 'Pleno' : 'Não-pleno') as "Pleno" | "Não-pleno",
                             agFiliacao: columns[6] || '',
                             attendance: "not-counting" as AttendanceState
                         };
