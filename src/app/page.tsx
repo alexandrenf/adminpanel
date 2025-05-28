@@ -24,7 +24,7 @@ export default async function Home() {
         {/* Header */}
         <header className="pt-8 pb-4">
           <div className="container mx-auto px-6">
-            {session && (
+            {!session && (
             <div className="flex items-center justify-center">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-white/10 backdrop-blur-sm rounded-xl">
