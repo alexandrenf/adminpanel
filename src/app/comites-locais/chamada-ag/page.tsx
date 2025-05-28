@@ -23,6 +23,11 @@ import {
     BarChart3
 } from "lucide-react";
 import { api } from "~/trpc/react";
+import { useQuery, useMutation } from "convex/react";
+import { useToast } from "~/components/ui/use-toast";
+import { useSession } from "next-auth/react";
+import { api as convexApi } from "convex/_generated/api";
+import type { Id } from "convex/_generated/dataModel";
 
 type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
@@ -51,6 +56,34 @@ type CrMember = {
     attendance: AttendanceState;
 };
 
+type Member = {
+    id: string;
+    name: string;
+    role?: string;
+    attendance: AttendanceState;
+};
+
+type Comite = {
+    id: string;
+    name: string;
+    status: string;
+    attendance: AttendanceState;
+};
+
+type CsvData = {
+    ebs: Member[];
+    crs: Member[];
+    comitesPlenos: Comite[];
+    comitesNaoPlenos: Comite[];
+};
+
+type AttendanceData = {
+    ebs: Member[];
+    crs: Member[];
+    comitesPlenos: Comite[];
+    comitesNaoPlenos: Comite[];
+};
+
 // Add quorum requirements
 const QUORUM_REQUIREMENTS = {
     eb: 0.5, // 50% of EB members
@@ -58,6 +91,34 @@ const QUORUM_REQUIREMENTS = {
     comitesPlenos: 0.5, // 50% of Pleno committees
     comitesNaoPlenos: 0.5, // 50% of Não-pleno committees
 } as const;
+
+const getNextAttendanceState = (currentState: AttendanceState): AttendanceState => {
+    switch (currentState) {
+        case "not-counting":
+            return "present";
+        case "present":
+            return "absent";
+        case "absent":
+            return "excluded";
+        case "excluded":
+            return "not-counting";
+        default:
+            return "not-counting";
+    }
+};
+
+const getAttendanceLabel = (state: AttendanceState): string => {
+    switch (state) {
+        case "present":
+            return "Presente";
+        case "absent":
+            return "Ausente";
+        case "excluded":
+            return "Excluído";
+        default:
+            return "Não contando";
+    }
+};
 
 export default function ChamadaAGPage() {
     const router = useRouter();
@@ -71,6 +132,23 @@ export default function ChamadaAGPage() {
     const [searchCr, setSearchCr] = useState("");
     const [searchPlenos, setSearchPlenos] = useState("");
     const [searchNaoPlenos, setSearchNaoPlenos] = useState("");
+    const { data: session } = useSession();
+    const { toast } = useToast();
+    const [attendanceData, setAttendanceData] = useState<AttendanceData>({
+        ebs: [],
+        crs: [],
+        comitesPlenos: [],
+        comitesNaoPlenos: [],
+    });
+
+    // Convex queries
+    const ebsAttendance = useQuery(convexApi.attendance.getByType, { type: "eb" });
+    const crsAttendance = useQuery(convexApi.attendance.getByType, { type: "cr" });
+    const comitesAttendance = useQuery(convexApi.attendance.getByType, { type: "comite" });
+
+    // Convex mutations
+    const updateAttendance = useMutation(convexApi.attendance.updateAttendance);
+    const resetAllAttendance = useMutation(convexApi.attendance.resetAll);
 
     // Fetch data
     const { data: registrosData, isLoading: registrosLoading } = api.registros.get.useQuery();
@@ -197,6 +275,31 @@ export default function ChamadaAGPage() {
 
         fetchCSVData();
     }, [registrosData, registrosLoading]);
+
+    // Update attendance state when Convex data changes
+    useEffect(() => {
+        if (attendanceData && ebsAttendance && crsAttendance && comitesAttendance) {
+            const newAttendanceData: AttendanceData = {
+                ebs: attendanceData.ebs.map(eb => ({
+                    ...eb,
+                    attendance: (ebsAttendance.find(a => a.memberId === eb.id)?.attendance || "not-counting") as AttendanceState
+                })),
+                crs: attendanceData.crs.map(cr => ({
+                    ...cr,
+                    attendance: (crsAttendance.find(a => a.memberId === cr.id)?.attendance || "not-counting") as AttendanceState
+                })),
+                comitesPlenos: attendanceData.comitesPlenos.map(comite => ({
+                    ...comite,
+                    attendance: (comitesAttendance.find(a => a.memberId === comite.id)?.attendance || "not-counting") as AttendanceState
+                })),
+                comitesNaoPlenos: attendanceData.comitesNaoPlenos.map(comite => ({
+                    ...comite,
+                    attendance: (comitesAttendance.find(a => a.memberId === comite.id)?.attendance || "not-counting") as AttendanceState
+                }))
+            };
+            setAttendanceData(newAttendanceData);
+        }
+    }, [attendanceData, ebsAttendance, crsAttendance, comitesAttendance]);
 
     const getAttendanceIcon = (state: AttendanceState) => {
         switch (state) {
@@ -371,6 +474,70 @@ export default function ChamadaAGPage() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+    };
+
+    const handleAttendanceChange = async (type: string, id: string, name: string, role?: string, status?: string) => {
+        if (!session?.user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para alterar a presença.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const currentState = attendanceData[type as keyof AttendanceData].find(item => item.id === id)?.attendance || "not-counting";
+        const nextState = getNextAttendanceState(currentState);
+
+        try {
+            await updateAttendance({
+                type,
+                memberId: id,
+                name,
+                role,
+                status,
+                attendance: nextState,
+                lastUpdatedBy: session.user.id
+            });
+
+            toast({
+                title: "Presença atualizada",
+                description: `${name} marcado como ${getAttendanceLabel(nextState)}`,
+            });
+        } catch (error) {
+            toast({
+                title: "Erro",
+                description: "Erro ao atualizar presença. Tente novamente.",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleResetAll = async () => {
+        if (!session?.user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para resetar a presença.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (window.confirm("Tem certeza que deseja resetar todas as presenças?")) {
+            try {
+                await resetAllAttendance({ lastUpdatedBy: session.user.id });
+                toast({
+                    title: "Presenças resetadas",
+                    description: "Todas as presenças foram resetadas com sucesso.",
+                });
+            } catch (error) {
+                toast({
+                    title: "Erro",
+                    description: "Erro ao resetar presenças. Tente novamente.",
+                    variant: "destructive",
+                });
+            }
+        }
     };
 
     if (loading) {
