@@ -73,7 +73,7 @@ export default function ChamadaAGPage() {
     const [searchNaoPlenos, setSearchNaoPlenos] = useState("");
 
     // Fetch data
-    const { data: registrosData } = api.registros.get.useQuery();
+    const { data: registrosData, isLoading: registrosLoading } = api.registros.get.useQuery();
     const { data: ebData } = api.eb.getAll.useQuery();
     const { data: crData } = api.cr.getAll.useQuery();
 
@@ -101,6 +101,11 @@ export default function ChamadaAGPage() {
 
     useEffect(() => {
         const fetchCSVData = async () => {
+            // Don't start fetching if registros is still loading
+            if (registrosLoading) {
+                return;
+            }
+
             if (!registrosData) {
                 console.log("No registros data available");
                 setError("URL do CSV não configurada");
@@ -208,7 +213,7 @@ export default function ChamadaAGPage() {
         };
 
         fetchCSVData();
-    }, [registrosData]);
+    }, [registrosData, registrosLoading]);
 
     const getAttendanceIcon = (state: AttendanceState) => {
         switch (state) {
@@ -251,19 +256,30 @@ export default function ChamadaAGPage() {
     const comitesNaoPlenos = comitesLocais.filter(c => c.status === "Não-pleno");
 
     // Search filtering functions
-    const filterBySearch = <T extends { name: string }>(items: T[], searchTerm: string): T[] => {
+    const filterBySearch = <T extends { name: string; role?: string }>(items: T[], searchTerm: string): T[] => {
         if (!searchTerm.trim()) return items;
         
         const searchLower = searchTerm.toLowerCase()
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, ''); // Remove accents for search
         
-        return items.filter(item => 
-            item.name.toLowerCase()
+        return items.filter(item => {
+            const nameMatch = item.name.toLowerCase()
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
-                .includes(searchLower)
-        );
+                .includes(searchLower);
+            
+            // If item has a role property, also search in it
+            if (item.role) {
+                const roleMatch = item.role.toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .includes(searchLower);
+                return nameMatch || roleMatch;
+            }
+            
+            return nameMatch;
+        });
     };
 
     const filteredEbMembers = filterBySearch(ebMembers, searchEb);
@@ -559,7 +575,7 @@ export default function ChamadaAGPage() {
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                                     <input
                                         type="text"
-                                        placeholder="Buscar na Diretoria Executiva..."
+                                        placeholder="Buscar por nome ou cargo na Diretoria Executiva..."
                                         value={searchEb}
                                         onChange={(e) => setSearchEb(e.target.value)}
                                         className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
@@ -677,7 +693,7 @@ export default function ChamadaAGPage() {
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                                     <input
                                         type="text"
-                                        placeholder="Buscar nos Coordenadores Regionais..."
+                                        placeholder="Buscar por nome ou cargo nos Coordenadores Regionais..."
                                         value={searchCr}
                                         onChange={(e) => setSearchCr(e.target.value)}
                                         className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
@@ -994,7 +1010,7 @@ export default function ChamadaAGPage() {
                     </div>
 
                     {/* Floating Summary Menu */}
-                    <div className="fixed right-6 top-1/2 transform -translate-y-1/2 z-50">
+                    <div className="fixed right-6 top-24 z-50">
                         <div className="group">
                             {/* Summary Icon */}
                             <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full p-3 shadow-lg cursor-pointer transition-all duration-300 hover:shadow-xl">
