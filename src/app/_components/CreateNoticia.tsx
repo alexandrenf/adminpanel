@@ -148,6 +148,7 @@ const CreateNoticia = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        e.stopPropagation();
 
         if (isEditMode && noticiaId !== null) {
             try {
@@ -220,6 +221,7 @@ const CreateNoticia = () => {
                             variant="outline"
                             onClick={() => router.push("/noticias")}
                             className="hover:bg-gray-50"
+                            type="button"
                         >
                             <ArrowLeft className="w-4 h-4 mr-2" />
                             Voltar
@@ -258,6 +260,11 @@ const CreateNoticia = () => {
                                         onChange={(e) => setTitle(e.target.value)}
                                         placeholder="Digite o título da notícia"
                                         required
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                            }
+                                        }}
                                     />
                                 </div>
 
@@ -286,6 +293,11 @@ const CreateNoticia = () => {
                                                 onChange={(e) => setOtherAuthor(e.target.value)}
                                                 placeholder="Especifique o Autor"
                                                 className="mt-2"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                    }
+                                                }}
                                             />
                                         )}
                                     </div>
@@ -313,6 +325,11 @@ const CreateNoticia = () => {
                                         maxLength={150}
                                         placeholder="Digite um resumo da notícia (máximo 150 caracteres)"
                                         className="min-h-[80px]"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                            }
+                                        }}
                                     />
                                     <p className="text-xs text-gray-500">{resumo.length}/150 caracteres</p>
                                 </div>
