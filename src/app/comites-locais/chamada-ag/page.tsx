@@ -1,0 +1,522 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "../../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
+import { Badge } from "../../../components/ui/badge";
+import { 
+    ClipboardCheck, 
+    ArrowLeft, 
+    Users, 
+    UserCheck, 
+    Building, 
+    Building2,
+    CheckCircle,
+    XCircle,
+    Minus
+} from "lucide-react";
+import { api } from "~/trpc/react";
+
+type AttendanceState = "present" | "absent" | "not-counting";
+
+type ComiteLocal = {
+    name: string;
+    escola: string;
+    regional: string;
+    cidade: string;
+    uf: string;
+    status: "Pleno" | "Não-pleno";
+    agFiliacao: string;
+    attendance: AttendanceState;
+};
+
+type EbMember = {
+    id: number;
+    role: string;
+    name: string;
+    attendance: AttendanceState;
+};
+
+type CrMember = {
+    id: number;
+    role: string;
+    name: string;
+    attendance: AttendanceState;
+};
+
+export default function ChamadaAGPage() {
+    const router = useRouter();
+    const [comitesLocais, setComitesLocais] = useState<ComiteLocal[]>([]);
+    const [ebMembers, setEbMembers] = useState<EbMember[]>([]);
+    const [crMembers, setCrMembers] = useState<CrMember[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Fetch data
+    const { data: registrosData } = api.registros.get.useQuery();
+    const { data: ebData } = api.eb.getAll.useQuery();
+    const { data: crData } = api.cr.getAll.useQuery();
+
+    useEffect(() => {
+        if (ebData) {
+            setEbMembers(ebData.map(eb => ({
+                id: eb.id,
+                role: eb.role,
+                name: eb.name,
+                attendance: "not-counting" as AttendanceState
+            })));
+        }
+    }, [ebData]);
+
+    useEffect(() => {
+        if (crData) {
+            setCrMembers(crData.map(cr => ({
+                id: cr.id,
+                role: cr.role,
+                name: cr.name,
+                attendance: "not-counting" as AttendanceState
+            })));
+        }
+    }, [crData]);
+
+    useEffect(() => {
+        const fetchCSVData = async () => {
+            if (!registrosData?.url) {
+                setError("URL do CSV não configurada");
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const response = await fetch(registrosData.url);
+                if (!response.ok) {
+                    throw new Error("Erro ao buscar dados do CSV");
+                }
+                
+                const csvText = await response.text();
+                const lines = csvText.split('\n').filter(line => line.trim());
+                
+                // Skip header line
+                const dataLines = lines.slice(1);
+                
+                const comites: ComiteLocal[] = dataLines.map(line => {
+                    const columns = line.split(',').map(col => col.trim().replace(/"/g, ''));
+                    
+                    // Normalize the status text for comparison
+                    const normalizedStatus = (columns[5] || '').toLowerCase()
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '') // Remove accents
+                        .replace(/[^a-z0-9]/g, '') // Remove special characters
+                        .trim();
+                    
+                    // Check if the normalized status contains "pleno"
+                    const isPleno = normalizedStatus.includes('pleno');
+                    
+                    return {
+                        name: columns[0] || '',
+                        escola: columns[1] || '',
+                        regional: columns[2] || '',
+                        cidade: columns[3] || '',
+                        uf: columns[4] || '',
+                        status: (isPleno ? 'Pleno' : 'Não-pleno') as "Pleno" | "Não-pleno",
+                        agFiliacao: columns[6] || '',
+                        attendance: "not-counting" as AttendanceState
+                    };
+                }).filter(comite => comite.name); // Filter out empty names
+
+                // Sort alphabetically by name
+                comites.sort((a, b) => a.name.localeCompare(b.name));
+                
+                setComitesLocais(comites);
+                setLoading(false);
+            } catch (err) {
+                setError("Erro ao carregar dados do CSV");
+                setLoading(false);
+            }
+        };
+
+        fetchCSVData();
+    }, [registrosData]);
+
+    const toggleAttendance = (type: 'eb' | 'cr' | 'comite', index: number) => {
+        const nextState = (current: AttendanceState): AttendanceState => {
+            switch (current) {
+                case "not-counting": return "present";
+                case "present": return "absent";
+                case "absent": return "not-counting";
+                default: return "not-counting";
+            }
+        };
+
+        if (type === 'eb') {
+            setEbMembers(prev => prev.map((member, i) => 
+                i === index ? { ...member, attendance: nextState(member.attendance) } : member
+            ));
+        } else if (type === 'cr') {
+            setCrMembers(prev => prev.map((member, i) => 
+                i === index ? { ...member, attendance: nextState(member.attendance) } : member
+            ));
+        } else if (type === 'comite') {
+            setComitesLocais(prev => prev.map((comite, i) => 
+                i === index ? { ...comite, attendance: nextState(comite.attendance) } : comite
+            ));
+        }
+    };
+
+    const getAttendanceIcon = (state: AttendanceState) => {
+        switch (state) {
+            case "present":
+                return <CheckCircle className="w-5 h-5 text-green-600" />;
+            case "absent":
+                return <XCircle className="w-5 h-5 text-red-600" />;
+            case "not-counting":
+                return <Minus className="w-5 h-5 text-gray-400" />;
+        }
+    };
+
+    const getAttendanceColor = (state: AttendanceState) => {
+        switch (state) {
+            case "present":
+                return "bg-green-50 border-green-200 hover:bg-green-100";
+            case "absent":
+                return "bg-red-50 border-red-200 hover:bg-red-100";
+            case "not-counting":
+                return "bg-gray-50 border-gray-200 hover:bg-gray-100";
+        }
+    };
+
+    const getStats = (members: { attendance: AttendanceState }[]) => {
+        const present = members.filter(m => m.attendance === "present").length;
+        const absent = members.filter(m => m.attendance === "absent").length;
+        const notCounting = members.filter(m => m.attendance === "not-counting").length;
+        return { present, absent, notCounting };
+    };
+
+    const comitesPlenos = comitesLocais.filter(c => c.status === "Pleno");
+    const comitesNaoPlenos = comitesLocais.filter(c => c.status === "Não-pleno");
+
+    if (loading) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+                <div className="container mx-auto px-6 py-12">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Carregando dados...</p>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
+    if (error) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+                <div className="container mx-auto px-6 py-12">
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <XCircle className="w-8 h-8 text-red-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Erro ao carregar dados</h3>
+                        <p className="text-red-600 mb-4">{error}</p>
+                        <Button onClick={() => router.push("/comites-locais")} variant="outline">
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            Voltar
+                        </Button>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
+    return (
+        <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+            <div className="container mx-auto px-6 py-12">
+                <div className="max-w-7xl mx-auto space-y-8">
+                    {/* Header */}
+                    <div className="flex items-center space-x-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => router.push("/comites-locais")}
+                            className="hover:bg-gray-50"
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            Voltar
+                        </Button>
+                        <div className="flex items-center space-x-4">
+                            <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg">
+                                <ClipboardCheck className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-green-800 bg-clip-text text-transparent">
+                                    Chamada de AG
+                                </h1>
+                                <p className="text-gray-600">
+                                    Controle de presença para Assembleia Geral
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Instructions */}
+                    <Card className="shadow-lg border-0">
+                        <CardContent className="p-6">
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
+                                <h3 className="text-lg font-semibold text-blue-800 mb-2">Como usar</h3>
+                                <p className="text-blue-700 mb-3">Clique nos nomes para alterar o status de presença:</p>
+                                <div className="flex items-center space-x-6 text-sm">
+                                    <div className="flex items-center space-x-2">
+                                        <CheckCircle className="w-4 h-4 text-green-600" />
+                                        <span className="text-green-700">Presente</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <XCircle className="w-4 h-4 text-red-600" />
+                                        <span className="text-red-700">Ausente</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Minus className="w-4 h-4 text-gray-400" />
+                                        <span className="text-gray-600">Não contabilizado</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Grid Layout */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* EBs Section */}
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                        <Users className="w-5 h-5 text-blue-600" />
+                                        <span>Executiva Brasileira</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        {(() => {
+                                            const stats = getStats(ebMembers);
+                                            return (
+                                                <>
+                                                    <Badge variant="outline" className="text-green-600 border-green-200">
+                                                        {stats.present} presentes
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-red-600 border-red-200">
+                                                        {stats.absent} ausentes
+                                                    </Badge>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                    {ebMembers.map((member, index) => (
+                                        <button
+                                            key={member.id}
+                                            onClick={() => toggleAttendance('eb', index)}
+                                            className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(member.attendance)}`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="font-medium">{member.name}</p>
+                                                    <p className="text-sm text-gray-600">{member.role}</p>
+                                                </div>
+                                                {getAttendanceIcon(member.attendance)}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* CRs Section */}
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                        <UserCheck className="w-5 h-5 text-purple-600" />
+                                        <span>Coordenadores Regionais</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        {(() => {
+                                            const stats = getStats(crMembers);
+                                            return (
+                                                <>
+                                                    <Badge variant="outline" className="text-green-600 border-green-200">
+                                                        {stats.present} presentes
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-red-600 border-red-200">
+                                                        {stats.absent} ausentes
+                                                    </Badge>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                    {crMembers.map((member, index) => (
+                                        <button
+                                            key={member.id}
+                                            onClick={() => toggleAttendance('cr', index)}
+                                            className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(member.attendance)}`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="font-medium">{member.name}</p>
+                                                    <p className="text-sm text-gray-600">{member.role}</p>
+                                                </div>
+                                                {getAttendanceIcon(member.attendance)}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Comitês Plenos Section */}
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                        <Building className="w-5 h-5 text-green-600" />
+                                        <span>Comitês Plenos</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        {(() => {
+                                            const stats = getStats(comitesPlenos);
+                                            return (
+                                                <>
+                                                    <Badge variant="outline" className="text-green-600 border-green-200">
+                                                        {stats.present} presentes
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-red-600 border-red-200">
+                                                        {stats.absent} ausentes
+                                                    </Badge>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                    {comitesPlenos.map((comite, index) => {
+                                        const originalIndex = comitesLocais.findIndex(c => c.name === comite.name);
+                                        return (
+                                            <button
+                                                key={comite.name}
+                                                onClick={() => toggleAttendance('comite', originalIndex)}
+                                                className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(comite.attendance)}`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-medium">{comite.name}</p>
+                                                        <p className="text-sm text-gray-600">{comite.cidade}, {comite.uf}</p>
+                                                    </div>
+                                                    {getAttendanceIcon(comite.attendance)}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Comitês Não Plenos Section */}
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                        <Building2 className="w-5 h-5 text-orange-600" />
+                                        <span>Comitês Não Plenos</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        {(() => {
+                                            const stats = getStats(comitesNaoPlenos);
+                                            return (
+                                                <>
+                                                    <Badge variant="outline" className="text-green-600 border-green-200">
+                                                        {stats.present} presentes
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-red-600 border-red-200">
+                                                        {stats.absent} ausentes
+                                                    </Badge>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                    {comitesNaoPlenos.map((comite, index) => {
+                                        const originalIndex = comitesLocais.findIndex(c => c.name === comite.name);
+                                        return (
+                                            <button
+                                                key={comite.name}
+                                                onClick={() => toggleAttendance('comite', originalIndex)}
+                                                className={`w-full p-3 rounded-lg border transition-colors text-left ${getAttendanceColor(comite.attendance)}`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-medium">{comite.name}</p>
+                                                        <p className="text-sm text-gray-600">{comite.cidade}, {comite.uf}</p>
+                                                    </div>
+                                                    {getAttendanceIcon(comite.attendance)}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Summary */}
+                    <Card className="shadow-lg border-0">
+                        <CardHeader>
+                            <CardTitle className="flex items-center space-x-2">
+                                <ClipboardCheck className="w-5 h-5 text-green-600" />
+                                <span>Resumo Geral</span>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                {[
+                                    { label: "EBs", data: ebMembers, color: "blue" },
+                                    { label: "CRs", data: crMembers, color: "purple" },
+                                    { label: "Comitês Plenos", data: comitesPlenos, color: "green" },
+                                    { label: "Comitês Não Plenos", data: comitesNaoPlenos, color: "orange" }
+                                ].map(({ label, data, color }) => {
+                                    const stats = getStats(data);
+                                    return (
+                                        <div key={label} className="text-center">
+                                            <h4 className="font-semibold text-gray-900 mb-2">{label}</h4>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-center space-x-1">
+                                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                                    <span className="text-sm text-green-700">{stats.present}</span>
+                                                </div>
+                                                <div className="flex items-center justify-center space-x-1">
+                                                    <XCircle className="w-4 h-4 text-red-600" />
+                                                    <span className="text-sm text-red-700">{stats.absent}</span>
+                                                </div>
+                                                <div className="flex items-center justify-center space-x-1">
+                                                    <Minus className="w-4 h-4 text-gray-400" />
+                                                    <span className="text-sm text-gray-600">{stats.notCounting}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </main>
+    );
+} 
