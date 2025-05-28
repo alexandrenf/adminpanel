@@ -2,6 +2,7 @@ import { postRouter } from "~/server/api/routers/post";
 import { fileRouter } from "~/server/api/routers/fileRouter";
 import { ebRouter } from "~/server/api/routers/ebRouter";
 import { ebPhotoRouter } from "~/server/api/routers/ebPhoto";
+import { noticiasRouter } from "~/server/api/routers/noticias"
 import { arquivoRouter } from "~/server/api/routers/arquivoRouter";
 import { photoRouter } from "~/server/api/routers/photoRouter";
 import { gestaoRouter } from "./routers/gestaoRouter";
@@ -20,6 +21,7 @@ import { registrosRouter } from "~/server/api/routers/registrosRouter";
  */
 export const appRouter = createTRPCRouter({
   post: postRouter,
+  noticias: noticiasRouter,
   file: fileRouter,
   eb: ebRouter,
   ebPhoto: ebPhotoRouter,
