@@ -39,7 +39,10 @@ import { api } from "~/trpc/react";
 export default function NoticiasTable() {
     const router = useRouter();
     const [deleteError, setDeleteError] = useState<string | null>(null);
-    const { data: noticias, refetch } = api.noticias.getAll.useQuery();
+    const { data: noticiasData, refetch } = api.noticias.getAll.useQuery();
+
+    // Sort noticias by date (newest first)
+    const noticias = noticiasData?.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const deleteMutation = api.noticias.delete.useMutation({
         onSuccess: () => {

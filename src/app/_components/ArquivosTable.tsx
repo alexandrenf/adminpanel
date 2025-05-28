@@ -61,7 +61,9 @@ export default function ArquivosTable({ type, label }: ArquivosTableProps) {
 
     useEffect(() => {
         if (data) {
-            setArquivos(data);
+            // Sort arquivos by date (newest first)
+            const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setArquivos(sortedData);
         }
     }, [data]);
 

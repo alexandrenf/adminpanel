@@ -83,7 +83,14 @@ const CreateNoticia = () => {
             setDate(new Date(noticiaData.date));
             fetchMarkdownFile(noticiaData.link);
             setResumo(noticiaData.summary);
-            setAuthor(noticiaData.author);
+            // Check if the author is in the predefined options
+            const isPredefinedAuthor = authorOptions.includes(noticiaData.author);
+            if (isPredefinedAuthor) {
+                setAuthor(noticiaData.author);
+            } else {
+                setAuthor("Outros");
+                setOtherAuthor(noticiaData.author);
+            }
             setImageSrc(noticiaData.imageLink);
             setForcarPaginaInicial(noticiaData.forceHomePage);
         }
