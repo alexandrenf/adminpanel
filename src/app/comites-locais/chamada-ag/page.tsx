@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
@@ -14,7 +14,11 @@ import {
     Building2,
     CheckCircle,
     XCircle,
-    Minus
+    Minus,
+    Download,
+    Upload,
+    RotateCcw,
+    Save
 } from "lucide-react";
 import { api } from "~/trpc/react";
 
@@ -55,6 +59,7 @@ const QUORUM_REQUIREMENTS = {
 
 export default function ChamadaAGPage() {
     const router = useRouter();
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [comitesLocais, setComitesLocais] = useState<ComiteLocal[]>([]);
     const [ebMembers, setEbMembers] = useState<EbMember[]>([]);
     const [crMembers, setCrMembers] = useState<CrMember[]>([]);
@@ -108,7 +113,6 @@ export default function ChamadaAGPage() {
                 console.log("Fetching CSV from URL:", registrosData.url);
                 const response = await fetch(registrosData.url, {
                     redirect: 'follow',
-                    credentials: 'include',
                 });
                 if (!response.ok) {
                     console.error("Failed to fetch CSV:", response.status, response.statusText);
@@ -259,6 +263,106 @@ export default function ChamadaAGPage() {
     const comitesPlenos = comitesLocais.filter(c => c.status === "Pleno");
     const comitesNaoPlenos = comitesLocais.filter(c => c.status === "Não-pleno");
 
+    // Save/Load/Reset functions
+    const saveAttendanceState = () => {
+        const state = {
+            timestamp: new Date().toISOString(),
+            ebMembers,
+            crMembers,
+            comitesLocais
+        };
+        
+        const dataStr = JSON.stringify(state, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `chamada-ag-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const loadAttendanceState = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const content = e.target?.result as string;
+                const state = JSON.parse(content);
+                
+                if (state.ebMembers) {
+                    setEbMembers(state.ebMembers);
+                }
+                if (state.crMembers) {
+                    setCrMembers(state.crMembers);
+                }
+                if (state.comitesLocais) {
+                    setComitesLocais(state.comitesLocais);
+                }
+            } catch (error) {
+                console.error('Error loading attendance state:', error);
+                alert('Erro ao carregar o arquivo. Verifique se o formato está correto.');
+            }
+        };
+        reader.readAsText(file);
+        
+        // Reset the input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const resetAttendanceState = () => {
+        if (confirm('Tem certeza que deseja resetar todos os estados de presença?')) {
+            setEbMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" })));
+            setCrMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" })));
+            setComitesLocais(prev => prev.map(comite => ({ ...comite, attendance: "not-counting" })));
+        }
+    };
+
+    const downloadExcelReport = () => {
+        // Create CSV content
+        let csvContent = "Tipo,Nome,Cargo/Localização,Status,Presença\n";
+        
+        // Add EB members
+        ebMembers.forEach(member => {
+            const status = member.attendance === "present" ? "Presente" : 
+                          member.attendance === "absent" ? "Ausente" : "Não contabilizado";
+            csvContent += `EB,"${member.name}","${member.role}","${status}"\n`;
+        });
+        
+        // Add CR members
+        crMembers.forEach(member => {
+            const status = member.attendance === "present" ? "Presente" : 
+                          member.attendance === "absent" ? "Ausente" : "Não contabilizado";
+            csvContent += `CR,"${member.name}","${member.role}","${status}"\n`;
+        });
+        
+        // Add Comitês
+        comitesLocais.forEach(comite => {
+            const status = comite.attendance === "present" ? "Presente" : 
+                          comite.attendance === "absent" ? "Ausente" : "Não contabilizado";
+            csvContent += `${comite.status},"${comite.name}","${comite.cidade}, ${comite.uf}","${status}"\n`;
+        });
+        
+        // Create and download file
+        const dataBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `relatorio-presenca-ag-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     if (loading) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -320,6 +424,58 @@ export default function ChamadaAGPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Action Buttons */}
+                    <Card className="shadow-lg border-0">
+                        <CardContent className="p-6">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <Button
+                                        onClick={downloadExcelReport}
+                                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                                    >
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Baixar Relatório
+                                    </Button>
+                                    <Button
+                                        onClick={saveAttendanceState}
+                                        variant="outline"
+                                        className="hover:bg-blue-50 hover:border-blue-200 border-blue-300 text-blue-700"
+                                    >
+                                        <Save className="w-4 h-4 mr-2" />
+                                        Salvar Estado
+                                    </Button>
+                                    <Button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        variant="outline"
+                                        className="hover:bg-purple-50 hover:border-purple-200 border-purple-300 text-purple-700"
+                                    >
+                                        <Upload className="w-4 h-4 mr-2" />
+                                        Carregar Estado
+                                    </Button>
+                                    <Button
+                                        onClick={resetAttendanceState}
+                                        variant="outline"
+                                        className="hover:bg-red-50 hover:border-red-200 border-red-300 text-red-700"
+                                    >
+                                        <RotateCcw className="w-4 h-4 mr-2" />
+                                        Resetar
+                                    </Button>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                    <p>Use os botões para gerenciar o estado da chamada</p>
+                                </div>
+                            </div>
+                            {/* Hidden file input */}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".json"
+                                onChange={loadAttendanceState}
+                                style={{ display: 'none' }}
+                            />
+                        </CardContent>
+                    </Card>
 
                     {/* Instructions */}
                     <Card className="shadow-lg border-0">
