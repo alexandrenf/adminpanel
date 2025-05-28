@@ -1,5 +1,5 @@
 import { postRouter } from "~/server/api/routers/post";
-import { noticiasRouter } from "~/server/api/routers/noticias"
+import { noticiasRouter } from "~/server/api/routers/noticiasRouter";
 import { fileRouter } from "~/server/api/routers/fileRouter";
 import { ebRouter } from "~/server/api/routers/ebRouter";
 import { ebPhotoRouter } from "~/server/api/routers/ebPhoto";
@@ -12,6 +12,7 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { crRouter } from "./routers/crRouter";
 import { regionalRouter } from "./routers/regionalRouter";
 import { configRouter } from "./routers/configRouter";
+import { registrosRouter } from "~/server/api/routers/registrosRouter";
 
 /**
  * This is the primary router for your server.
@@ -32,6 +33,7 @@ export const appRouter = createTRPCRouter({
   regional: regionalRouter,
   times: timesRouter,
   config: configRouter,
+  registros: registrosRouter,
 });
 
 // export type definition of API

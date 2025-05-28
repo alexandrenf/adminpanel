@@ -1,42 +1,49 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { api } from "~/trpc/react";
 
 const UrlEditor = () => {
     const [isEditing, setIsEditing] = useState(false);
-    const [url, setUrl] = useState("https://docs.google.com/spreadsheets/d/example/edit");
-    const [tempUrl, setTempUrl] = useState(url);
+    const [tempUrl, setTempUrl] = useState("");
+    
+    const { data: registros, isLoading } = api.registros.get.useQuery();
+    const updateUrl = api.registros.update.useMutation({
+        onSuccess: () => {
+            setIsEditing(false);
+        },
+    });
+
+    useEffect(() => {
+        if (registros) {
+            setTempUrl(registros.url);
+        }
+    }, [registros]);
 
     const handleEdit = () => {
         setIsEditing(true);
-        setTempUrl(url);
     };
 
     const handleSave = () => {
-        // Here we would normally save to the server
-        setUrl(tempUrl);
-        setIsEditing(false);
+        updateUrl.mutate({ url: tempUrl });
     };
 
     const handleCancel = () => {
-        setTempUrl(url);
+        if (registros) {
+            setTempUrl(registros.url);
+        }
         setIsEditing(false);
     };
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(url);
+        if (registros) {
+            navigator.clipboard.writeText(registros.url);
+        }
     };
 
-    const formatGoogleDriveUrl = (inputUrl: string) => {
-        // Convert Google Drive URL to CSV download URL
-        const match = inputUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-        if (match) {
-            const fileId = match[1];
-            return `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv`;
-        }
-        return inputUrl;
-    };
+    if (isLoading) {
+        return <div>Carregando...</div>;
+    }
 
     return (
         <div className="flex items-center space-x-2">
@@ -46,14 +53,15 @@ const UrlEditor = () => {
                         type="text"
                         value={tempUrl}
                         onChange={(e) => setTempUrl(e.target.value)}
-                        className="px-2 py-1 text-black rounded"
+                        className="px-2 py-1 text-black rounded w-full"
                         placeholder="Cole a URL do Google Drive"
                     />
                     <button
                         onClick={handleSave}
                         className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                        disabled={updateUrl.isPending}
                     >
-                        Salvar
+                        {updateUrl.isPending ? "Salvando..." : "Salvar"}
                     </button>
                     <button
                         onClick={handleCancel}
@@ -64,7 +72,7 @@ const UrlEditor = () => {
                 </>
             ) : (
                 <>
-                    <span className="text-sm truncate max-w-[200px]">{url}</span>
+                    <span className="text-sm truncate max-w-[200px]">{registros?.url}</span>
                     <button
                         onClick={handleEdit}
                         className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
