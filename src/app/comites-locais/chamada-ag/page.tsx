@@ -143,7 +143,6 @@ export default function ChamadaAGPage() {
     const { data: crData } = api.cr.getAll.useQuery();
 
     // State for tracking if data is loaded
-    const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [isLoadingNovaAG, setIsLoadingNovaAG] = useState(false);
 
     useEffect(() => {
@@ -167,6 +166,51 @@ export default function ChamadaAGPage() {
             })));
         }
     }, [crData]);
+
+    // Convex is always the source of truth - rebuild UI from Convex data
+    useEffect(() => {
+        if (ebsAttendance !== undefined && ebData) {
+            const updatedEbMembers = ebData.map(eb => ({
+                id: eb.id,
+                role: eb.role,
+                name: eb.name,
+                attendance: (ebsAttendance.find(a => a.memberId === eb.id.toString())?.attendance || "not-counting") as AttendanceState
+            }));
+            setEbMembers(updatedEbMembers);
+        }
+    }, [ebsAttendance, ebData]);
+
+    useEffect(() => {
+        if (crsAttendance !== undefined && crData) {
+            const updatedCrMembers = crData.map(cr => ({
+                id: cr.id,
+                role: cr.role,
+                name: cr.name,
+                attendance: (crsAttendance.find(a => a.memberId === cr.id.toString())?.attendance || "not-counting") as AttendanceState
+            }));
+            setCrMembers(updatedCrMembers);
+        }
+    }, [crsAttendance, crData]);
+
+    useEffect(() => {
+        if (comitesAttendance !== undefined) {
+            // Always rebuild comites from Convex data with complete CSV information
+            const comitesFromConvex = comitesAttendance
+                .filter(record => record.type === "comite")
+                .map(record => ({
+                    name: record.name,
+                    escola: record.escola || "",
+                    regional: record.regional || "",
+                    cidade: record.cidade || "",
+                    uf: record.uf || "",
+                    status: (record.status || "Não-pleno") as "Pleno" | "Não-pleno",
+                    agFiliacao: record.agFiliacao || "",
+                    attendance: record.attendance as AttendanceState
+                }));
+            
+            setComitesLocais(comitesFromConvex);
+        }
+    }, [comitesAttendance]);
 
     // Nova AG function to load all data and populate Convex
     const handleNovaAG = async () => {
@@ -304,12 +348,7 @@ export default function ChamadaAGPage() {
                 // Bulk insert all records to Convex
                 await bulkInsertAttendance({ records: allRecords });
                 
-                // Update local state - but after this, Convex becomes source of truth
-                setIsDataLoaded(true);
                 setLoading(false);
-                
-                // Store the full CSV data temporarily for reconstruction
-                // The useEffect hooks will rebuild the UI from Convex data
                 
                 toast({
                     title: "✅ Nova AG criada com sucesso",
@@ -330,51 +369,6 @@ export default function ChamadaAGPage() {
             }
         }
     };
-
-    // Update attendance state when Convex data changes - this is the source of truth after Nova AG
-    useEffect(() => {
-        if (isDataLoaded && ebsAttendance !== undefined) {
-            const updatedEbMembers = ebData?.map(eb => ({
-                id: eb.id,
-                role: eb.role,
-                name: eb.name,
-                attendance: (ebsAttendance.find(a => a.memberId === eb.id.toString())?.attendance || "not-counting") as AttendanceState
-            })) || [];
-            setEbMembers(updatedEbMembers);
-        }
-    }, [ebsAttendance, ebData, isDataLoaded]);
-
-    useEffect(() => {
-        if (isDataLoaded && crsAttendance !== undefined) {
-            const updatedCrMembers = crData?.map(cr => ({
-                id: cr.id,
-                role: cr.role,
-                name: cr.name,
-                attendance: (crsAttendance.find(a => a.memberId === cr.id.toString())?.attendance || "not-counting") as AttendanceState
-            })) || [];
-            setCrMembers(updatedCrMembers);
-        }
-    }, [crsAttendance, crData, isDataLoaded]);
-
-    useEffect(() => {
-        if (isDataLoaded && comitesAttendance !== undefined) {
-            // Rebuild comites from Convex data with complete CSV information
-            const comitesFromConvex = comitesAttendance
-                .filter(record => record.type === "comite")
-                .map(record => ({
-                    name: record.name,
-                    escola: record.escola || "",
-                    regional: record.regional || "",
-                    cidade: record.cidade || "",
-                    uf: record.uf || "",
-                    status: (record.status || "Não-pleno") as "Pleno" | "Não-pleno",
-                    agFiliacao: record.agFiliacao || "",
-                    attendance: record.attendance as AttendanceState
-                }));
-            
-            setComitesLocais(comitesFromConvex);
-        }
-    }, [comitesAttendance, isDataLoaded]);
 
     const getAttendanceIcon = (state: AttendanceState) => {
         switch (state) {
@@ -687,7 +681,7 @@ export default function ChamadaAGPage() {
         }
     };
 
-    if (loading) {
+    if (loading || isLoadingNovaAG) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
                 <div className="container mx-auto px-6 py-12">
@@ -728,8 +722,8 @@ export default function ChamadaAGPage() {
         );
     }
 
-    // If no data is loaded, show the Nova AG starter screen
-    if (!isDataLoaded && ebMembers.length === 0 && crMembers.length === 0 && comitesLocais.length === 0) {
+    // If no data is loaded and Convex is not loading, show the Nova AG starter screen
+    if (!isConvexLoading && ebMembers.length === 0 && crMembers.length === 0 && comitesLocais.length === 0) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
                 <div className="container mx-auto px-6 py-12">
