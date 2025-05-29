@@ -27,7 +27,8 @@ import {
   Clock,
   UserCheck,
   Newspaper,
-  Archive
+  Archive,
+  Calendar
 } from "lucide-react";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 
@@ -56,18 +57,23 @@ const Navbar: React.FC = () => {
     
     useEffect(() => {
         const checkEmail = async () => {
-          const result = await isIfmsaEmailSession(session);
-          setIsIfmsaEmail(result);
-          console.log("Is IFMSA email:", result);
+          if (session) {
+            const result = await isIfmsaEmailSession(session);
+            setIsIfmsaEmail(result);
+          } else {
+            setIsIfmsaEmail(false);
+          }
         };
         checkEmail();
       }, [session]);
 
-    if (!session || isIfmsaEmail !== true) {
+    // No session - return null
+    if (!session) {
         return null;
     }
 
-    const navLinks = [
+    // Define navigation links for IFMSA users
+    const ifmsaNavLinks = [
         { href: "/comites-locais", label: "LCs", icon: Users },
         { href: "/noticias", label: "Notícias", icon: Newspaper },
         { href: "/eb", label: "EBs", icon: UserCheck },
@@ -77,6 +83,14 @@ const Navbar: React.FC = () => {
         { href: "/times", label: "Times", icon: Users },
         { href: "/config", label: "Configurações", icon: Settings },
     ];
+
+    // Define navigation links for non-IFMSA users (only AG)
+    const agNavLinks = [
+        { href: "/ag", label: "AG", icon: Calendar },
+    ];
+
+    // Determine which links to show
+    const navLinks = isIfmsaEmail === true ? ifmsaNavLinks : agNavLinks;
 
     const getInitials = (name: string) => {
         return name
@@ -95,7 +109,7 @@ const Navbar: React.FC = () => {
                     <div className="flex-shrink-0 flex items-center">
                         <Link href="/" className="flex items-center space-x-3 group">
                             <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
-                                Admin Panel
+                                {isIfmsaEmail === true ? "Admin Panel" : "IFMSA Brazil"}
                             </span>
                         </Link>
                     </div>
@@ -142,7 +156,7 @@ const Navbar: React.FC = () => {
                                             {session.user?.email}
                                         </p>
                                         <Badge variant="secondary" className="w-fit mt-1">
-                                            IFMSA Brazil
+                                            {isIfmsaEmail === true ? "IFMSA Brazil" : "Guest"}
                                         </Badge>
                                     </div>
                                 </DropdownMenuLabel>
@@ -186,7 +200,7 @@ const Navbar: React.FC = () => {
                                                 {session.user?.email}
                                             </p>
                                             <Badge variant="secondary" className="w-fit mt-1">
-                                                IFMSA Brazil
+                                                {isIfmsaEmail === true ? "IFMSA Brazil" : "Guest"}
                                             </Badge>
                                         </div>
                                     </div>

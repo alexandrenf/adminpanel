@@ -8,7 +8,6 @@ import Navbar from "./_components/Navbar";
 import Loading from "~/app/_components/Loading";
 import { Providers } from "./_components/Providers";
 import { Toaster } from "../components/ui/toaster";
-import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 
 export const metadata = {
   title: "Portal IFMSA Brazil",
@@ -33,13 +32,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const session = await getServerAuthSession();
-  const hasIfmsaEmail = session ? await isIfmsaEmailSession(session) : false;
   
   return (
     <html lang="en" className={`${GeistSans.variable}`}>
       <body>
         <Providers session={session}>
-          {hasIfmsaEmail && <Navbar />}
+          <Navbar />
           <Suspense fallback={<Loading />}>
             {children}
           </Suspense>

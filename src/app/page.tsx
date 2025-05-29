@@ -16,7 +16,6 @@ export default function Home() {
     const checkEmail = async () => {
       const result = await isIfmsaEmailSession(session);
       setIsIfmsaEmail(result);
-      console.log("Is IFMSA email:", result);
     };
     checkEmail();
   }, [session]);
