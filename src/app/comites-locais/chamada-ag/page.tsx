@@ -27,7 +27,7 @@ import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { useSession } from "next-auth/react";
 import { api as convexApi } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
+import * as XLSX from 'xlsx';
 
 type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
@@ -68,20 +68,6 @@ type Comite = {
     name: string;
     status: string;
     attendance: AttendanceState;
-};
-
-type CsvData = {
-    ebs: Member[];
-    crs: Member[];
-    comitesPlenos: Comite[];
-    comitesNaoPlenos: Comite[];
-};
-
-type AttendanceData = {
-    ebs: Member[];
-    crs: Member[];
-    comitesPlenos: Comite[];
-    comitesNaoPlenos: Comite[];
 };
 
 // Add quorum requirements
@@ -132,14 +118,9 @@ export default function ChamadaAGPage() {
     const [searchCr, setSearchCr] = useState("");
     const [searchPlenos, setSearchPlenos] = useState("");
     const [searchNaoPlenos, setSearchNaoPlenos] = useState("");
+    const [isResetting, setIsResetting] = useState(false);
     const { data: session } = useSession();
     const { toast } = useToast();
-    const [attendanceData, setAttendanceData] = useState<AttendanceData>({
-        ebs: [],
-        crs: [],
-        comitesPlenos: [],
-        comitesNaoPlenos: [],
-    });
 
     // Convex queries
     const ebsAttendance = useQuery(convexApi.attendance.getByType, { type: "eb" });
@@ -221,7 +202,7 @@ export default function ChamadaAGPage() {
                 // Skip header line
                 const dataLines = lines.slice(1);
                 
-                const comites: ComiteLocal[] = dataLines.map((line, index) => {
+                const comites: ComiteLocal[] = dataLines.map((line) => {
                     try {
                         // Handle potential quoted fields
                         const columns = line.split(',').map(col => {
@@ -278,28 +259,31 @@ export default function ChamadaAGPage() {
 
     // Update attendance state when Convex data changes
     useEffect(() => {
-        if (attendanceData && ebsAttendance && crsAttendance && comitesAttendance) {
-            const newAttendanceData: AttendanceData = {
-                ebs: attendanceData.ebs.map(eb => ({
-                    ...eb,
-                    attendance: (ebsAttendance.find(a => a.memberId === eb.id)?.attendance || "not-counting") as AttendanceState
-                })),
-                crs: attendanceData.crs.map(cr => ({
-                    ...cr,
-                    attendance: (crsAttendance.find(a => a.memberId === cr.id)?.attendance || "not-counting") as AttendanceState
-                })),
-                comitesPlenos: attendanceData.comitesPlenos.map(comite => ({
-                    ...comite,
-                    attendance: (comitesAttendance.find(a => a.memberId === comite.id)?.attendance || "not-counting") as AttendanceState
-                })),
-                comitesNaoPlenos: attendanceData.comitesNaoPlenos.map(comite => ({
-                    ...comite,
-                    attendance: (comitesAttendance.find(a => a.memberId === comite.id)?.attendance || "not-counting") as AttendanceState
-                }))
-            };
-            setAttendanceData(newAttendanceData);
+        if (ebMembers.length > 0) {
+            setEbMembers(prev => prev.map(eb => ({
+                ...eb,
+                attendance: (ebsAttendance?.find(a => a.memberId === eb.id.toString())?.attendance || "not-counting") as AttendanceState
+            })));
         }
-    }, [attendanceData, ebsAttendance, crsAttendance, comitesAttendance]);
+    }, [ebsAttendance, ebMembers.length]);
+
+    useEffect(() => {
+        if (crMembers.length > 0) {
+            setCrMembers(prev => prev.map(cr => ({
+                ...cr,
+                attendance: (crsAttendance?.find(a => a.memberId === cr.id.toString())?.attendance || "not-counting") as AttendanceState
+            })));
+        }
+    }, [crsAttendance, crMembers.length]);
+
+    useEffect(() => {
+        if (comitesLocais.length > 0) {
+            setComitesLocais(prev => prev.map(comite => ({
+                ...comite,
+                attendance: (comitesAttendance?.find(a => a.memberId === comite.name)?.attendance || "not-counting") as AttendanceState
+            })));
+        }
+    }, [comitesAttendance, comitesLocais.length]);
 
     const getAttendanceIcon = (state: AttendanceState) => {
         switch (state) {
@@ -427,56 +411,107 @@ export default function ChamadaAGPage() {
         }
     };
 
-    const resetAttendanceState = () => {
-        if (confirm('Tem certeza que deseja resetar todos os estados de presença?')) {
-            setEbMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
-            setCrMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
-            setComitesLocais(prev => prev.map(comite => ({ ...comite, attendance: "not-counting" as AttendanceState })));
+    const resetAttendanceState = async () => {
+        if (!session?.user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para resetar a presença.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (isResetting) return; // Prevent multiple clicks
+
+        if (window.confirm("⚠️ ATENÇÃO: Tem certeza que deseja resetar todas as presenças?\n\nEsta ação irá:\n• Apagar TODOS os registros de presença do banco de dados\n• Resetar todos os membros para 'Não contabilizado'\n• Esta ação NÃO pode ser desfeita\n\nDeseja continuar?")) {
+            setIsResetting(true);
+            try {
+                // Reset all attendance records in Convex database
+                const deletedCount = await resetAllAttendance({ lastUpdatedBy: session.user.id });
+                
+                // Update local state immediately for better UX - reset all to "not-counting"
+                setEbMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
+                setCrMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
+                setComitesLocais(prev => prev.map(comite => ({ ...comite, attendance: "not-counting" as AttendanceState })));
+                
+                toast({
+                    title: "✅ Presenças resetadas com sucesso",
+                    description: `${deletedCount} registros de presença foram removidos do banco de dados.`,
+                });
+            } catch (error) {
+                console.error("Error resetting attendance:", error);
+                toast({
+                    title: "❌ Erro ao resetar",
+                    description: "Erro ao resetar presenças. Tente novamente.",
+                    variant: "destructive",
+                });
+            } finally {
+                setIsResetting(false);
+            }
         }
     };
 
     const downloadExcelReport = () => {
-        // Create CSV content
-        let csvContent = "Tipo,Nome,Cargo/Localização,Status,Presença\n";
+        // Create workbook
+        const wb = XLSX.utils.book_new();
         
-        // Add EB members
-        ebMembers.forEach(member => {
-            const status = member.attendance === "present" ? "Presente" : 
-                          member.attendance === "absent" ? "Ausente" : 
-                          member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado";
-            csvContent += `EB,"${member.name}","${member.role}","${status}"\n`;
-        });
+        // Helper function to create worksheet from data
+        const createWorksheet = (data: any[], title: string) => {
+            const ws = XLSX.utils.json_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, title);
+        };
+
+        // Prepare EB members data
+        const ebData = ebMembers.map(member => ({
+            'Tipo': 'EB',
+            'Nome': member.name,
+            'Cargo': member.role,
+            'Status': member.attendance === "present" ? "Presente" : 
+                     member.attendance === "absent" ? "Ausente" : 
+                     member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
+        }));
+
+        // Prepare CR members data
+        const crData = crMembers.map(member => ({
+            'Tipo': 'CR',
+            'Nome': member.name,
+            'Cargo': member.role,
+            'Status': member.attendance === "present" ? "Presente" : 
+                     member.attendance === "absent" ? "Ausente" : 
+                     member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
+        }));
+
+        // Prepare Comitês data
+        const comitesData = comitesLocais.map(comite => ({
+            'Tipo': comite.status,
+            'Nome': comite.name,
+            'Localização': `${comite.cidade}, ${comite.uf}`,
+            'Status': comite.attendance === "present" ? "Presente" : 
+                     comite.attendance === "absent" ? "Ausente" : 
+                     comite.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
+        }));
+
+        // Create worksheets
+        createWorksheet(ebData, 'Diretoria Executiva');
+        createWorksheet(crData, 'Coordenadores Regionais');
+        createWorksheet(comitesData, 'Comitês');
+
+        // Generate Excel file
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         
-        // Add CR members
-        crMembers.forEach(member => {
-            const status = member.attendance === "present" ? "Presente" : 
-                          member.attendance === "absent" ? "Ausente" : 
-                          member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado";
-            csvContent += `CR,"${member.name}","${member.role}","${status}"\n`;
-        });
-        
-        // Add Comitês
-        comitesLocais.forEach(comite => {
-            const status = comite.attendance === "present" ? "Presente" : 
-                          comite.attendance === "absent" ? "Ausente" : 
-                          comite.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado";
-            csvContent += `${comite.status},"${comite.name}","${comite.cidade}, ${comite.uf}","${status}"\n`;
-        });
-        
-        // Create and download file
-        const dataBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        // Create download link
         const url = URL.createObjectURL(dataBlob);
-        
         const link = document.createElement('a');
         link.href = url;
-        link.download = `relatorio-presenca-ag-${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `relatorio-presenca-ag-${new Date().toISOString().split('T')[0]}.xlsx`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     };
 
-    const handleAttendanceChange = async (type: string, id: string, name: string, role?: string, status?: string) => {
+    const handleAttendanceChange = async (type: string, id: string, name: string, role?: string) => {
         if (!session?.user?.id) {
             toast({
                 title: "Erro",
@@ -486,7 +521,20 @@ export default function ChamadaAGPage() {
             return;
         }
 
-        const currentState = attendanceData[type as keyof AttendanceData].find(item => item.id === id)?.attendance || "not-counting";
+        // Get current state from local data
+        let currentState: AttendanceState = "not-counting";
+        
+        if (type === "eb") {
+            const member = ebMembers.find(m => m.id.toString() === id);
+            currentState = member?.attendance || "not-counting";
+        } else if (type === "cr") {
+            const member = crMembers.find(m => m.id.toString() === id);
+            currentState = member?.attendance || "not-counting";
+        } else if (type === "comite") {
+            const comite = comitesLocais.find(c => c.name === id);
+            currentState = comite?.attendance || "not-counting";
+        }
+
         const nextState = getNextAttendanceState(currentState);
 
         try {
@@ -495,10 +543,25 @@ export default function ChamadaAGPage() {
                 memberId: id,
                 name,
                 role,
-                status,
+                status: nextState,
                 attendance: nextState,
                 lastUpdatedBy: session.user.id
             });
+
+            // Update local state immediately for better UX
+            if (type === "eb") {
+                setEbMembers(prev => prev.map(m => 
+                    m.id.toString() === id ? { ...m, attendance: nextState } : m
+                ));
+            } else if (type === "cr") {
+                setCrMembers(prev => prev.map(m => 
+                    m.id.toString() === id ? { ...m, attendance: nextState } : m
+                ));
+            } else if (type === "comite") {
+                setComitesLocais(prev => prev.map(c => 
+                    c.name === id ? { ...c, attendance: nextState } : c
+                ));
+            }
 
             toast({
                 title: "Presença atualizada",
@@ -513,30 +576,52 @@ export default function ChamadaAGPage() {
         }
     };
 
-    const handleResetAll = async () => {
+    const handleDirectAttendanceSet = async (type: string, id: string, name: string, newState: AttendanceState, role?: string) => {
         if (!session?.user?.id) {
             toast({
                 title: "Erro",
-                description: "Você precisa estar logado para resetar a presença.",
+                description: "Você precisa estar logado para alterar a presença.",
                 variant: "destructive",
             });
             return;
         }
 
-        if (window.confirm("Tem certeza que deseja resetar todas as presenças?")) {
-            try {
-                await resetAllAttendance({ lastUpdatedBy: session.user.id });
-                toast({
-                    title: "Presenças resetadas",
-                    description: "Todas as presenças foram resetadas com sucesso.",
-                });
-            } catch (error) {
-                toast({
-                    title: "Erro",
-                    description: "Erro ao resetar presenças. Tente novamente.",
-                    variant: "destructive",
-                });
+        try {
+            await updateAttendance({
+                type,
+                memberId: id,
+                name,
+                role,
+                status: newState,
+                attendance: newState,
+                lastUpdatedBy: session.user.id
+            });
+
+            // Update local state immediately for better UX
+            if (type === "eb") {
+                setEbMembers(prev => prev.map(m => 
+                    m.id.toString() === id ? { ...m, attendance: newState } : m
+                ));
+            } else if (type === "cr") {
+                setCrMembers(prev => prev.map(m => 
+                    m.id.toString() === id ? { ...m, attendance: newState } : m
+                ));
+            } else if (type === "comite") {
+                setComitesLocais(prev => prev.map(c => 
+                    c.name === id ? { ...c, attendance: newState } : c
+                ));
             }
+
+            toast({
+                title: "Presença atualizada",
+                description: `${name} marcado como ${getAttendanceLabel(newState)}`,
+            });
+        } catch (error) {
+            toast({
+                title: "Erro",
+                description: "Erro ao atualizar presença. Tente novamente.",
+                variant: "destructive",
+            });
         }
     };
 
@@ -633,10 +718,11 @@ export default function ChamadaAGPage() {
                                     <Button
                                         onClick={resetAttendanceState}
                                         variant="outline"
+                                        disabled={isResetting}
                                         className="hover:bg-red-50 hover:border-red-200 border-red-300 text-red-700"
                                     >
-                                        <RotateCcw className="w-4 h-4 mr-2" />
-                                        Resetar
+                                        <RotateCcw className={`w-4 h-4 mr-2 ${isResetting ? 'animate-spin' : ''}`} />
+                                        {isResetting ? 'Resetando...' : 'Resetar'}
                                     </Button>
                                 </div>
                                 <div className="flex items-center gap-4">
@@ -697,7 +783,6 @@ export default function ChamadaAGPage() {
                                     <div className="flex items-center space-x-2">
                                         {(() => {
                                             const stats = getStats(filteredEbMembers);
-                                            const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.eb * 100;
                                             return (
                                                 <>
                                                     <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
@@ -735,11 +820,11 @@ export default function ChamadaAGPage() {
                             <CardContent>
                                 <div className="space-y-2 max-h-80 overflow-y-auto">
                                     {filteredEbMembers.map((member) => {
-                                        const originalIndex = ebMembers.findIndex(m => m.id === member.id);
                                         return (
                                             <div
                                                 key={member.id}
-                                                className={`group relative p-3 rounded-lg border transition-colors ${getAttendanceColor(member.attendance)}`}
+                                                className={`group relative p-3 rounded-lg border transition-colors cursor-pointer ${getAttendanceColor(member.attendance)}`}
+                                                onClick={() => handleAttendanceChange("eb", member.id.toString(), member.name, member.role)}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div>
@@ -751,10 +836,9 @@ export default function ChamadaAGPage() {
                                                         {/* Hover buttons */}
                                                         <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
                                                             <button
-                                                                onClick={() => {
-                                                                    setEbMembers(prev => prev.map((m, i) => 
-                                                                        i === originalIndex ? { ...m, attendance: "present" } : m
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("eb", member.id.toString(), member.name, "present", member.role);
                                                                 }}
                                                                 className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
                                                                 title="Presente"
@@ -762,10 +846,9 @@ export default function ChamadaAGPage() {
                                                                 <CheckCircle className="w-3 h-3 text-green-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setEbMembers(prev => prev.map((m, i) => 
-                                                                        i === originalIndex ? { ...m, attendance: "absent" } : m
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("eb", member.id.toString(), member.name, "absent", member.role);
                                                                 }}
                                                                 className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
                                                                 title="Ausente"
@@ -773,10 +856,9 @@ export default function ChamadaAGPage() {
                                                                 <XCircle className="w-3 h-3 text-red-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setEbMembers(prev => prev.map((m, i) => 
-                                                                        i === originalIndex ? { ...m, attendance: "excluded" } : m
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("eb", member.id.toString(), member.name, "excluded", member.role);
                                                                 }}
                                                                 className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
                                                                 title="Excluído do quórum"
@@ -784,10 +866,9 @@ export default function ChamadaAGPage() {
                                                                 <XCircle className="w-3 h-3 text-orange-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setEbMembers(prev => prev.map((m, i) => 
-                                                                        i === originalIndex ? { ...m, attendance: "not-counting" } : m
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("eb", member.id.toString(), member.name, "not-counting", member.role);
                                                                 }}
                                                                 className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
                                                                 title="Não contabilizado"
@@ -815,7 +896,6 @@ export default function ChamadaAGPage() {
                                     <div className="flex items-center space-x-2">
                                         {(() => {
                                             const stats = getStats(filteredCrMembers);
-                                            const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.cr * 100;
                                             return (
                                                 <>
                                                     <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
@@ -853,11 +933,11 @@ export default function ChamadaAGPage() {
                             <CardContent>
                                 <div className="space-y-2 max-h-80 overflow-y-auto">
                                     {filteredCrMembers.map((member) => {
-                                        const originalIndex = crMembers.findIndex(m => m.id === member.id);
                                         return (
                                             <div
                                                 key={member.id}
-                                                className={`group relative p-3 rounded-lg border transition-colors ${getAttendanceColor(member.attendance)}`}
+                                                className={`group relative p-3 rounded-lg border transition-colors cursor-pointer ${getAttendanceColor(member.attendance)}`}
+                                                onClick={() => handleAttendanceChange("cr", member.id.toString(), member.name, member.role)}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div>
@@ -869,10 +949,9 @@ export default function ChamadaAGPage() {
                                                         {/* Hover buttons */}
                                                         <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
                                                             <button
-                                                                onClick={() => {
-                                                                    setCrMembers(prev => prev.map((m, i) => 
-                                                                        i === originalIndex ? { ...m, attendance: "present" } : m
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("cr", member.id.toString(), member.name, "present", member.role);
                                                                 }}
                                                                 className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
                                                                 title="Presente"
@@ -880,10 +959,9 @@ export default function ChamadaAGPage() {
                                                                 <CheckCircle className="w-3 h-3 text-green-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setCrMembers(prev => prev.map((m, i) => 
-                                                                        i === originalIndex ? { ...m, attendance: "absent" } : m
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("cr", member.id.toString(), member.name, "absent", member.role);
                                                                 }}
                                                                 className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
                                                                 title="Ausente"
@@ -891,10 +969,9 @@ export default function ChamadaAGPage() {
                                                                 <XCircle className="w-3 h-3 text-red-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setCrMembers(prev => prev.map((m, i) => 
-                                                                        i === originalIndex ? { ...m, attendance: "excluded" } : m
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("cr", member.id.toString(), member.name, "excluded", member.role);
                                                                 }}
                                                                 className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
                                                                 title="Excluído do quórum"
@@ -902,10 +979,9 @@ export default function ChamadaAGPage() {
                                                                 <XCircle className="w-3 h-3 text-orange-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setCrMembers(prev => prev.map((m, i) => 
-                                                                        i === originalIndex ? { ...m, attendance: "not-counting" } : m
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("cr", member.id.toString(), member.name, "not-counting", member.role);
                                                                 }}
                                                                 className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
                                                                 title="Não contabilizado"
@@ -933,7 +1009,6 @@ export default function ChamadaAGPage() {
                                     <div className="flex items-center space-x-2">
                                         {(() => {
                                             const stats = getStats(filteredComitesPlenos);
-                                            const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.comitesPlenos * 100;
                                             return (
                                                 <>
                                                     <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
@@ -971,11 +1046,11 @@ export default function ChamadaAGPage() {
                             <CardContent>
                                 <div className="space-y-2 max-h-80 overflow-y-auto">
                                     {filteredComitesPlenos.map((comite) => {
-                                        const originalIndex = comitesLocais.findIndex(c => c.name === comite.name);
                                         return (
                                             <div
                                                 key={comite.name}
-                                                className={`group relative p-3 rounded-lg border transition-colors ${getAttendanceColor(comite.attendance)}`}
+                                                className={`group relative p-3 rounded-lg border transition-colors cursor-pointer ${getAttendanceColor(comite.attendance)}`}
+                                                onClick={() => handleAttendanceChange("comite", comite.name, comite.name, undefined)}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div>
@@ -987,10 +1062,9 @@ export default function ChamadaAGPage() {
                                                         {/* Hover buttons */}
                                                         <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
                                                             <button
-                                                                onClick={() => {
-                                                                    setComitesLocais(prev => prev.map((c, i) => 
-                                                                        i === originalIndex ? { ...c, attendance: "present" } : c
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "present", undefined);
                                                                 }}
                                                                 className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
                                                                 title="Presente"
@@ -998,10 +1072,9 @@ export default function ChamadaAGPage() {
                                                                 <CheckCircle className="w-3 h-3 text-green-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setComitesLocais(prev => prev.map((c, i) => 
-                                                                        i === originalIndex ? { ...c, attendance: "absent" } : c
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "absent", undefined);
                                                                 }}
                                                                 className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
                                                                 title="Ausente"
@@ -1009,10 +1082,9 @@ export default function ChamadaAGPage() {
                                                                 <XCircle className="w-3 h-3 text-red-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setComitesLocais(prev => prev.map((c, i) => 
-                                                                        i === originalIndex ? { ...c, attendance: "excluded" } : c
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "excluded", undefined);
                                                                 }}
                                                                 className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
                                                                 title="Excluído do quórum"
@@ -1020,10 +1092,9 @@ export default function ChamadaAGPage() {
                                                                 <XCircle className="w-3 h-3 text-orange-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setComitesLocais(prev => prev.map((c, i) => 
-                                                                        i === originalIndex ? { ...c, attendance: "not-counting" } : c
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "not-counting", undefined);
                                                                 }}
                                                                 className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
                                                                 title="Não contabilizado"
@@ -1051,7 +1122,6 @@ export default function ChamadaAGPage() {
                                     <div className="flex items-center space-x-2">
                                         {(() => {
                                             const stats = getStats(filteredComitesNaoPlenos);
-                                            const hasQuorum = stats.quorumPercentage >= QUORUM_REQUIREMENTS.comitesNaoPlenos * 100;
                                             return (
                                                 <>
                                                     <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
@@ -1089,11 +1159,11 @@ export default function ChamadaAGPage() {
                             <CardContent>
                                 <div className="space-y-2 max-h-80 overflow-y-auto">
                                     {filteredComitesNaoPlenos.map((comite) => {
-                                        const originalIndex = comitesLocais.findIndex(c => c.name === comite.name);
                                         return (
                                             <div
                                                 key={comite.name}
-                                                className={`group relative p-3 rounded-lg border transition-colors ${getAttendanceColor(comite.attendance)}`}
+                                                className={`group relative p-3 rounded-lg border transition-colors cursor-pointer ${getAttendanceColor(comite.attendance)}`}
+                                                onClick={() => handleAttendanceChange("comite", comite.name, comite.name, undefined)}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div>
@@ -1105,10 +1175,9 @@ export default function ChamadaAGPage() {
                                                         {/* Hover buttons */}
                                                         <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
                                                             <button
-                                                                onClick={() => {
-                                                                    setComitesLocais(prev => prev.map((c, i) => 
-                                                                        i === originalIndex ? { ...c, attendance: "present" } : c
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "present", undefined);
                                                                 }}
                                                                 className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
                                                                 title="Presente"
@@ -1116,10 +1185,9 @@ export default function ChamadaAGPage() {
                                                                 <CheckCircle className="w-3 h-3 text-green-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setComitesLocais(prev => prev.map((c, i) => 
-                                                                        i === originalIndex ? { ...c, attendance: "absent" } : c
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "absent", undefined);
                                                                 }}
                                                                 className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
                                                                 title="Ausente"
@@ -1127,10 +1195,9 @@ export default function ChamadaAGPage() {
                                                                 <XCircle className="w-3 h-3 text-red-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setComitesLocais(prev => prev.map((c, i) => 
-                                                                        i === originalIndex ? { ...c, attendance: "excluded" } : c
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "excluded", undefined);
                                                                 }}
                                                                 className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
                                                                 title="Excluído do quórum"
@@ -1138,10 +1205,9 @@ export default function ChamadaAGPage() {
                                                                 <XCircle className="w-3 h-3 text-orange-600" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    setComitesLocais(prev => prev.map((c, i) => 
-                                                                        i === originalIndex ? { ...c, attendance: "not-counting" } : c
-                                                                    ));
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "not-counting", undefined);
                                                                 }}
                                                                 className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
                                                                 title="Não contabilizado"
@@ -1179,13 +1245,12 @@ export default function ChamadaAGPage() {
                                     <CardContent className="pt-0">
                                         <div className="grid grid-cols-2 gap-4">
                                             {[
-                                                { label: "Diretoria Executiva", data: filteredEbMembers, color: "blue", requirement: QUORUM_REQUIREMENTS.eb },
-                                                { label: "Coordenadores Regionais", data: filteredCrMembers, color: "purple", requirement: QUORUM_REQUIREMENTS.cr },
-                                                { label: "Comitês Plenos", data: filteredComitesPlenos, color: "green", requirement: QUORUM_REQUIREMENTS.comitesPlenos },
-                                                { label: "Comitês Não Plenos", data: filteredComitesNaoPlenos, color: "orange", requirement: QUORUM_REQUIREMENTS.comitesNaoPlenos }
-                                            ].map(({ label, data, color, requirement }) => {
+                                                { label: "Diretoria Executiva", data: filteredEbMembers, requirement: QUORUM_REQUIREMENTS.eb },
+                                                { label: "Coordenadores Regionais", data: filteredCrMembers, requirement: QUORUM_REQUIREMENTS.cr },
+                                                { label: "Comitês Plenos", data: filteredComitesPlenos, requirement: QUORUM_REQUIREMENTS.comitesPlenos },
+                                                { label: "Comitês Não Plenos", data: filteredComitesNaoPlenos, requirement: QUORUM_REQUIREMENTS.comitesNaoPlenos }
+                                            ].map(({ label, data, requirement }) => {
                                                 const stats = getStats(data);
-                                                const hasQuorum = stats.quorumPercentage >= requirement * 100;
                                                 return (
                                                     <div key={label} className="text-center p-3 bg-gray-50 rounded-lg">
                                                         <h4 className="font-semibold text-gray-900 mb-2 text-sm">{label}</h4>

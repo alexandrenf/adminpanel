@@ -57,14 +57,25 @@ export const updateAttendance = mutation({
 export const resetAll = mutation({
   args: { lastUpdatedBy: v.string() },
   handler: async (ctx, args) => {
+    // Get all records
     const allRecords = await ctx.db.query("attendance").collect();
+    
+    // Delete all records using the database API
     for (const record of allRecords) {
-      await ctx.db.patch(record._id, {
-        attendance: "not-counting",
-        lastUpdated: Date.now(),
-        lastUpdatedBy: args.lastUpdatedBy,
-      });
+      try {
+        // Delete the document from the database
+        await ctx.db.delete(record._id);
+      } catch (error) {
+        console.error(`Failed to delete record ${record._id}:`, error);
+      }
     }
+    
+    // Verify deletion by checking if any records remain
+    const remainingRecords = await ctx.db.query("attendance").collect();
+    if (remainingRecords.length > 0) {
+      console.error(`Failed to delete all records. ${remainingRecords.length} records remain.`);
+    }
+    
     return allRecords.length;
   },
 }); 
