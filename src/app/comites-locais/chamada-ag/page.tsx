@@ -130,11 +130,18 @@ export default function ChamadaAGPage() {
     // Convex mutations
     const updateAttendance = useMutation(convexApi.attendance.updateAttendance);
     const resetAllAttendance = useMutation(convexApi.attendance.resetAll);
+    const clearAllAttendance = useMutation(convexApi.attendance.clearAll);
+    const bulkInsertAttendance = useMutation(convexApi.attendance.bulkInsert);
+    const resetAttendanceOnly = useMutation(convexApi.attendance.resetAttendanceOnly);
 
     // Fetch data
     const { data: registrosData, isLoading: registrosLoading } = api.registros.get.useQuery();
     const { data: ebData } = api.eb.getAll.useQuery();
     const { data: crData } = api.cr.getAll.useQuery();
+
+    // State for tracking if data is loaded
+    const [isDataLoaded, setIsDataLoaded] = useState(false);
+    const [isLoadingNovaAG, setIsLoadingNovaAG] = useState(false);
 
     useEffect(() => {
         if (ebData) {
@@ -158,40 +165,43 @@ export default function ChamadaAGPage() {
         }
     }, [crData]);
 
-    useEffect(() => {
-        const fetchCSVData = async () => {
-            // Don't start fetching if registros is still loading
-            if (registrosLoading) {
-                return;
-            }
+    // Nova AG function to load all data and populate Convex
+    const handleNovaAG = async () => {
+        if (!session?.user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para criar uma nova AG.",
+                variant: "destructive",
+            });
+            return;
+        }
 
-            if (!registrosData) {
-                setError("URL do CSV não configurada");
-                setLoading(false);
-                return;
-            }
+        if (isLoadingNovaAG) return;
 
-            if (!registrosData.url) {
-                setError("URL do CSV não configurada");
-                setLoading(false);
-                return;
-            }
-
+        if (window.confirm("NOVA AG: Deseja carregar todos os dados e criar uma nova sessão?\n\nEsta ação irá:\n• Carregar dados do CSV, EBs e CRs\n• Limpar completamente a tabela de presença\n• Criar novos registros para todos os membros\n\nDeseja continuar?")) {
+            setIsLoadingNovaAG(true);
+            setLoading(true);
+            
             try {
-                const response = await fetch(registrosData.url, {
-                    redirect: 'follow',
-                });
+                // First, clear all existing attendance records
+                await clearAllAttendance();
+                
+                // Load CSV data
+                if (!registrosData?.url) {
+                    throw new Error("URL do CSV não configurada");
+                }
+
+                const response = await fetch(registrosData.url, { redirect: 'follow' });
                 if (!response.ok) {
                     throw new Error(`Erro ao buscar dados do CSV: ${response.status} ${response.statusText}`);
                 }
                 
                 const csvText = await response.text();
-                
                 if (!csvText.trim()) {
                     throw new Error("O arquivo CSV está vazio");
                 }
 
-                // Handle potential BOM and different line endings
+                // Process CSV data
                 const cleanText = csvText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
                 const lines = cleanText.split('\n').filter(line => line.trim());
                 
@@ -199,33 +209,25 @@ export default function ChamadaAGPage() {
                     throw new Error("O arquivo CSV não contém dados");
                 }
                 
-                // Skip header line
                 const dataLines = lines.slice(1);
-                
                 const comites: ComiteLocal[] = dataLines.map((line) => {
                     try {
-                        // Handle potential quoted fields
                         const columns = line.split(',').map(col => {
                             const trimmed = col.trim();
-                            // Remove quotes if they wrap the entire field
                             return trimmed.startsWith('"') && trimmed.endsWith('"') 
                                 ? trimmed.slice(1, -1).trim() 
                                 : trimmed;
                         });
                         
-                        // Normalize the status text for comparison
                         const statusText = (columns[5] || '').toLowerCase()
                             .normalize('NFD')
-                            .replace(/[\u0300-\u036f]/g, '') // Remove accents
-                            .replace(/[^a-z0-9]/g, '') // Remove special characters
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .replace(/[^a-z0-9]/g, '')
                             .trim();
                         
-                        // Check if the status is "Não-pleno" first
                         const isNaoPleno = statusText.includes('naopleno') || 
                                           statusText.includes('nao pleno') || 
                                           statusText.includes('nao-pleno');
-                        
-                        // If it's not "Não-pleno", then check if it's "Pleno"
                         const isPleno = !isNaoPleno && statusText.includes('pleno');
                         
                         return {
@@ -243,19 +245,81 @@ export default function ChamadaAGPage() {
                     }
                 }).filter((comite): comite is ComiteLocal => comite !== null && comite.name !== '');
 
-                // Sort alphabetically by name
                 comites.sort((a, b) => a.name.localeCompare(b.name));
                 
+                // Prepare all records for bulk insert
+                const allRecords = [];
+                
+                // Add EB records
+                if (ebData) {
+                    for (const eb of ebData) {
+                        allRecords.push({
+                            type: "eb",
+                            memberId: eb.id.toString(),
+                            name: eb.name,
+                            role: eb.role,
+                            status: "not-counting",
+                            attendance: "not-counting",
+                            lastUpdatedBy: session.user.id
+                        });
+                    }
+                }
+                
+                // Add CR records
+                if (crData) {
+                    for (const cr of crData) {
+                        allRecords.push({
+                            type: "cr",
+                            memberId: cr.id.toString(),
+                            name: cr.name,
+                            role: cr.role,
+                            status: "not-counting",
+                            attendance: "not-counting",
+                            lastUpdatedBy: session.user.id
+                        });
+                    }
+                }
+                
+                // Add Comite records
+                for (const comite of comites) {
+                    allRecords.push({
+                        type: "comite",
+                        memberId: comite.name,
+                        name: comite.name,
+                        role: `${comite.cidade}, ${comite.uf}`,
+                        status: comite.status,
+                        attendance: "not-counting",
+                        lastUpdatedBy: session.user.id
+                    });
+                }
+                
+                // Bulk insert all records to Convex
+                await bulkInsertAttendance({ records: allRecords });
+                
+                // Update local state
                 setComitesLocais(comites);
+                setIsDataLoaded(true);
                 setLoading(false);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Erro ao carregar dados do CSV");
+                
+                toast({
+                    title: "✅ Nova AG criada com sucesso",
+                    description: `${allRecords.length} registros foram carregados na nova sessão.`,
+                });
+                
+            } catch (error) {
+                console.error("Error creating new AG:", error);
+                setError(error instanceof Error ? error.message : "Erro ao carregar dados");
                 setLoading(false);
+                toast({
+                    title: "❌ Erro ao criar nova AG",
+                    description: "Erro ao carregar dados. Tente novamente.",
+                    variant: "destructive",
+                });
+            } finally {
+                setIsLoadingNovaAG(false);
             }
-        };
-
-        fetchCSVData();
-    }, [registrosData, registrosLoading]);
+        }
+    };
 
     // Update attendance state when Convex data changes
     useEffect(() => {
@@ -423,11 +487,11 @@ export default function ChamadaAGPage() {
 
         if (isResetting) return; // Prevent multiple clicks
 
-        if (window.confirm("⚠️ ATENÇÃO: Tem certeza que deseja resetar todas as presenças?\n\nEsta ação irá:\n• Apagar TODOS os registros de presença do banco de dados\n• Resetar todos os membros para 'Não contabilizado'\n• Esta ação NÃO pode ser desfeita\n\nDeseja continuar?")) {
+        if (window.confirm("⚠️ ATENÇÃO: Tem certeza que deseja resetar todas as presenças?\n\nEsta ação irá:\n• Resetar todos os status de presença para 'Não contabilizado'\n• Manter todos os registros na tabela\n\nDeseja continuar?")) {
             setIsResetting(true);
             try {
-                // Reset all attendance records in Convex database
-                const deletedCount = await resetAllAttendance({ lastUpdatedBy: session.user.id });
+                // Reset all attendance status to "not-counting" (without deleting records)
+                const updatedCount = await resetAttendanceOnly({ lastUpdatedBy: session.user.id });
                 
                 // Update local state immediately for better UX - reset all to "not-counting"
                 setEbMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
@@ -436,7 +500,7 @@ export default function ChamadaAGPage() {
                 
                 toast({
                     title: "✅ Presenças resetadas com sucesso",
-                    description: `${deletedCount} registros de presença foram removidos do banco de dados.`,
+                    description: `${updatedCount} registros foram resetados para 'Não contabilizado'.`,
                 });
             } catch (error) {
                 console.error("Error resetting attendance:", error);
@@ -631,7 +695,9 @@ export default function ChamadaAGPage() {
                 <div className="container mx-auto px-6 py-12">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Carregando dados...</p>
+                        <p className="mt-4 text-gray-600">
+                            {isLoadingNovaAG ? "Carregando nova AG..." : "Carregando dados..."}
+                        </p>
                     </div>
                 </div>
             </main>
@@ -648,10 +714,79 @@ export default function ChamadaAGPage() {
                         </div>
                         <h3 className="text-lg font-semibold text-gray-900 mb-2">Erro ao carregar dados</h3>
                         <p className="text-red-600 mb-4">{error}</p>
-                        <Button onClick={() => router.push("/comites-locais")} variant="outline">
-                            <ArrowLeft className="w-4 h-4 mr-2" />
-                            Voltar
-                        </Button>
+                        <div className="space-y-2">
+                            <Button onClick={() => router.push("/comites-locais")} variant="outline">
+                                <ArrowLeft className="w-4 h-4 mr-2" />
+                                Voltar
+                            </Button>
+                            <Button onClick={() => { setError(null); handleNovaAG(); }} className="bg-blue-600 hover:bg-blue-700">
+                                <ClipboardCheck className="w-4 h-4 mr-2" />
+                                Tentar Carregar Nova AG
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
+    // If no data is loaded, show the Nova AG starter screen
+    if (!isDataLoaded && ebMembers.length === 0 && crMembers.length === 0 && comitesLocais.length === 0) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+                <div className="container mx-auto px-6 py-12">
+                    <div className="max-w-2xl mx-auto text-center">
+                        <div className="flex items-center justify-center space-x-4 mb-8">
+                            <Button
+                                variant="outline"
+                                onClick={() => router.push("/comites-locais")}
+                                className="hover:bg-gray-50"
+                            >
+                                <ArrowLeft className="w-4 h-4 mr-2" />
+                                Voltar
+                            </Button>
+                        </div>
+                        
+                        <div className="p-12 bg-white rounded-xl shadow-lg border">
+                            <div className="p-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg mb-6 mx-auto w-fit">
+                                <ClipboardCheck className="w-12 h-12 text-white" />
+                            </div>
+                            
+                            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent mb-4">
+                                Chamada de AG
+                            </h1>
+                            
+                            <p className="text-gray-600 mb-8 text-lg">
+                                Clique no botão abaixo para carregar todos os dados e iniciar uma nova sessão de Assembleia Geral
+                            </p>
+                            
+                            <Button
+                                onClick={handleNovaAG}
+                                disabled={isLoadingNovaAG}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300 text-lg px-8 py-3"
+                            >
+                                {isLoadingNovaAG ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                                        Carregando Nova AG...
+                                    </>
+                                ) : (
+                                    <>
+                                        <ClipboardCheck className="w-5 h-5 mr-3" />
+                                        Nova AG
+                                    </>
+                                )}
+                            </Button>
+                            
+                            <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                <p className="text-blue-800 text-sm">
+                                    <strong>O que acontecerá:</strong><br/>
+                                    • Carregamento de dados do CSV, EBs e CRs<br/>
+                                    • Limpeza completa da tabela de presença<br/>
+                                    • Criação de novos registros para todos os membros
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>
@@ -693,6 +828,23 @@ export default function ChamadaAGPage() {
                             <div className="flex flex-wrap items-center justify-between gap-4">
                                 <div className="flex flex-wrap items-center gap-3">
                                     <Button
+                                        onClick={handleNovaAG}
+                                        disabled={isLoadingNovaAG}
+                                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                                    >
+                                        {isLoadingNovaAG ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                Carregando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ClipboardCheck className="w-4 h-4 mr-2" />
+                                                Nova AG
+                                            </>
+                                        )}
+                                    </Button>
+                                    <Button
                                         onClick={downloadExcelReport}
                                         className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
                                     >
@@ -722,12 +874,12 @@ export default function ChamadaAGPage() {
                                         className="hover:bg-red-50 hover:border-red-200 border-red-300 text-red-700"
                                     >
                                         <RotateCcw className={`w-4 h-4 mr-2 ${isResetting ? 'animate-spin' : ''}`} />
-                                        {isResetting ? 'Resetando...' : 'Resetar'}
+                                        {isResetting ? 'Resetando...' : 'Resetar Presenças'}
                                     </Button>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="text-sm text-gray-600">
-                                        <p>Use os botões para gerenciar o estado da chamada</p>
+                                        <p>Use os botões para gerenciar a sessão da AG</p>
                                     </div>
                                 </div>
                             </div>

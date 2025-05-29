@@ -78,4 +78,68 @@ export const resetAll = mutation({
     
     return allRecords.length;
   },
+});
+
+// Mutation to completely empty the attendance table
+export const clearAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Get all records
+    const allRecords = await ctx.db.query("attendance").collect();
+    
+    // Delete all records
+    for (const record of allRecords) {
+      await ctx.db.delete(record._id);
+    }
+    
+    return allRecords.length;
+  },
+});
+
+// Mutation to bulk insert attendance records
+export const bulkInsert = mutation({
+  args: {
+    records: v.array(v.object({
+      type: v.string(),
+      memberId: v.string(),
+      name: v.string(),
+      role: v.optional(v.string()),
+      status: v.optional(v.string()),
+      attendance: v.string(),
+      lastUpdatedBy: v.string(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const insertedIds = [];
+    
+    for (const record of args.records) {
+      const id = await ctx.db.insert("attendance", {
+        ...record,
+        lastUpdated: Date.now(),
+      });
+      insertedIds.push(id);
+    }
+    
+    return insertedIds;
+  },
+});
+
+// Mutation to reset attendance status only (not delete records)
+export const resetAttendanceOnly = mutation({
+  args: { lastUpdatedBy: v.string() },
+  handler: async (ctx, args) => {
+    // Get all records
+    const allRecords = await ctx.db.query("attendance").collect();
+    
+    // Update all records to "not-counting"
+    for (const record of allRecords) {
+      await ctx.db.patch(record._id, {
+        attendance: "not-counting",
+        lastUpdated: Date.now(),
+        lastUpdatedBy: args.lastUpdatedBy,
+      });
+    }
+    
+    return allRecords.length;
+  },
 }); 
