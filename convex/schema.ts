@@ -18,4 +18,13 @@ export default defineSchema({
     uf: v.optional(v.string()),
     agFiliacao: v.optional(v.string()),
   }).index("by_type", ["type"]),
+  
+  qrReaders: defineTable({
+    name: v.string(), // Name of the QR reader/person
+    token: v.string(), // Unique token for the QR reader link
+    createdAt: v.number(), // timestamp
+    createdBy: v.string(), // user identifier who created it
+    isActive: v.boolean(), // whether the reader is active
+  }).index("by_token", ["token"])
+    .index("by_active", ["isActive"]),
 }); 

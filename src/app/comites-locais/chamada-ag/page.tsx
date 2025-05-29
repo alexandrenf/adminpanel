@@ -18,7 +18,13 @@ import {
     Download,
     RotateCcw,
     Search,
-    BarChart3
+    BarChart3,
+    QrCode,
+    Smartphone,
+    Plus,
+    Trash2,
+    Copy,
+    ExternalLink
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useQuery, useMutation } from "convex/react";
@@ -26,6 +32,20 @@ import { useToast } from "~/components/ui/use-toast";
 import { useSession } from "next-auth/react";
 import { api as convexApi } from "../../../../convex/_generated/api";
 import * as XLSX from 'xlsx';
+import QRCode from 'qrcode';
+import JSZip from 'jszip';
+import PrecisaLogin from "~/app/_components/PrecisaLogin";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 
 type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
@@ -119,10 +139,16 @@ export default function ChamadaAGPage() {
     const { data: session } = useSession();
     const { toast } = useToast();
 
+    // QR Readers state
+    const [isQrReadersDialogOpen, setIsQrReadersDialogOpen] = useState(false);
+    const [newReaderName, setNewReaderName] = useState("");
+    const [isCreatingReader, setIsCreatingReader] = useState(false);
+
     // Convex queries - handle cases where table might be empty or queries fail
     const ebsAttendance = useQuery(convexApi.attendance.getByType, { type: "eb" });
     const crsAttendance = useQuery(convexApi.attendance.getByType, { type: "cr" });
     const comitesAttendance = useQuery(convexApi.attendance.getByType, { type: "comite" });
+    const qrReaders = useQuery(convexApi.qrReaders.getAll);
 
     // Check if Convex data is loading
     const isConvexLoading = ebsAttendance === undefined || crsAttendance === undefined || comitesAttendance === undefined;
@@ -133,6 +159,11 @@ export default function ChamadaAGPage() {
     const clearAllAttendance = useMutation(convexApi.attendance.clearAll);
     const bulkInsertAttendance = useMutation(convexApi.attendance.bulkInsert);
     const resetAttendanceOnly = useMutation(convexApi.attendance.resetAttendanceOnly);
+
+    // QR Readers mutations
+    const createQrReader = useMutation(convexApi.qrReaders.create);
+    const removeQrReader = useMutation(convexApi.qrReaders.remove);
+    const clearQrReaders = useMutation(convexApi.qrReaders.clearAll);
 
     // Fetch data
     const { data: registrosData, isLoading: registrosLoading } = api.registros.get.useQuery();
@@ -209,6 +240,28 @@ export default function ChamadaAGPage() {
         }
     }, [comitesAttendance]);
 
+    // Check if user is authenticated - moved after all hooks
+    if (!session) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
+                {/* Background decorative elements */}
+                <div className="absolute inset-0 opacity-20">
+                    <div className="w-full h-full" style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                    }}></div>
+                </div>
+                
+                {/* Floating orbs */}
+                <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+                <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+                
+                <div className="relative z-10 flex-grow flex items-center justify-center">
+                    <PrecisaLogin />
+                </div>
+            </main>
+        );
+    }
+
     // Nova AG function to load all data and populate Convex
     const handleNovaAG = async () => {
         if (!session?.user?.id) {
@@ -222,13 +275,14 @@ export default function ChamadaAGPage() {
 
         if (isLoadingNovaAG) return;
 
-        if (window.confirm("NOVA AG: Deseja carregar todos os dados e criar uma nova sessão?\n\nEsta ação irá:\n• Carregar dados do CSV, EBs e CRs\n• Limpar completamente a tabela de presença\n• Criar novos registros para todos os membros\n\nDeseja continuar?")) {
+        if (window.confirm("NOVA AG: Deseja carregar todos os dados e criar uma nova sessão?\n\nEsta ação irá:\n• Carregar dados do CSV, EBs e CRs\n• Limpar completamente a tabela de presença\n• Limpar todos os leitores QR\n• Criar novos registros para todos os membros\n\nDeseja continuar?")) {
             setIsLoadingNovaAG(true);
             setLoading(true);
             
             try {
-                // First, clear all existing attendance records
+                // First, clear all existing attendance records and QR readers
                 await clearAllAttendance();
+                await clearQrReaders();
                 
                 // Load CSV data
                 if (!registrosData?.url) {
@@ -624,6 +678,205 @@ export default function ChamadaAGPage() {
         URL.revokeObjectURL(url);
     };
 
+    const downloadQRCodes = async () => {
+        if (!session?.user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para gerar os QR Codes.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setLoading(true);
+        
+        try {
+            const zip = new JSZip();
+            const qrFolder = zip.folder("QR_Codes_AG");
+            
+            if (!qrFolder) {
+                throw new Error("Erro ao criar pasta no ZIP");
+            }
+
+            // Generate QR codes for EB members
+            for (const member of ebMembers) {
+                const qrData = JSON.stringify({
+                    type: "eb",
+                    id: member.id.toString(),
+                    name: member.name,
+                    role: member.role
+                });
+
+                const qrCodeDataURL = await QRCode.toDataURL(qrData, {
+                    width: 300,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#FFFFFF'
+                    }
+                });
+
+                // Convert data URL to base64
+                const base64Data = qrCodeDataURL.replace(/^data:image\/png;base64,/, "");
+                const fileName = `EB - ${member.name} - ${member.role}.png`.replace(/[<>:"/\\|?*]/g, '_');
+                qrFolder.file(fileName, base64Data, { base64: true });
+            }
+
+            // Generate QR codes for CR members
+            for (const member of crMembers) {
+                const qrData = JSON.stringify({
+                    type: "cr",
+                    id: member.id.toString(),
+                    name: member.name,
+                    role: member.role
+                });
+
+                const qrCodeDataURL = await QRCode.toDataURL(qrData, {
+                    width: 300,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#FFFFFF'
+                    }
+                });
+
+                const base64Data = qrCodeDataURL.replace(/^data:image\/png;base64,/, "");
+                const fileName = `CR - ${member.name} - ${member.role}.png`.replace(/[<>:"/\\|?*]/g, '_');
+                qrFolder.file(fileName, base64Data, { base64: true });
+            }
+
+            // Generate QR codes for Comitês
+            for (const comite of comitesLocais) {
+                const qrData = JSON.stringify({
+                    type: "comite",
+                    id: comite.name,
+                    name: comite.name,
+                    status: comite.status,
+                    uf: comite.uf
+                });
+
+                const qrCodeDataURL = await QRCode.toDataURL(qrData, {
+                    width: 300,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#FFFFFF'
+                    }
+                });
+
+                const base64Data = qrCodeDataURL.replace(/^data:image\/png;base64,/, "");
+                const fileName = `${comite.status} - ${comite.name}.png`.replace(/[<>:"/\\|?*]/g, '_');
+                qrFolder.file(fileName, base64Data, { base64: true });
+            }
+
+            // Generate ZIP file
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            
+            // Create download link
+            const url = URL.createObjectURL(zipBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `QR_Codes_AG_${new Date().toISOString().split('T')[0]}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            toast({
+                title: "✅ QR Codes gerados com sucesso",
+                description: `${ebMembers.length + crMembers.length + comitesLocais.length} QR Codes foram baixados.`,
+            });
+
+        } catch (error) {
+            console.error("Error generating QR Codes:", error);
+            toast({
+                title: "❌ Erro ao gerar QR Codes",
+                description: "Erro ao gerar os QR Codes. Tente novamente.",
+                variant: "destructive",
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCreateQrReader = async () => {
+        if (!session?.user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para criar um leitor QR.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (!newReaderName.trim()) {
+            toast({
+                title: "Erro",
+                description: "Digite um nome para o leitor QR.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setIsCreatingReader(true);
+        try {
+            const result = await createQrReader({
+                name: newReaderName.trim(),
+                createdBy: session.user.id,
+            });
+
+            setNewReaderName("");
+            toast({
+                title: "✅ Leitor QR criado",
+                description: `Leitor "${newReaderName}" criado com sucesso!`,
+            });
+        } catch (error) {
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao criar leitor QR. Tente novamente.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsCreatingReader(false);
+        }
+    };
+
+    const handleDeleteQrReader = async (id: string, name: string) => {
+        if (window.confirm(`Deseja realmente excluir o leitor "${name}"?`)) {
+            try {
+                await removeQrReader({ id: id as any });
+                toast({
+                    title: "✅ Leitor excluído",
+                    description: `Leitor "${name}" foi excluído.`,
+                });
+            } catch (error) {
+                toast({
+                    title: "❌ Erro",
+                    description: "Erro ao excluir leitor. Tente novamente.",
+                    variant: "destructive",
+                });
+            }
+        }
+    };
+
+    const handleCopyReaderLink = (token: string, name: string) => {
+        const baseUrl = window.location.origin;
+        const readerUrl = `${baseUrl}/leitor-qr/${token}`;
+        
+        navigator.clipboard.writeText(readerUrl).then(() => {
+            toast({
+                title: "✅ Link copiado",
+                description: `Link do leitor "${name}" copiado para a área de transferência!`,
+            });
+        }).catch(() => {
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao copiar link. Tente novamente.",
+                variant: "destructive",
+            });
+        });
+    };
+
     if (loading || isLoadingNovaAG) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -718,6 +971,7 @@ export default function ChamadaAGPage() {
                                     <strong>O que acontecerá:</strong><br/>
                                     • Carregamento de dados do CSV, EBs e CRs<br/>
                                     • Limpeza completa da tabela de presença<br/>
+                                    • Limpeza completa dos leitores QR<br/>
                                     • Criação de novos registros para todos os membros
                                 </p>
                             </div>
@@ -786,6 +1040,138 @@ export default function ChamadaAGPage() {
                                         <Download className="w-4 h-4 mr-2" />
                                         Baixar Relatório
                                     </Button>
+                                    <Button
+                                        onClick={downloadQRCodes}
+                                        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                                    >
+                                        <QrCode className="w-4 h-4 mr-2" />
+                                        Baixar QR Codes
+                                    </Button>
+                                    <Dialog open={isQrReadersDialogOpen} onOpenChange={setIsQrReadersDialogOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 shadow-lg hover:shadow-xl transition-all duration-300">
+                                                <Smartphone className="w-4 h-4 mr-2" />
+                                                Leitores de QRs
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-[600px]">
+                                            <DialogHeader>
+                                                <DialogTitle className="flex items-center space-x-2">
+                                                    <Smartphone className="w-5 h-5 text-cyan-600" />
+                                                    <span>Gerenciar Leitores QR</span>
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    Crie links únicos para dispositivos móveis lerem QR codes e marcarem presença.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            
+                                            <div className="space-y-4">
+                                                {/* Create new reader section */}
+                                                <div className="p-4 bg-gray-50 rounded-lg border">
+                                                    <h4 className="font-semibold mb-3 flex items-center space-x-2">
+                                                        <Plus className="w-4 h-4 text-green-600" />
+                                                        <span>Novo Leitor QR</span>
+                                                    </h4>
+                                                    <div className="flex space-x-2">
+                                                        <div className="flex-1">
+                                                            <Label htmlFor="reader-name">Nome do leitor</Label>
+                                                            <Input
+                                                                id="reader-name"
+                                                                placeholder="Ex: João da Silva"
+                                                                value={newReaderName}
+                                                                onChange={(e) => setNewReaderName(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        handleCreateQrReader();
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <Button 
+                                                            onClick={handleCreateQrReader}
+                                                            disabled={isCreatingReader || !newReaderName.trim()}
+                                                            className="mt-6 bg-green-600 hover:bg-green-700"
+                                                        >
+                                                            {isCreatingReader ? (
+                                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                                                            ) : (
+                                                                <>
+                                                                    <Plus className="w-4 h-4 mr-1" />
+                                                                    Criar
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Existing readers list */}
+                                                <div>
+                                                    <h4 className="font-semibold mb-3 flex items-center justify-between">
+                                                        <span>Leitores Ativos</span>
+                                                        <Badge variant="outline" className="text-cyan-600 border-cyan-200">
+                                                            {qrReaders?.length || 0} leitores
+                                                        </Badge>
+                                                    </h4>
+                                                    
+                                                    {qrReaders && qrReaders.length > 0 ? (
+                                                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                                                            {qrReaders.map((reader) => (
+                                                                <div 
+                                                                    key={reader._id} 
+                                                                    className="flex items-center justify-between p-3 bg-white border rounded-lg hover:bg-gray-50 transition-colors"
+                                                                >
+                                                                    <div>
+                                                                        <p className="font-medium text-sm">{reader.name}</p>
+                                                                        <p className="text-xs text-gray-500">
+                                                                            Criado em {new Date(reader.createdAt).toLocaleString('pt-BR')}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="flex items-center space-x-1">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() => handleCopyReaderLink(reader.token, reader.name)}
+                                                                            className="text-cyan-600 border-cyan-200 hover:bg-cyan-50"
+                                                                        >
+                                                                            <Copy className="w-3 h-3 mr-1" />
+                                                                            Copiar Link
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() => {
+                                                                                const baseUrl = window.location.origin;
+                                                                                const readerUrl = `${baseUrl}/leitor-qr/${reader.token}`;
+                                                                                window.open(readerUrl, '_blank');
+                                                                            }}
+                                                                            className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                                                                        >
+                                                                            <ExternalLink className="w-3 h-3 mr-1" />
+                                                                            Abrir
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() => handleDeleteQrReader(reader._id, reader.name)}
+                                                                            className="text-red-600 border-red-200 hover:bg-red-50"
+                                                                        >
+                                                                            <Trash2 className="w-3 h-3" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-center py-8 text-gray-500">
+                                                            <Smartphone className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                                            <p>Nenhum leitor QR criado ainda.</p>
+                                                            <p className="text-sm">Crie um leitor para começar!</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
                                     <Button
                                         onClick={resetAttendanceState}
                                         variant="outline"

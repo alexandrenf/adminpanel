@@ -1,11 +1,13 @@
+"use client";
+
 import Link from "next/link";
-import { getServerAuthSession } from "~/server/auth";
+import { useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Shield, Users, Settings, LogIn, LogOut } from "lucide-react";
 
-export default async function Home() {
-  const session = await getServerAuthSession();
+export default function Home() {
+  const { data: session } = useSession();
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">

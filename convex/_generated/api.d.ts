@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as attendance from "../attendance.js";
+import type * as qrReaders from "../qrReaders.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -25,6 +26,7 @@ import type * as attendance from "../attendance.js";
  */
 declare const fullApi: ApiFromModules<{
   attendance: typeof attendance;
+  qrReaders: typeof qrReaders;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
