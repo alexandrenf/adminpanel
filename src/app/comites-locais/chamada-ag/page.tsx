@@ -112,7 +112,7 @@ export default function ChamadaAGPage() {
     const [comitesLocais, setComitesLocais] = useState<ComiteLocal[]>([]);
     const [ebMembers, setEbMembers] = useState<EbMember[]>([]);
     const [crMembers, setCrMembers] = useState<CrMember[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchEb, setSearchEb] = useState("");
     const [searchCr, setSearchCr] = useState("");
@@ -122,10 +122,13 @@ export default function ChamadaAGPage() {
     const { data: session } = useSession();
     const { toast } = useToast();
 
-    // Convex queries
+    // Convex queries - handle cases where table might be empty or queries fail
     const ebsAttendance = useQuery(convexApi.attendance.getByType, { type: "eb" });
     const crsAttendance = useQuery(convexApi.attendance.getByType, { type: "cr" });
     const comitesAttendance = useQuery(convexApi.attendance.getByType, { type: "comite" });
+
+    // Check if Convex data is loading
+    const isConvexLoading = ebsAttendance === undefined || crsAttendance === undefined || comitesAttendance === undefined;
 
     // Convex mutations
     const updateAttendance = useMutation(convexApi.attendance.updateAttendance);
@@ -323,28 +326,28 @@ export default function ChamadaAGPage() {
 
     // Update attendance state when Convex data changes
     useEffect(() => {
-        if (ebMembers.length > 0) {
+        if (ebMembers.length > 0 && ebsAttendance !== undefined) {
             setEbMembers(prev => prev.map(eb => ({
                 ...eb,
-                attendance: (ebsAttendance?.find(a => a.memberId === eb.id.toString())?.attendance || "not-counting") as AttendanceState
+                attendance: (ebsAttendance.find(a => a.memberId === eb.id.toString())?.attendance || "not-counting") as AttendanceState
             })));
         }
     }, [ebsAttendance, ebMembers.length]);
 
     useEffect(() => {
-        if (crMembers.length > 0) {
+        if (crMembers.length > 0 && crsAttendance !== undefined) {
             setCrMembers(prev => prev.map(cr => ({
                 ...cr,
-                attendance: (crsAttendance?.find(a => a.memberId === cr.id.toString())?.attendance || "not-counting") as AttendanceState
+                attendance: (crsAttendance.find(a => a.memberId === cr.id.toString())?.attendance || "not-counting") as AttendanceState
             })));
         }
     }, [crsAttendance, crMembers.length]);
 
     useEffect(() => {
-        if (comitesLocais.length > 0) {
+        if (comitesLocais.length > 0 && comitesAttendance !== undefined) {
             setComitesLocais(prev => prev.map(comite => ({
                 ...comite,
-                attendance: (comitesAttendance?.find(a => a.memberId === comite.name)?.attendance || "not-counting") as AttendanceState
+                attendance: (comitesAttendance.find(a => a.memberId === comite.name)?.attendance || "not-counting") as AttendanceState
             })));
         }
     }, [comitesAttendance, comitesLocais.length]);
