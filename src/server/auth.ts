@@ -38,6 +38,46 @@ declare module "next-auth" {
  */
 export const authOptions: NextAuthOptions = {
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google" && account.access_token && profile) {
+        try {
+          // Fetch fresh user data from Google API
+          const response = await fetch(
+            "https://www.googleapis.com/oauth2/v1/userinfo?alt=json",
+            {
+              headers: {
+                Authorization: `Bearer ${account.access_token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const googleProfile = await response.json() as {
+              id: string;
+              name: string;
+              email: string;
+              picture: string;
+            };
+
+            // Update user in database with fresh data
+            await db.user.update({
+              where: { email: googleProfile.email },
+              data: {
+                name: googleProfile.name,
+                email: googleProfile.email,
+                image: googleProfile.picture,
+              },
+            });
+
+            console.log(`Updated profile for user: ${googleProfile.email}`);
+          }
+        } catch (error) {
+          console.error("Error updating user profile on sign in:", error);
+          // Don't prevent sign in if profile update fails
+        }
+      }
+      return true;
+    },
     session: ({ session, user }) => ({
       ...session,
       user: {
@@ -50,7 +90,14 @@ export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          scope: "openid email profile",
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     })
   ],
 };
