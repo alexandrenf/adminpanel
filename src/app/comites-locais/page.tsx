@@ -51,102 +51,85 @@ export default async function ComitesLocaisPage() {
                                 Comitês Locais
                             </h1>
                             <p className="text-gray-600">
-                                Gerencie os dados dos comitês locais através do Google Drive
+                                Gerencie os dados dos comitês locais através do Google Drive e as chamadas das AGs.
                             </p>
                         </div>
                     </div>
 
-                    <Card className="shadow-lg border-0">
-                        <CardHeader>
-                            <CardTitle className="flex items-center space-x-2">
-                                <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-                                <span>Configuração do Google Drive</span>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {/* Overview */}
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-100">
-                                <div className="flex items-start space-x-3">
-                                    <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-blue-800 mb-2">
-                                            Como Funciona
-                                        </h3>
-                                        <p className="text-blue-700 mb-4">
-                                            Para manter os dados dos comitês locais atualizados, você pode:
-                                        </p>
-                                        <ul className="list-disc list-inside space-y-2 text-blue-600">
-                                            <li>Atualizar a URL do Google Drive que contém os dados</li>
-                                            <li>Copiar a URL formatada para uso em outros sistemas</li>
-                                            <li>Visualizar quem fez a última atualização</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
+                    
 
-                            {/* Instructions */}
-                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-lg border border-green-100">
-                                <div className="flex items-start space-x-3">
-                                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-green-800 mb-3">
-                                            Instruções Importantes
-                                        </h3>
-                                        <ul className="list-disc list-inside space-y-2 text-green-700">
-                                            <li>Certifique-se de que o arquivo no Google Drive está no formato correto</li>
-                                            <li>A URL será automaticamente convertida para o formato CSV</li>
-                                            <li>Mantenha o arquivo atualizado com as informações mais recentes</li>
-                                            <li>Verifique se o arquivo está acessível para todos os usuários necessários</li>
-                                        </ul>
+                    {/* Management Actions */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Gerenciar Comitês */}
+                        <Card className="shadow-lg border-0 hover:shadow-xl transition-all duration-300">
+                            <CardHeader className="pb-4">
+                                <CardTitle className="flex items-center space-x-3">
+                                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                                        <ExternalLink className="w-5 h-5 text-white" />
                                     </div>
+                                    <span className="text-xl">Gerenciar Dados dos Comitês</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-gray-600 leading-relaxed">
+                                    Configure e gerencie a URL do Google Drive que contém a planilha com todos os dados dos comitês locais. 
+                                    Esta é a fonte principal de informações para o sistema.
+                                </p>
+                                
+                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                    <h4 className="font-semibold text-blue-800 mb-2">O que você pode fazer:</h4>
+                                    <ul className="text-sm text-blue-700 space-y-1">
+                                        <li>• Atualizar a URL da planilha do Google Drive</li>
+                                        <li>• Copiar URL formatada para outros sistemas</li>
+                                        <li>• Visualizar histórico de atualizações</li>
+                                        <li>• Verificar status da conexão com o Drive</li>
+                                    </ul>
                                 </div>
-                            </div>
 
-                            {/* Warning */}
-                            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-6 rounded-lg border border-amber-100">
-                                <div className="flex items-start space-x-3">
-                                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-amber-800 mb-2">
-                                            Atenção
-                                        </h3>
-                                        <p className="text-amber-700">
-                                            Certifique-se de que o arquivo do Google Drive está configurado com as permissões corretas 
-                                            para que o sistema possa acessar os dados automaticamente.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                                <Link href="/registros" className="block">
+                                    <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300 py-3">
+                                        <ExternalLink className="w-5 h-5 mr-3" />
+                                        Gerenciar URL do Google Drive
+                                    </Button>
+                                </Link>
+                            </CardContent>
+                        </Card>
 
-                            {/* Action */}
-                            <div className="bg-white p-6 rounded-lg border border-gray-200">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                                            Gerenciar URL do Google Drive
-                                        </h3>
-                                        <p className="text-gray-600">
-                                            Configure e gerencie a URL do Google Drive que contém os dados dos comitês locais.
-                                        </p>
+                        {/* Chamada de AG */}
+                        <Card className="shadow-lg border-0 hover:shadow-xl transition-all duration-300">
+                            <CardHeader className="pb-4">
+                                <CardTitle className="flex items-center space-x-3">
+                                    <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+                                        <ClipboardCheck className="w-5 h-5 text-white" />
                                     </div>
-                                    <div className="flex items-center space-x-3">
-                                    <Link href="/registros">
-                                        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300">
-                                            <ExternalLink className="w-4 h-4 mr-2" />
-                                            Gerenciar URL
-                                        </Button>
-                                    </Link>
-                                        <Link href="/comites-locais/chamada-ag">
-                                            <Button variant="outline" className="hover:bg-green-50 hover:border-green-200 border-green-300 text-green-700">
-                                                <ClipboardCheck className="w-4 h-4 mr-2" />
-                                                Chamada de AG
-                                            </Button>
-                                        </Link>
-                                    </div>
+                                    <span className="text-xl">Chamada de Assembleia Geral</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-gray-600 leading-relaxed">
+                                    Acesse o sistema de controle de presença para Assembleias Gerais. 
+                                    Gerencie a presença de EBs, CRs e Comitês Locais em tempo real.
+                                </p>
+                                
+                                <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                                    <h4 className="font-semibold text-green-800 mb-2">Funcionalidades:</h4>
+                                    <ul className="text-sm text-green-700 space-y-1">
+                                        <li>• Controle de presença em tempo real</li>
+                                        <li>• Cálculo automático de quórum</li>
+                                        <li>• Relatórios em Excel</li>
+                                        <li>• Sincronização com banco de dados</li>
+                                    </ul>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+
+                                <Link href="/comites-locais/chamada-ag" className="block">
+                                    <Button className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300 py-3">
+                                        <ClipboardCheck className="w-5 h-5 mr-3" />
+                                        Acessar Chamada de AG
+                                    </Button>
+                                </Link>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             </div>
         </main>

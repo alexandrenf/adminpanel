@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
@@ -16,9 +16,7 @@ import {
     XCircle,
     Minus,
     Download,
-    Upload,
     RotateCcw,
-    Save,
     Search,
     BarChart3
 } from "lucide-react";
@@ -108,7 +106,6 @@ const getAttendanceLabel = (state: AttendanceState): string => {
 
 export default function ChamadaAGPage() {
     const router = useRouter();
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const [comitesLocais, setComitesLocais] = useState<ComiteLocal[]>([]);
     const [ebMembers, setEbMembers] = useState<EbMember[]>([]);
     const [crMembers, setCrMembers] = useState<CrMember[]>([]);
@@ -442,57 +439,91 @@ export default function ChamadaAGPage() {
     const filteredComitesPlenos = filterBySearch(comitesPlenos, searchPlenos);
     const filteredComitesNaoPlenos = filterBySearch(comitesNaoPlenos, searchNaoPlenos);
 
-    // Save/Load/Reset functions
-    const saveAttendanceState = () => {
-        const state = {
-            timestamp: new Date().toISOString(),
-            ebMembers,
-            crMembers,
-            comitesLocais
-        };
+    const handleAttendanceChange = async (type: string, id: string, name: string, role?: string) => {
+        if (!session?.user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para alterar a presença.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        // Get current state from Convex data
+        let currentState: AttendanceState = "not-counting";
         
-        const dataStr = JSON.stringify(state, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `chamada-ag-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        if (type === "eb") {
+            const record = ebsAttendance?.find(a => a.memberId === id);
+            currentState = (record?.attendance || "not-counting") as AttendanceState;
+        } else if (type === "cr") {
+            const record = crsAttendance?.find(a => a.memberId === id);
+            currentState = (record?.attendance || "not-counting") as AttendanceState;
+        } else if (type === "comite") {
+            const record = comitesAttendance?.find(a => a.memberId === id);
+            currentState = (record?.attendance || "not-counting") as AttendanceState;
+        }
+
+        const nextState = getNextAttendanceState(currentState);
+
+        try {
+            await updateAttendance({
+                type,
+                memberId: id,
+                name,
+                role,
+                status: nextState,
+                attendance: nextState,
+                lastUpdatedBy: session.user.id
+            });
+
+            // No local state updates - Convex will trigger UI updates via useEffect
+
+            toast({
+                title: "Presença atualizada",
+                description: `${name} marcado como ${getAttendanceLabel(nextState)}`,
+            });
+        } catch (error) {
+            toast({
+                title: "Erro",
+                description: "Erro ao atualizar presença. Tente novamente.",
+                variant: "destructive",
+            });
+        }
     };
 
-    const loadAttendanceState = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
+    const handleDirectAttendanceSet = async (type: string, id: string, name: string, newState: AttendanceState, role?: string) => {
+        if (!session?.user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para alterar a presença.",
+                variant: "destructive",
+            });
+            return;
+        }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const content = e.target?.result as string;
-                const state = JSON.parse(content);
-                
-                if (state.ebMembers) {
-                    setEbMembers(state.ebMembers);
-                }
-                if (state.crMembers) {
-                    setCrMembers(state.crMembers);
-                }
-                if (state.comitesLocais) {
-                    setComitesLocais(state.comitesLocais);
-                }
-            } catch (error) {
-                console.error('Error loading attendance state:', error);
-                alert('Erro ao carregar o arquivo. Verifique se o formato está correto.');
-            }
-        };
-        reader.readAsText(file);
-        
-        // Reset the input
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
+        try {
+            await updateAttendance({
+                type,
+                memberId: id,
+                name,
+                role,
+                status: newState,
+                attendance: newState,
+                lastUpdatedBy: session.user.id
+            });
+
+            // No local state updates - Convex will trigger UI updates via useEffect
+
+            toast({
+                title: "Presença atualizada",
+                description: `${name} marcado como ${getAttendanceLabel(newState)}`,
+            });
+        } catch (error) {
+            toast({
+                title: "Erro",
+                description: "Erro ao atualizar presença. Tente novamente.",
+                variant: "destructive",
+            });
         }
     };
 
@@ -591,94 +622,6 @@ export default function ChamadaAGPage() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-    };
-
-    const handleAttendanceChange = async (type: string, id: string, name: string, role?: string) => {
-        if (!session?.user?.id) {
-            toast({
-                title: "Erro",
-                description: "Você precisa estar logado para alterar a presença.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        // Get current state from Convex data
-        let currentState: AttendanceState = "not-counting";
-        
-        if (type === "eb") {
-            const record = ebsAttendance?.find(a => a.memberId === id);
-            currentState = (record?.attendance || "not-counting") as AttendanceState;
-        } else if (type === "cr") {
-            const record = crsAttendance?.find(a => a.memberId === id);
-            currentState = (record?.attendance || "not-counting") as AttendanceState;
-        } else if (type === "comite") {
-            const record = comitesAttendance?.find(a => a.memberId === id);
-            currentState = (record?.attendance || "not-counting") as AttendanceState;
-        }
-
-        const nextState = getNextAttendanceState(currentState);
-
-        try {
-            await updateAttendance({
-                type,
-                memberId: id,
-                name,
-                role,
-                status: nextState,
-                attendance: nextState,
-                lastUpdatedBy: session.user.id
-            });
-
-            // No local state updates - Convex will trigger UI updates via useEffect
-
-            toast({
-                title: "Presença atualizada",
-                description: `${name} marcado como ${getAttendanceLabel(nextState)}`,
-            });
-        } catch (error) {
-            toast({
-                title: "Erro",
-                description: "Erro ao atualizar presença. Tente novamente.",
-                variant: "destructive",
-            });
-        }
-    };
-
-    const handleDirectAttendanceSet = async (type: string, id: string, name: string, newState: AttendanceState, role?: string) => {
-        if (!session?.user?.id) {
-            toast({
-                title: "Erro",
-                description: "Você precisa estar logado para alterar a presença.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        try {
-            await updateAttendance({
-                type,
-                memberId: id,
-                name,
-                role,
-                status: newState,
-                attendance: newState,
-                lastUpdatedBy: session.user.id
-            });
-
-            // No local state updates - Convex will trigger UI updates via useEffect
-
-            toast({
-                title: "Presença atualizada",
-                description: `${name} marcado como ${getAttendanceLabel(newState)}`,
-            });
-        } catch (error) {
-            toast({
-                title: "Erro",
-                description: "Erro ao atualizar presença. Tente novamente.",
-                variant: "destructive",
-            });
-        }
     };
 
     if (loading || isLoadingNovaAG) {
@@ -844,22 +787,6 @@ export default function ChamadaAGPage() {
                                         Baixar Relatório
                                     </Button>
                                     <Button
-                                        onClick={saveAttendanceState}
-                                        variant="outline"
-                                        className="hover:bg-blue-50 hover:border-blue-200 border-blue-300 text-blue-700"
-                                    >
-                                        <Save className="w-4 h-4 mr-2" />
-                                        Salvar Estado
-                                    </Button>
-                                    <Button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        variant="outline"
-                                        className="hover:bg-purple-50 hover:border-purple-200 border-purple-300 text-purple-700"
-                                    >
-                                        <Upload className="w-4 h-4 mr-2" />
-                                        Carregar Estado
-                                    </Button>
-                                    <Button
                                         onClick={resetAttendanceState}
                                         variant="outline"
                                         disabled={isResetting}
@@ -875,14 +802,6 @@ export default function ChamadaAGPage() {
                                     </div>
                                 </div>
                             </div>
-                            {/* Hidden file input */}
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".json"
-                                onChange={loadAttendanceState}
-                                style={{ display: 'none' }}
-                            />
                         </CardContent>
                     </Card>
 
