@@ -37,7 +37,7 @@ const PrecisaLogin: React.FC = () => {
                                 <div className="flex-1">
                                     <h3 className="font-semibold text-gray-900 mb-2">Acesso Restrito</h3>
                                     <p className="text-gray-700 text-sm leading-relaxed">
-                                        Você só pode fazer login com uma conta Google{" "}
+                                        Para acessar essa função, faça login com uma conta Google{" "}
                                         <span className="font-semibold text-blue-700">@ifmsabrazil.org</span>
                                     </p>
                                 </div>
