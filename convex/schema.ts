@@ -11,5 +11,11 @@ export default defineSchema({
     attendance: v.string(), // "present" | "absent" | "not-counting" | "excluded"
     lastUpdated: v.number(), // timestamp
     lastUpdatedBy: v.string(), // user identifier
+    // Additional fields for complete CSV data
+    escola: v.optional(v.string()),
+    regional: v.optional(v.string()),
+    cidade: v.optional(v.string()),
+    uf: v.optional(v.string()),
+    agFiliacao: v.optional(v.string()),
   }).index("by_type", ["type"]),
 }); 
