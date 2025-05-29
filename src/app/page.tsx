@@ -5,9 +5,24 @@ import { useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Shield, Users, Settings, LogIn, LogOut } from "lucide-react";
+import { isIfmsaEmailSession } from "~/server/lib/authcheck";
+import { useEffect, useState } from "react";
 
 export default function Home() {
   const { data: session } = useSession();
+  const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkEmail = async () => {
+      const result = await isIfmsaEmailSession(session);
+      setIsIfmsaEmail(result);
+    };
+    checkEmail();
+  }, [session]);
+
+  if (isIfmsaEmail === null) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
@@ -52,10 +67,10 @@ export default function Home() {
                   </div>
                 </div>
                 <CardTitle className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 bg-clip-text text-transparent mb-4">
-                  Portal de Administrador
+                  Portal IFMSA Brazil
                 </CardTitle>
                 <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                  Sistema exclusivo para administradores da IFMSA Brazil
+                  Sistema para membros da IFMSA Brazil
                 </p>
               </CardHeader>
 
@@ -124,7 +139,7 @@ export default function Home() {
                   </div>
 
                   {/* Features preview for logged in users */}
-                  {session && (
+                  {isIfmsaEmail && (
                     <div className="mt-12 pt-8 border-t border-gray-200">
                       <h3 className="text-lg font-semibold text-gray-900 mb-6 text-center">
                         Acesso Rápido

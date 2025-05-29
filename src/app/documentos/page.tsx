@@ -1,18 +1,9 @@
 import Link from "next/link";
-import { getServerAuthSession } from "~/server/auth";
-import PrecisaLogin from "~/app/_components/PrecisaLogin";
 import { Card, CardContent } from "../../components/ui/card";
-import { 
-    FileText, 
-    Newspaper, 
-    BookOpen, 
-    Globe, 
-    BarChart3, 
-    Scale, 
-    Plane, 
-    Users,
-    FileCheck
-} from "lucide-react";
+import { Button } from "../../components/ui/button";
+import { FileText, Upload, Download, Trash2, Edit, Plus, Clock, Users, Plane, FileCheck } from "lucide-react";
+import PrecisaLogin from "~/app/_components/PrecisaLogin";
+import { getIfmsaEmailSession } from "~/server/lib/authcheck";
 
 const documentTypes = [
     { 
@@ -25,65 +16,65 @@ const documentTypes = [
     { 
         href: "/documentos/informa-susi", 
         label: "Informa SUSi",
-        icon: Newspaper,
+        icon: FileText,
         description: "Informativo do Sistema Único de Saúde",
         color: "from-green-500 to-green-600"
     },
     { 
         href: "/documentos/ressonancia-poetica", 
         label: "Ressonância Poética",
-        icon: BookOpen,
+        icon: FileText,
         description: "Publicações de ressonância poética",
         color: "from-purple-500 to-purple-600"
     },
     { 
         href: "/documentos/brazilian-medical-students", 
         label: "Brazilian Medical Students",
-        icon: Globe,
+        icon: FileText,
         description: "Documentos para estudantes brasileiros",
         color: "from-indigo-500 to-indigo-600"
     },
     { 
         href: "/documentos/relatorios", 
         label: "Relatórios",
-        icon: BarChart3,
+        icon: FileText,
         description: "Relatórios e análises institucionais",
         color: "from-orange-500 to-orange-600"
     },
     { 
         href: "/documentos/declaracoes-de-politica", 
         label: "Declarações de Política",
-        icon: Scale,
+        icon: FileText,
         description: "Declarações oficiais de política",
         color: "from-red-500 to-red-600"
     },
     { 
         href: "/documentos/intercambio-nac", 
         label: "Intercâmbio Nacional",
-        icon: Users,
+        icon: FileText,
         description: "Documentos de intercâmbio nacional",
         color: "from-teal-500 to-teal-600"
     },
     { 
         href: "/documentos/intercambio-internacional", 
         label: "Intercâmbio Internacional",
-        icon: Plane,
+        icon: FileText,
         description: "Documentos de intercâmbio internacional",
         color: "from-cyan-500 to-cyan-600"
     },
     { 
         href: "/documentos/regulamento", 
         label: "Regulamento de Intercâmbios",
-        icon: FileCheck,
+        icon: FileText,
         description: "Regulamentos e normas de intercâmbio",
         color: "from-amber-500 to-amber-600"
     },
 ];
 
 export default async function DocumentosPage() {
-    const session = await getServerAuthSession();
+    const { session, hasIfmsaEmail } = await getIfmsaEmailSession();
 
-    if (!session) {
+    if (!hasIfmsaEmail) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
                 {/* Background decorative elements */}

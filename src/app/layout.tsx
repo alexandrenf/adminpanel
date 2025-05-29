@@ -10,7 +10,7 @@ import { Providers } from "./_components/Providers";
 import { Toaster } from "../components/ui/toaster";
 
 export const metadata = {
-  title: "Painel de Administrador da IFMSA Brazil",
+  title: "Portal IFMSA Brazil",
   description: "Criado por @alex.bfilho",
   icons: [
     { rel: "icon", url: "/favicon.ico" },
@@ -32,11 +32,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const session = await getServerAuthSession();
+  
   return (
     <html lang="en" className={`${GeistSans.variable}`}>
       <body>
         <Providers session={session}>
-          {session && <Navbar />}
+          <Navbar />
           <Suspense fallback={<Loading />}>
             {children}
           </Suspense>

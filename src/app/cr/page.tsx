@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { getServerAuthSession } from "~/server/auth";
+import { getIfmsaEmailSession } from "~/server/lib/authcheck";
 import CRTable from "~/app/_components/CRTable";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
 export default async function CRPage() {
-    const session = await getServerAuthSession();
+    const { session, hasIfmsaEmail } = await getIfmsaEmailSession();
 
-    if (!session) {
+    if (!hasIfmsaEmail) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
                 {/* Background decorative elements */}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import fetch from 'node-fetch';
 import { env } from "~/env";
@@ -97,22 +97,22 @@ const deleteOldFile = async (url: string) => {
 };
 
 export const arquivoRouter = createTRPCRouter({
-    getByType: protectedProcedure
+    getByType: ifmsaEmailProcedure
         .input(z.object({
             type: z.string().min(1),
         }))
-        .query(({ input, ctx }) => {
+        .query(({ ctx, input }) => {
             return ctx.db.arquivo.findMany({
                 where: {
                     type: input.type,
                 },
             });
         }),
-    latestArquivoId: protectedProcedure.query(async ({ ctx }) => {
+    latestArquivoId: ifmsaEmailProcedure.query(async ({ ctx }) => {
         const latestArquivo = await ctx.db.arquivo.findFirst({ orderBy: { id: "desc" } });
         return latestArquivo?.id || 0;
     }),
-    uploadPhoto: protectedProcedure
+    uploadPhoto: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
             image: z.string().nullable(), // Expecting base64 string or null
@@ -173,7 +173,7 @@ export const arquivoRouter = createTRPCRouter({
             }
         }),
 
-    updatePhoto: protectedProcedure
+    updatePhoto: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
             image: z.string().nullable(), // Expecting base64 string or null
@@ -278,7 +278,7 @@ export const arquivoRouter = createTRPCRouter({
                 });
             }
         }),
-    getOne: protectedProcedure
+    getOne: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
         }))
@@ -289,7 +289,7 @@ export const arquivoRouter = createTRPCRouter({
                 },
             });
         }),
-    create: protectedProcedure
+    create: ifmsaEmailProcedure
         .input(z.object({
             tipo: z.string().min(1),
             title: z.string().min(1),
@@ -310,7 +310,7 @@ export const arquivoRouter = createTRPCRouter({
                 }
             });
         }),
-    update: protectedProcedure
+    update: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
             tipo: z.string().min(1),
@@ -336,7 +336,7 @@ export const arquivoRouter = createTRPCRouter({
             });
         }),
 
-    delete: protectedProcedure
+    delete: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ input, ctx }) => {
             const { id } = input;

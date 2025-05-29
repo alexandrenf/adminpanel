@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import fetch from 'node-fetch';
 import { env } from "~/env";
@@ -98,11 +98,11 @@ const deleteOldFile = async (url: string) => {
 };
 
 export const timesRouter = createTRPCRouter({
-    getByType: protectedProcedure
+    getByType: ifmsaEmailProcedure
         .input(z.object({
             type: z.string().min(1),
         }))
-        .query(({ input, ctx }) => {
+        .query(({ ctx, input }) => {
             return ctx.db.timeRegional.findMany({
                 where: {
                     type: input.type,
@@ -110,41 +110,41 @@ export const timesRouter = createTRPCRouter({
             });
         }),
 
-    getMembros: protectedProcedure
+    getMembros: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
         }))
-        .query(({ input, ctx }) => {
+        .query(({ ctx, input }) => {
             return ctx.db.membroTime.findMany({
                 where: {
                     timeID: input.id,
                 },
             });
         }),
-    latestTimeMembroId: protectedProcedure.query(async ({ ctx }) => {
+    latestTimeMembroId: ifmsaEmailProcedure.query(async ({ ctx }) => {
         const latestTimeMembro = await ctx.db.membroTime.findFirst({ orderBy: { id: "desc" } });
         return latestTimeMembro?.id || 0;
     }),
 
-    getOneTimeMembro: protectedProcedure
+    getOneTimeMembro: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
         }))
-        .query(async ({ input, ctx }) => {
+        .query(async ({ ctx, input }) => {
             return ctx.db.membroTime.findUnique({
                 where: {
                     id: input.id,
                 },
             });
         }),
-    createTimeMembro: protectedProcedure
+    createTimeMembro: ifmsaEmailProcedure
         .input(z.object({
             name: z.string().min(1),
             role: z.string().min(1),
             timeID: z.number().min(1),
             imageLink: z.string().optional(),
         }))
-        .mutation(async ({ input, ctx }) => {
+        .mutation(async ({ ctx, input }) => {
             return ctx.db.membroTime.create({
                 data: {
                     name: input.name,
@@ -154,7 +154,7 @@ export const timesRouter = createTRPCRouter({
                 }
             });
         }),
-    updateTimeMembro: protectedProcedure
+    updateTimeMembro: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
             name: z.string().min(1),
@@ -162,7 +162,7 @@ export const timesRouter = createTRPCRouter({
             timeID: z.number().min(1).optional(),
             imageLink: z.string().optional(),
         }))
-        .mutation(async ({ input, ctx }) => {
+        .mutation(async ({ ctx, input }) => {
             return ctx.db.membroTime.update({
                 where: {
                     id: input.id,
@@ -176,9 +176,9 @@ export const timesRouter = createTRPCRouter({
             });
         }),
 
-    delete: protectedProcedure
+    delete: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input, ctx }) => {
+        .mutation(async ({ ctx, input }) => {
             const { id } = input;
 
             // Retrieve the EB details

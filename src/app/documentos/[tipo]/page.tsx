@@ -1,13 +1,13 @@
-import { getServerAuthSession } from "~/server/auth";
 import { redirect } from "next/navigation";
 import ArquivosTableWrapper from "~/app/_components/ArquivosTableWrapper";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 import { allowedTypes } from "~/app/_components/allowedTypes";
+import { getIfmsaEmailSession } from "~/server/lib/authcheck";
 
 import { GetServerSidePropsContext } from "next";
 
 export default async function Noticias({ params }: { params: GetServerSidePropsContext["params"] }) {
-    const session = await getServerAuthSession();
+    const { session, hasIfmsaEmail } = await getIfmsaEmailSession();
     const { tipo } = params as { tipo: string };
 
     // Find the type object in the allowed types list
@@ -18,7 +18,7 @@ export default async function Noticias({ params }: { params: GetServerSidePropsC
         redirect("/404");
     }
 
-    if (!session) {
+    if (!hasIfmsaEmail) {
         return (
             <main className="flex flex-col min-h-screen bg-gradient-to-b from-blue-800 to-blue-600 text-white">
                 <div className="flex-grow flex items-center justify-center">

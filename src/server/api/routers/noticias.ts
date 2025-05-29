@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import fetch from 'node-fetch';
 import { env } from "~/env";
@@ -9,105 +9,48 @@ const REPO_OWNER = "ifmsabrazil";
 const REPO_NAME = "dataifmsabrazil";
 
 export const noticiasRouter = createTRPCRouter({
-    getAll: protectedProcedure.query(({ ctx }) => {
-        return ctx.db.blog.findMany();
+    getAll: ifmsaEmailProcedure.query(({ ctx }) => {
+        return ctx.db.blog.findMany({
+            orderBy: [{ id: "desc" }],
+        });
     }),
 
-    getOne: protectedProcedure
+    getOne: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
-        .query(({ input, ctx }) => {
+        .query(({ ctx, input }) => {
             return ctx.db.blog.findUnique({ where: { id: input.id } });
         }),
 
-    delete: protectedProcedure
+    delete: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input, ctx }) => {
-            const { id } = input;
+        .mutation(async ({ ctx, input }) => {
+            // First get the blog to find photo name if it exists
+            const blog = await ctx.db.blog.findUnique({
+                where: { id: input.id }
+            });
 
-            // Retrieve the noticia details
-            const noticia = await ctx.db.blog.findUnique({ where: { id } });
-            if (!noticia) {
-                throw new TRPCError({
-                    code: 'NOT_FOUND',
-                    message: `Noticia with ID ${id} not found`,
-                });
+            if (!blog) {
+                throw new Error("Blog not found");
             }
 
-            const { link, imageLink } = noticia;
-
-            // Convert jsDelivr URLs back to GitHub API URLs
-            const convertJsDelivrToGitHubUrl = (jsDelivrUrl: string, type: "markdown" | "image") => {
-                const regex = /https:\/\/cdn.jsdelivr.net\/gh\/([^\/]+)\/([^\/]+)\/noticias\/([^\/]+)\/([^\/]+)/;
-                const match = jsDelivrUrl.match(regex);
-                if (!match) return null;
-
-                const [_, owner, repo, id, filename] = match;
-                const fileType = type === "markdown" ? "content.md" : "cover.png";
-                return `https://api.github.com/repos/${owner}/${repo}/contents/noticias/${id}/${fileType}`;
-            };
-
-            const githubMarkdownUrl = convertJsDelivrToGitHubUrl(link, "markdown");
-            const githubImageUrl = imageLink ? convertJsDelivrToGitHubUrl(imageLink, "image") : null;
-
-            const deleteFileFromGitHub = async (url: string | null, type: "markdown" | "image") => {
-                if (!url) return;
-
-                // Get the SHA of the file
-                const response = await fetch(url, {
-                    method: "GET",
-                    headers: {
-                        Authorization: `token ${GITHUB_TOKEN}`,
-                        "Content-Type": "application/json",
-                    },
-                });
-                const data: { sha?: string } | null = response.ok ? await response.json() as { sha?: string } | null : null;
-                const sha = data ? data.sha : null;
-
-                if (sha) {
-                    // Delete the file
-                    await fetch(url, {
-                        method: "DELETE",
-                        headers: {
-                            Authorization: `token ${GITHUB_TOKEN}`,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            message: `Delete ${type} for noticia ${id}`,
-                            sha,
-                            committer: {
-                                name: "Your Name",
-                                email: "your-email@example.com",
-                            },
-                        }),
-                    });
-                }
-            };
-
+            // Use delete instead of deleteMany since we're querying by ID (primary key)
             try {
-                // Attempt to delete the files from GitHub
-                await deleteFileFromGitHub(githubMarkdownUrl, "markdown");
-                await deleteFileFromGitHub(githubImageUrl, "image");
-
-                // Proceed to delete the database entry
-                return ctx.db.blog.delete({ where: { id } });
-            } catch (error) {
-                console.error("Error deleting files from GitHub:", error);
-
-                // If error, prompt user for confirmation to delete the database entry anyway
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: `Erro apagando arquivos. Anote essa ID (${id}) e peça que o CM-D delete manualmente. Após isso, clique confirmar para deletar do banco de dados mesmo assim.`,
+                return await ctx.db.blog.delete({
+                    where: { id: input.id }
                 });
+            } catch (error) {
+                console.error("Error deleting blog:", error);
+                throw new Error("Failed to delete blog from database");
             }
         }),
 
-    deleteAnyway: protectedProcedure
+    deleteAnyway: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ input, ctx }) => {
             return ctx.db.blog.delete({ where: { id: input.id } });
         }),
 
-    create: protectedProcedure
+    create: ifmsaEmailProcedure
         .input(z.object({
             date: z.date(),
             author: z.string().min(1),
@@ -138,12 +81,12 @@ export const noticiasRouter = createTRPCRouter({
             });
         }),
 
-    latestBlogId: protectedProcedure.query(async ({ ctx }) => {
+    latestBlogId: ifmsaEmailProcedure.query(async ({ ctx }) => {
         const latestBlog = await ctx.db.blog.findFirst({ orderBy: { id: "desc" } });
         return latestBlog?.id || 0;
     }),
 
-    update: protectedProcedure
+    update: ifmsaEmailProcedure
         .input(z.object({
             id: z.number(),
             date: z.date(),

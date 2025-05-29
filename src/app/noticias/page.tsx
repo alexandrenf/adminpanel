@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { getServerAuthSession } from "~/server/auth";
+import { getIfmsaEmailSession } from "~/server/lib/authcheck";
 import NoticiasTable from "~/app/_components/NoticiasTable";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
-export default async function NoticiasPage() {
-    const session = await getServerAuthSession();
+export default async function Noticias() {
+    const { session, hasIfmsaEmail } = await getIfmsaEmailSession();
 
-    if (!session) {
+    if (!hasIfmsaEmail) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
                 {/* Background decorative elements */}

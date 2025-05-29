@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { Shield, LogIn } from "lucide-react";
 
-const PrecisaLogin: React.FC = () => {
+const PrecisaLoginCL: React.FC = () => {
     return (
         <div className="container mx-auto flex flex-col items-center justify-center px-6 py-12">
             <Card className="w-full max-w-2xl mx-auto bg-white/95 backdrop-blur-xl border-0 shadow-2xl shadow-black/20 rounded-3xl overflow-hidden">
@@ -37,8 +37,7 @@ const PrecisaLogin: React.FC = () => {
                                 <div className="flex-1">
                                     <h3 className="font-semibold text-gray-900 mb-2">Acesso Restrito</h3>
                                     <p className="text-gray-700 text-sm leading-relaxed">
-                                        Para acessar essa função, faça login com uma conta Google{" "}
-                                        <span className="font-semibold text-blue-700">@ifmsabrazil.org</span>
+                                        Faça login com sua conta Google para acessar o sistema
                                     </p>
                                 </div>
                             </div>
@@ -66,4 +65,4 @@ const PrecisaLogin: React.FC = () => {
     );
 };
 
-export default PrecisaLogin;
+export default PrecisaLoginCL; 

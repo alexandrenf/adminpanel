@@ -13,6 +13,7 @@ import { ZodError } from "zod";
 
 import { getServerAuthSession } from "~/server/auth";
 import { db } from "~/server/db";
+import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 
 /**
  * 1. CONTEXT
@@ -99,6 +100,32 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.session || !ctx.session.user) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
+  return next({
+    ctx: {
+      // infers the `session` as non-nullable
+      session: { ...ctx.session, user: ctx.session.user },
+    },
+  });
+});
+
+/**
+ * IFMSA Email Protected procedure
+ *
+ * If you want a query or mutation to ONLY be accessible to users with IFMSA Brazil emails, use this.
+ * It verifies the session is valid and the email ends with @ifmsabrazil.org (or is webmaster).
+ *
+ * @see https://trpc.io/docs/procedures
+ */
+export const ifmsaEmailProcedure = t.procedure.use(async ({ ctx, next }) => {
+  if (!ctx.session || !ctx.session.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+
+  const hasIfmsaEmail = await isIfmsaEmailSession(ctx.session);
+  if (!hasIfmsaEmail) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "IFMSA Brazil email required" });
+  }
+
   return next({
     ctx: {
       // infers the `session` as non-nullable

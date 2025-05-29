@@ -164,9 +164,9 @@ export default function EbTable() {
                     </div>
                     <div>
                         <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
-                            Executiva Brasileira
+                            Diretoria Executiva
                         </h2>
-                        <p className="text-gray-600">Gerencie os membros da executiva brasileira</p>
+                        <p className="text-gray-600">Gerencie os membros da diretoria executiva</p>
                     </div>
                 </div>
                 <div className="flex items-center space-x-3">

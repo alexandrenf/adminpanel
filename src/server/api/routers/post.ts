@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import {
   createTRPCRouter,
-  protectedProcedure,
+  ifmsaEmailProcedure,
   publicProcedure,
 } from "~/server/api/trpc";
 
@@ -15,7 +15,7 @@ export const postRouter = createTRPCRouter({
       };
     }),
 
-  create: protectedProcedure
+  create: ifmsaEmailProcedure
     .input(z.object({ name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       // simulate a slow db call
@@ -29,14 +29,14 @@ export const postRouter = createTRPCRouter({
       });
     }),
 
-  getLatest: protectedProcedure.query(({ ctx }) => {
+  getLatest: ifmsaEmailProcedure.query(({ ctx }) => {
     return ctx.db.post.findFirst({
       orderBy: { createdAt: "desc" },
       where: { createdBy: { id: ctx.session.user.id } },
     });
   }),
 
-  getSecretMessage: protectedProcedure.query(() => {
+  getSecretMessage: ifmsaEmailProcedure.query(() => {
     return "you can now see this secret message!";
   }),
 });

@@ -2,13 +2,12 @@ import { z } from "zod";
 
 import {
     createTRPCRouter,
-    protectedProcedure,
-    publicProcedure,
+    ifmsaEmailProcedure,
 } from "~/server/api/trpc";
 
 export const gestaoRouter = createTRPCRouter({
 
-    create: protectedProcedure
+    create: ifmsaEmailProcedure
         .input(z.object({
             yearStart: z.number().min(3),
             yearEnd: z.number().min(3),
@@ -23,17 +22,17 @@ export const gestaoRouter = createTRPCRouter({
             });
         }),
 
-    getAll: protectedProcedure.query(({ ctx }) => {
+    getAll: ifmsaEmailProcedure.query(({ ctx }) => {
         return ctx.db.gestao.findMany();
     }),
 
-    delete: protectedProcedure
+    delete: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ input, ctx }) => {
             return ctx.db.gestao.delete({ where: { id: input.id } });
         }),
 
-    getAllArquivados: protectedProcedure
+    getAllArquivados: ifmsaEmailProcedure
         .input(z.object({ id: z.number(), tipoCargo: z.string() }))
         .query(async ({ input, ctx }) => {
             return ctx.db.arquivado.findMany({

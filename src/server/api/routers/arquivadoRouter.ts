@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import fetch from "node-fetch";
 import { env } from "~/env";
@@ -58,7 +58,7 @@ const deleteFileFromGitHub = async (url: string | null) => {
 };
 
 export const arquivadoRouter = createTRPCRouter({
-    getAll: protectedProcedure.query(({ ctx }) => {
+    getAll: ifmsaEmailProcedure.query(({ ctx }) => {
         return ctx.db.arquivado.findMany({
             orderBy: {
                 order: "asc",
@@ -66,13 +66,13 @@ export const arquivadoRouter = createTRPCRouter({
         });
     }),
 
-    getOne: protectedProcedure
+    getOne: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .query(({ input, ctx }) => {
             return ctx.db.arquivado.findUnique({ where: { id: input.id } });
         }),
 
-    delete: protectedProcedure
+    delete: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ input, ctx }) => {
             const { id } = input;
@@ -104,7 +104,7 @@ export const arquivadoRouter = createTRPCRouter({
             }
         }),
 
-    create: protectedProcedure
+    create: ifmsaEmailProcedure
         .input(
             z.object({
                 role: z.string(),
@@ -122,7 +122,7 @@ export const arquivadoRouter = createTRPCRouter({
             });
         }),
 
-    update: protectedProcedure
+    update: ifmsaEmailProcedure
         .input(
             z.object({
                 id: z.number(),
@@ -142,7 +142,7 @@ export const arquivadoRouter = createTRPCRouter({
             });
         }),
 
-    getMaxOrder: protectedProcedure.query(async ({ ctx }) => {
+    getMaxOrder: ifmsaEmailProcedure.query(async ({ ctx }) => {
         const maxOrder = await ctx.db.arquivado.findFirst({
             orderBy: {
                 order: "desc",
@@ -154,7 +154,7 @@ export const arquivadoRouter = createTRPCRouter({
         return maxOrder?.order ?? 0;
     }),
 
-    updateOrder: protectedProcedure
+    updateOrder: ifmsaEmailProcedure
         .input(
             z.array(
                 z.object({
@@ -174,7 +174,7 @@ export const arquivadoRouter = createTRPCRouter({
             await ctx.db.$transaction(transaction);
         }),
 
-    latestArquivadoId: protectedProcedure.query(async ({ ctx }) => {
+    latestArquivadoId: ifmsaEmailProcedure.query(async ({ ctx }) => {
         const latestArquivado = await ctx.db.arquivado.findFirst({
             orderBy: { id: "desc" },
         });
