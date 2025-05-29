@@ -283,26 +283,33 @@ export default function ChamadaAGPage() {
                     }
                 }
                 
-                // Add Comite records
+                // Add Comite records with full data
                 for (const comite of comites) {
                     allRecords.push({
                         type: "comite",
                         memberId: comite.name,
                         name: comite.name,
-                        role: `${comite.cidade}, ${comite.uf}`,
                         status: comite.status,
                         attendance: "not-counting",
-                        lastUpdatedBy: session.user.id
+                        lastUpdatedBy: session.user.id,
+                        // Store complete CSV data
+                        escola: comite.escola,
+                        regional: comite.regional,
+                        cidade: comite.cidade,
+                        uf: comite.uf,
+                        agFiliacao: comite.agFiliacao
                     });
                 }
                 
                 // Bulk insert all records to Convex
                 await bulkInsertAttendance({ records: allRecords });
                 
-                // Update local state
-                setComitesLocais(comites);
+                // Update local state - but after this, Convex becomes source of truth
                 setIsDataLoaded(true);
                 setLoading(false);
+                
+                // Store the full CSV data temporarily for reconstruction
+                // The useEffect hooks will rebuild the UI from Convex data
                 
                 toast({
                     title: "✅ Nova AG criada com sucesso",
@@ -324,33 +331,50 @@ export default function ChamadaAGPage() {
         }
     };
 
-    // Update attendance state when Convex data changes
+    // Update attendance state when Convex data changes - this is the source of truth after Nova AG
     useEffect(() => {
-        if (ebMembers.length > 0 && ebsAttendance !== undefined) {
-            setEbMembers(prev => prev.map(eb => ({
-                ...eb,
+        if (isDataLoaded && ebsAttendance !== undefined) {
+            const updatedEbMembers = ebData?.map(eb => ({
+                id: eb.id,
+                role: eb.role,
+                name: eb.name,
                 attendance: (ebsAttendance.find(a => a.memberId === eb.id.toString())?.attendance || "not-counting") as AttendanceState
-            })));
+            })) || [];
+            setEbMembers(updatedEbMembers);
         }
-    }, [ebsAttendance, ebMembers.length]);
+    }, [ebsAttendance, ebData, isDataLoaded]);
 
     useEffect(() => {
-        if (crMembers.length > 0 && crsAttendance !== undefined) {
-            setCrMembers(prev => prev.map(cr => ({
-                ...cr,
+        if (isDataLoaded && crsAttendance !== undefined) {
+            const updatedCrMembers = crData?.map(cr => ({
+                id: cr.id,
+                role: cr.role,
+                name: cr.name,
                 attendance: (crsAttendance.find(a => a.memberId === cr.id.toString())?.attendance || "not-counting") as AttendanceState
-            })));
+            })) || [];
+            setCrMembers(updatedCrMembers);
         }
-    }, [crsAttendance, crMembers.length]);
+    }, [crsAttendance, crData, isDataLoaded]);
 
     useEffect(() => {
-        if (comitesLocais.length > 0 && comitesAttendance !== undefined) {
-            setComitesLocais(prev => prev.map(comite => ({
-                ...comite,
-                attendance: (comitesAttendance.find(a => a.memberId === comite.name)?.attendance || "not-counting") as AttendanceState
-            })));
+        if (isDataLoaded && comitesAttendance !== undefined) {
+            // Rebuild comites from Convex data with complete CSV information
+            const comitesFromConvex = comitesAttendance
+                .filter(record => record.type === "comite")
+                .map(record => ({
+                    name: record.name,
+                    escola: record.escola || "",
+                    regional: record.regional || "",
+                    cidade: record.cidade || "",
+                    uf: record.uf || "",
+                    status: (record.status || "Não-pleno") as "Pleno" | "Não-pleno",
+                    agFiliacao: record.agFiliacao || "",
+                    attendance: record.attendance as AttendanceState
+                }));
+            
+            setComitesLocais(comitesFromConvex);
         }
-    }, [comitesAttendance, comitesLocais.length]);
+    }, [comitesAttendance, isDataLoaded]);
 
     const getAttendanceIcon = (state: AttendanceState) => {
         switch (state) {
@@ -496,10 +520,7 @@ export default function ChamadaAGPage() {
                 // Reset all attendance status to "not-counting" (without deleting records)
                 const updatedCount = await resetAttendanceOnly({ lastUpdatedBy: session.user.id });
                 
-                // Update local state immediately for better UX - reset all to "not-counting"
-                setEbMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
-                setCrMembers(prev => prev.map(member => ({ ...member, attendance: "not-counting" as AttendanceState })));
-                setComitesLocais(prev => prev.map(comite => ({ ...comite, attendance: "not-counting" as AttendanceState })));
+                // No local state updates - Convex will trigger UI updates via useEffect
                 
                 toast({
                     title: "✅ Presenças resetadas com sucesso",
@@ -588,18 +609,18 @@ export default function ChamadaAGPage() {
             return;
         }
 
-        // Get current state from local data
+        // Get current state from Convex data
         let currentState: AttendanceState = "not-counting";
         
         if (type === "eb") {
-            const member = ebMembers.find(m => m.id.toString() === id);
-            currentState = member?.attendance || "not-counting";
+            const record = ebsAttendance?.find(a => a.memberId === id);
+            currentState = (record?.attendance || "not-counting") as AttendanceState;
         } else if (type === "cr") {
-            const member = crMembers.find(m => m.id.toString() === id);
-            currentState = member?.attendance || "not-counting";
+            const record = crsAttendance?.find(a => a.memberId === id);
+            currentState = (record?.attendance || "not-counting") as AttendanceState;
         } else if (type === "comite") {
-            const comite = comitesLocais.find(c => c.name === id);
-            currentState = comite?.attendance || "not-counting";
+            const record = comitesAttendance?.find(a => a.memberId === id);
+            currentState = (record?.attendance || "not-counting") as AttendanceState;
         }
 
         const nextState = getNextAttendanceState(currentState);
@@ -615,20 +636,7 @@ export default function ChamadaAGPage() {
                 lastUpdatedBy: session.user.id
             });
 
-            // Update local state immediately for better UX
-            if (type === "eb") {
-                setEbMembers(prev => prev.map(m => 
-                    m.id.toString() === id ? { ...m, attendance: nextState } : m
-                ));
-            } else if (type === "cr") {
-                setCrMembers(prev => prev.map(m => 
-                    m.id.toString() === id ? { ...m, attendance: nextState } : m
-                ));
-            } else if (type === "comite") {
-                setComitesLocais(prev => prev.map(c => 
-                    c.name === id ? { ...c, attendance: nextState } : c
-                ));
-            }
+            // No local state updates - Convex will trigger UI updates via useEffect
 
             toast({
                 title: "Presença atualizada",
@@ -664,20 +672,7 @@ export default function ChamadaAGPage() {
                 lastUpdatedBy: session.user.id
             });
 
-            // Update local state immediately for better UX
-            if (type === "eb") {
-                setEbMembers(prev => prev.map(m => 
-                    m.id.toString() === id ? { ...m, attendance: newState } : m
-                ));
-            } else if (type === "cr") {
-                setCrMembers(prev => prev.map(m => 
-                    m.id.toString() === id ? { ...m, attendance: newState } : m
-                ));
-            } else if (type === "comite") {
-                setComitesLocais(prev => prev.map(c => 
-                    c.name === id ? { ...c, attendance: newState } : c
-                ));
-            }
+            // No local state updates - Convex will trigger UI updates via useEffect
 
             toast({
                 title: "Presença atualizada",

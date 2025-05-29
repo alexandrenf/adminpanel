@@ -107,6 +107,12 @@ export const bulkInsert = mutation({
       status: v.optional(v.string()),
       attendance: v.string(),
       lastUpdatedBy: v.string(),
+      // Additional fields for complete CSV data
+      escola: v.optional(v.string()),
+      regional: v.optional(v.string()),
+      cidade: v.optional(v.string()),
+      uf: v.optional(v.string()),
+      agFiliacao: v.optional(v.string()),
     })),
   },
   handler: async (ctx, args) => {
