@@ -130,12 +130,12 @@ export default async function ComitesLocaisPage() {
                                         </p>
                                     </div>
                                     <div className="flex items-center space-x-3">
-                                        <Link href="/registros">
-                                            <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300">
-                                                <ExternalLink className="w-4 h-4 mr-2" />
-                                                Gerenciar URL
-                                            </Button>
-                                        </Link>
+                                    <Link href="/registros">
+                                        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300">
+                                            <ExternalLink className="w-4 h-4 mr-2" />
+                                            Gerenciar URL
+                                        </Button>
+                                    </Link>
                                         <Link href="/comites-locais/chamada-ag">
                                             <Button variant="outline" className="hover:bg-green-50 hover:border-green-200 border-green-300 text-green-700">
                                                 <ClipboardCheck className="w-4 h-4 mr-2" />
