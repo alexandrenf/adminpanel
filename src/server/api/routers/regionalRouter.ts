@@ -2,12 +2,11 @@ import { z } from "zod";
 
 import {
     createTRPCRouter,
-    protectedProcedure,
-    publicProcedure,
+    ifmsaEmailProcedure,
 } from "~/server/api/trpc";
 
 export const regionalRouter = createTRPCRouter({
-    getAll: protectedProcedure.query(({ ctx }) => {
+    getAll: ifmsaEmailProcedure.query(({ ctx }) => {
         return ctx.db.regional.findMany();
     }),
 

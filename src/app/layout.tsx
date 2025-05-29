@@ -8,9 +8,10 @@ import Navbar from "./_components/Navbar";
 import Loading from "~/app/_components/Loading";
 import { Providers } from "./_components/Providers";
 import { Toaster } from "../components/ui/toaster";
+import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 
 export const metadata = {
-  title: "Painel de Administrador da IFMSA Brazil",
+  title: "Portal IFMSA Brazil",
   description: "Criado por @alex.bfilho",
   icons: [
     { rel: "icon", url: "/favicon.ico" },
@@ -32,11 +33,13 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const session = await getServerAuthSession();
+  const hasIfmsaEmail = session ? await isIfmsaEmailSession(session) : false;
+  
   return (
     <html lang="en" className={`${GeistSans.variable}`}>
       <body>
         <Providers session={session}>
-          {session && <Navbar />}
+          {hasIfmsaEmail && <Navbar />}
           <Suspense fallback={<Loading />}>
             {children}
           </Suspense>

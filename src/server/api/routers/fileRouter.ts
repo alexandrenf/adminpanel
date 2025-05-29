@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import fetch from 'node-fetch';
 import { env } from "~/env";
@@ -97,7 +97,7 @@ const deleteOldFile = async (url: string) => {
 };
 
 export const fileRouter = createTRPCRouter({
-  uploadFile: protectedProcedure
+  uploadFile: ifmsaEmailProcedure
     .input(z.object({
       id: z.string().min(1),
       markdown: z.string().min(1),
@@ -188,7 +188,7 @@ export const fileRouter = createTRPCRouter({
       }
     }),
 
-  updateFile: protectedProcedure
+  updateFile: ifmsaEmailProcedure
     .input(z.object({
       id: z.string().min(1),
       markdown: z.string().min(1),

@@ -29,12 +29,14 @@ import {
   Newspaper,
   Archive
 } from "lucide-react";
+import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 
 const Navbar: React.FC = () => {
     const { data: session } = useSession();
     const pathname = usePathname();
     const [menuOpen, setMenuOpen] = useState(false);
     const navRef = useRef<HTMLDivElement>(null);
+    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
 
     const toggleMenu = () => {
         setMenuOpen(!menuOpen);
@@ -51,8 +53,17 @@ const Navbar: React.FC = () => {
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, []);
+    
+    useEffect(() => {
+        const checkEmail = async () => {
+          const result = await isIfmsaEmailSession(session);
+          setIsIfmsaEmail(result);
+          console.log("Is IFMSA email:", result);
+        };
+        checkEmail();
+      }, [session]);
 
-    if (!session) {
+    if (!session || isIfmsaEmail !== true) {
         return null;
     }
 
@@ -131,7 +142,7 @@ const Navbar: React.FC = () => {
                                             {session.user?.email}
                                         </p>
                                         <Badge variant="secondary" className="w-fit mt-1">
-                                            Administrador
+                                            IFMSA Brazil
                                         </Badge>
                                     </div>
                                 </DropdownMenuLabel>
@@ -175,7 +186,7 @@ const Navbar: React.FC = () => {
                                                 {session.user?.email}
                                             </p>
                                             <Badge variant="secondary" className="w-fit mt-1">
-                                                Administrador
+                                                IFMSA Brazil
                                             </Badge>
                                         </div>
                                     </div>

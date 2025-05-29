@@ -2,18 +2,17 @@ import { z } from "zod";
 
 import {
   createTRPCRouter,
-  protectedProcedure,
-  publicProcedure,
+  ifmsaEmailProcedure,
 } from "~/server/api/trpc";
 
 export const configRouter = createTRPCRouter({
 
-  get: protectedProcedure
+  get: ifmsaEmailProcedure
     .query(async ({ ctx }) => {
       return ctx.db.config.findMany();
     }),
 
-  update: protectedProcedure
+  update: ifmsaEmailProcedure
     .input(z.object({
       id: z.number(),
       toggleDate: z.boolean().optional(),

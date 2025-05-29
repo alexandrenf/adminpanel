@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import fetch from 'node-fetch';
 import { env } from "~/env";
@@ -74,23 +74,19 @@ const deleteFileFromGitHub = async (url: string | null) => {
 };
 
 export const crRouter = createTRPCRouter({
-    getAll: protectedProcedure.query(({ ctx }) => {
-        return ctx.db.cR.findMany(
-            {
-                orderBy: {
-                    order: 'asc'
-                }
-            }
-        );
+    getAll: ifmsaEmailProcedure.query(({ ctx }) => {
+        return ctx.db.cR.findMany({
+            orderBy: [{ order: "asc" }],
+        });
     }),
 
-    getOne: protectedProcedure
+    getOne: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .query(({ input, ctx }) => {
             return ctx.db.cR.findUnique({ where: { id: input.id } });
         }),
 
-    delete: protectedProcedure
+    delete: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ input, ctx }) => {
             const { id } = input;
@@ -123,13 +119,13 @@ export const crRouter = createTRPCRouter({
             }
         }),
 
-    deleteAnyway: protectedProcedure
+    deleteAnyway: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ input, ctx }) => {
             return ctx.db.cR.delete({ where: { id: input.id } });
         }),
 
-    create: protectedProcedure
+    create: ifmsaEmailProcedure
         .input(z.object({
             role: z.string(),
             acronym: z.string(),
@@ -145,7 +141,7 @@ export const crRouter = createTRPCRouter({
             });
         }),
 
-    update: protectedProcedure
+    update: ifmsaEmailProcedure
         .input(z.object({
             id: z.number(),
             role: z.string(),
@@ -163,7 +159,7 @@ export const crRouter = createTRPCRouter({
             });
         }),
 
-    getMaxOrder: protectedProcedure.query(async ({ ctx }) => {
+    getMaxOrder: ifmsaEmailProcedure.query(async ({ ctx }) => {
         const maxOrder = await ctx.db.cR.findFirst({
             orderBy: {
                 order: 'desc',
@@ -174,7 +170,7 @@ export const crRouter = createTRPCRouter({
         });
         return maxOrder?.order ?? 0;
     }),
-    updateOrder: protectedProcedure.input(z.array(z.object({
+    updateOrder: ifmsaEmailProcedure.input(z.array(z.object({
         id: z.number(),
         order: z.number()
     }))).mutation(async ({ ctx, input }) => {
@@ -187,7 +183,7 @@ export const crRouter = createTRPCRouter({
 
         await ctx.db.$transaction(transaction);
     }),
-    latestCrId: protectedProcedure.query(async ({ ctx }) => {
+    latestCrId: ifmsaEmailProcedure.query(async ({ ctx }) => {
         const latestCR = await ctx.db.cR.findFirst({ orderBy: { id: "desc" } });
         return latestCR?.id || 0;
     }),

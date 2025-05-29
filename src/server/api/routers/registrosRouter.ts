@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 
 export const registrosRouter = createTRPCRouter({
-  get: protectedProcedure.query(async ({ ctx }) => {
+  get: ifmsaEmailProcedure.query(async ({ ctx }) => {
     // First try to find an existing record
     let registros = await ctx.db.registros.findFirst({
       include: {
@@ -39,7 +39,7 @@ export const registrosRouter = createTRPCRouter({
     return registros;
   }),
 
-  update: protectedProcedure
+  update: ifmsaEmailProcedure
     .input(
       z.object({
         url: z.string().url(),

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import fetch from 'node-fetch';
 import { env } from "~/env";
@@ -97,7 +97,7 @@ const deleteOldFile = async (url: string) => {
 };
 
 export const ebPhotoRouter = createTRPCRouter({
-    uploadPhoto: protectedProcedure
+    uploadPhoto: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
             image: z.string().nullable(), // Expecting base64 string or null
@@ -157,7 +157,7 @@ export const ebPhotoRouter = createTRPCRouter({
             }
         }),
 
-    updateFile: protectedProcedure
+    updateFile: ifmsaEmailProcedure
         .input(z.object({
             id: z.number().min(1),
             image: z.string().nullable(), // Expecting base64 string or null
