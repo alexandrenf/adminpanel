@@ -12,6 +12,14 @@ import {
 } from './sendEmail';
 import { env } from '~/env.js';
 
+// Utility function to format dates without timezone conversion
+const formatDateWithoutTimezone = (date: Date): string => {
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+};
+
 // Example usage functions for AG registration workflow
 
 /**
@@ -29,7 +37,7 @@ export async function handleNewRegistration(registrationData: {
   paymentRequired: boolean;
   paymentAmount?: number;
 }) {
-  const assemblyDates = `${registrationData.assemblyStartDate.toLocaleDateString('pt-BR')} - ${registrationData.assemblyEndDate.toLocaleDateString('pt-BR')}`;
+  const assemblyDates = `${formatDateWithoutTimezone(registrationData.assemblyStartDate)} - ${formatDateWithoutTimezone(registrationData.assemblyEndDate)}`;
   
   const result = await sendRegistrationConfirmation({
     to: registrationData.participantEmail,
@@ -66,7 +74,7 @@ export async function handleRegistrationApproval(registrationData: {
   modalityName: string;
   additionalInstructions?: string;
 }) {
-  const assemblyDates = `${registrationData.assemblyStartDate.toLocaleDateString('pt-BR')} - ${registrationData.assemblyEndDate.toLocaleDateString('pt-BR')}`;
+  const assemblyDates = `${formatDateWithoutTimezone(registrationData.assemblyStartDate)} - ${formatDateWithoutTimezone(registrationData.assemblyEndDate)}`;
   
   const result = await sendRegistrationApproval({
     to: registrationData.participantEmail,
@@ -135,7 +143,7 @@ export async function handlePaymentReminder(registrationData: {
     registrationId: registrationData.registrationId,
     assemblyName: registrationData.assemblyName,
     paymentAmount: `R$ ${registrationData.paymentAmount.toFixed(2)}`,
-    paymentDeadline: registrationData.paymentDeadline.toLocaleDateString('pt-BR'),
+    paymentDeadline: formatDateWithoutTimezone(registrationData.paymentDeadline),
     paymentUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.registrationId}/payment`,
     pixKey: registrationData.pixKey,
     bankDetails: registrationData.bankDetails,
@@ -166,7 +174,7 @@ export async function handlePaymentConfirmation(registrationData: {
     registrationId: registrationData.registrationId,
     assemblyName: registrationData.assemblyName,
     paymentAmount: `R$ ${registrationData.paymentAmount.toFixed(2)}`,
-    paymentDate: registrationData.paymentDate.toLocaleDateString('pt-BR'),
+    paymentDate: formatDateWithoutTimezone(registrationData.paymentDate),
     receiptNumber: registrationData.receiptNumber,
   });
 
@@ -195,7 +203,7 @@ export async function handleResubmissionRequest(registrationData: {
     assemblyName: registrationData.assemblyName,
     reasonForResubmission: registrationData.reasonForResubmission,
     resubmissionUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.registrationId}/resubmit`,
-    resubmissionDeadline: registrationData.resubmissionDeadline?.toLocaleDateString('pt-BR'),
+    resubmissionDeadline: registrationData.resubmissionDeadline ? formatDateWithoutTimezone(registrationData.resubmissionDeadline) : undefined,
   });
 
   if (!result.success) {

@@ -25,6 +25,15 @@ import { api as convexApi } from "../../../../../../../convex/_generated/api";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
+// Utility function to format dates without timezone conversion
+const formatDateWithoutTimezone = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+};
+
 export default function RegistrationSuccessPage() {
     const { data: session } = useSession();
     const router = useRouter();
@@ -270,7 +279,7 @@ export default function RegistrationSuccessPage() {
                                 </div>
                                 <div>
                                     <Label className="font-semibold text-gray-700">Data de Término:</Label>
-                                    <p>{new Date(assembly.endDate).toLocaleDateString('pt-BR')}</p>
+                                    <p>{formatDateWithoutTimezone(assembly.endDate)}</p>
                                 </div>
                                 <div>
                                     <Label className="font-semibold text-gray-700">Duração:</Label>

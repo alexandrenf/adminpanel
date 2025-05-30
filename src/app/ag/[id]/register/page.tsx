@@ -71,6 +71,15 @@ type ComiteLocal = {
     uf?: string;
 };
 
+// Utility function to format dates without timezone conversion
+const formatDateWithoutTimezone = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+};
+
 export default function AGRegistrationPage() {
     const { data: session } = useSession();
     const router = useRouter();
@@ -94,32 +103,14 @@ export default function AGRegistrationPage() {
     // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
     
-    // Fetch local committees for dropdown
+    // Fetch comitês locais from agParticipants
+    const comitesLocais = useQuery(convexApi.assemblies?.getComitesLocais) || [];
+    
+    // Fetch local committees for dropdown - keeping original for compatibility
     const { data: registrosData } = api.registros.get.useQuery();
     const { data: ebData } = api.eb.getAll.useQuery();
     const { data: crData } = api.cr.getAll.useQuery();
     
-    // Process committees data
-    const comitesLocais = useMemo<ComiteLocal[]>(() => {
-        if (!registrosData?.url) return [];
-        
-        // For now, we'll create a more comprehensive placeholder structure
-        // In a real implementation, you'd fetch and process the CSV data here
-        return [
-            { id: "1", name: "ACEM - Associação dos Estudantes de Medicina de São Paulo", sigla: "ACEM", cidade: "São Paulo", uf: "SP" },
-            { id: "2", name: "ACEP - Associação dos Estudantes de Medicina de Pelotas", sigla: "ACEP", cidade: "Pelotas", uf: "RS" },
-            { id: "3", name: "ACERP - Associação dos Estudantes de Medicina de Ribeirão Preto", sigla: "ACERP", cidade: "Ribeirão Preto", uf: "SP" },
-            { id: "4", name: "ACESM - Associação dos Estudantes de Medicina de Santa Maria", sigla: "ACESM", cidade: "Santa Maria", uf: "RS" },
-            { id: "5", name: "AEMS - Associação dos Estudantes de Medicina de Salvador", sigla: "AEMS", cidade: "Salvador", uf: "BA" },
-            { id: "6", name: "CAEM-UnB - Centro Acadêmico de Medicina da UnB", sigla: "CAEM-UnB", cidade: "Brasília", uf: "DF" },
-            { id: "7", name: "CAEMFM - Centro Acadêmico de Medicina da UFMG", sigla: "CAEMFM", cidade: "Belo Horizonte", uf: "MG" },
-            { id: "8", name: "CAME - Centro Acadêmico de Medicina de Fortaleza", sigla: "CAME", cidade: "Fortaleza", uf: "CE" },
-            { id: "9", name: "CAMEC - Centro Acadêmico de Medicina de Campina Grande", sigla: "CAMEC", cidade: "Campina Grande", uf: "PB" },
-            { id: "10", name: "CAMED - Centro Acadêmico de Medicina de Recife", sigla: "CAMED", cidade: "Recife", uf: "PE" },
-            // Add more committees as needed - this should come from your CSV processing
-        ];
-    }, [registrosData]);
-
     // Initial form data
     const initialFormData: RegistrationFormData = useMemo(() => ({
         nome: "",
@@ -187,7 +178,7 @@ export default function AGRegistrationPage() {
     // Validate form
     const validateForm = useCallback(() => {
         const requiredFields = [
-            'nome', 'email', 'emailSolar', 'dataNascimento', 
+            'nome', 'email', 'dataNascimento', 
             'cpf', 'nomeCracha', 'celular', 'uf', 'cidade', 'role'
         ];
         
@@ -483,8 +474,8 @@ export default function AGRegistrationPage() {
                                     <div className="flex items-center space-x-2">
                                         <Calendar className="w-4 h-4 text-blue-600" />
                                         <span>
-                                            {new Date(assembly.startDate).toLocaleDateString('pt-BR')} - {" "}
-                                            {new Date(assembly.endDate).toLocaleDateString('pt-BR')}
+                                            {formatDateWithoutTimezone(assembly.startDate)} - {" "}
+                                            {formatDateWithoutTimezone(assembly.endDate)}
                                         </span>
                                     </div>
                                     <div className="flex items-center space-x-2">
@@ -568,7 +559,7 @@ export default function AGRegistrationPage() {
                                     </div>
                                     
                                     <div>
-                                        <Label htmlFor="emailSolar">Email como consta no Solar *</Label>
+                                        <Label htmlFor="emailSolar">Email como consta no Solar (opcional)</Label>
                                         <Input
                                             id="emailSolar"
                                             type="email"
@@ -683,43 +674,53 @@ export default function AGRegistrationPage() {
                                                         role="combobox"
                                                         aria-expanded={comiteLocalOpen}
                                                         className="w-full justify-between"
+                                                        disabled={comitesLocais === undefined}
                                                     >
-                                                        {formData.comiteLocal
-                                                            ? comitesLocais.find((comite) => comite.id === formData.comiteLocal)?.name
-                                                            : "Selecione um comitê local..."}
+                                                        {comitesLocais === undefined ? (
+                                                            "Carregando comitês..."
+                                                        ) : formData.comiteLocal ? (
+                                                            comitesLocais.find((comite) => comite.name === formData.comiteLocal)?.name || formData.comiteLocal
+                                                        ) : (
+                                                            "Selecione um comitê local..."
+                                                        )}
                                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                     </Button>
                                                 </PopoverTrigger>
                                                 <PopoverContent className="w-full p-0">
                                                     <Command>
                                                         <CommandInput placeholder="Buscar comitê..." />
-                                                        <CommandEmpty>Nenhum comitê encontrado.</CommandEmpty>
+                                                        <CommandEmpty>
+                                                            {comitesLocais?.length === 0 
+                                                                ? "Nenhum comitê encontrado no sistema."
+                                                                : "Nenhum comitê encontrado."
+                                                            }
+                                                        </CommandEmpty>
                                                         <CommandGroup>
-                                                            {comitesLocais.map((comite) => (
+                                                            {comitesLocais?.map((comite) => (
                                                                 <CommandItem
                                                                     key={comite.id}
-                                                                    value={`${comite.name} ${comite.sigla} ${comite.cidade}`}
+                                                                    value={`${comite.name} ${comite.sigla || ''} ${comite.cidade || ''}`}
                                                                     onSelect={() => {
-                                                                        handleInputChange('comiteLocal', comite.id);
+                                                                        handleInputChange('comiteLocal', comite.name);
                                                                         setComiteLocalOpen(false);
                                                                     }}
                                                                 >
                                                                     <Check
                                                                         className={cn(
                                                                             "mr-2 h-4 w-4",
-                                                                            formData.comiteLocal === comite.id ? "opacity-100" : "opacity-0"
+                                                                            formData.comiteLocal === comite.name ? "opacity-100" : "opacity-0"
                                                                         )}
                                                                     />
                                                                     <div>
                                                                         <div className="font-medium">{comite.name}</div>
-                                                                        {comite.sigla && (
+                                                                        {(comite.cidade || comite.uf) && (
                                                                             <div className="text-sm text-gray-500">
-                                                                                {comite.sigla} - {comite.cidade}, {comite.uf}
+                                                                                {comite.cidade}{comite.cidade && comite.uf ? ', ' : ''}{comite.uf}
                                                                             </div>
                                                                         )}
                                                                     </div>
                                                                 </CommandItem>
-                                                            ))}
+                                                            )) || []}
                                                         </CommandGroup>
                                                     </Command>
                                                 </PopoverContent>

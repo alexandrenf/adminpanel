@@ -455,4 +455,45 @@ export const getAssemblyDataForReport = query({
       agConfig,
     };
   },
+});
+
+// Get unique comitês locais from all agParticipants for registration dropdown
+export const getComitesLocais = query({
+  args: {},
+  handler: async (ctx) => {
+    const participants = await ctx.db
+      .query("agParticipants")
+      .filter((q) => q.eq(q.field("type"), "comite"))
+      .collect();
+
+    // Create a map to deduplicate committees by agFiliacao
+    const comiteMap = new Map();
+    
+    participants.forEach(participant => {
+      if (participant.agFiliacao && participant.agFiliacao.trim()) {
+        const key = participant.agFiliacao.trim();
+        if (!comiteMap.has(key)) {
+          // Try to extract a meaningful acronym from the agFiliacao
+          const words = participant.agFiliacao.trim().split(/[\s-]+/);
+          const acronym = words
+            .filter(word => word.length > 2) // Filter out small words like "de", "da", "do"
+            .map(word => word.charAt(0).toUpperCase())
+            .join('');
+          
+          comiteMap.set(key, {
+            id: `${participant.participantId}-${key.replace(/\s+/g, '-')}`, // Create a unique ID
+            name: participant.agFiliacao.trim(),
+            sigla: acronym.length > 1 ? acronym : participant.agFiliacao.trim().split(' ')[0] || '', 
+            cidade: participant.cidade?.trim() || '',
+            uf: participant.uf?.trim() || ''
+          });
+        }
+      }
+    });
+
+    // Convert map to array, filter out invalid entries, and sort by name
+    return Array.from(comiteMap.values())
+      .filter(comite => comite.name && comite.name.length > 0)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+  },
 }); 
