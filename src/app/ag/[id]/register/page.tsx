@@ -165,20 +165,20 @@ export default function AGRegistrationPage() {
         if (isIfmsaEmail) {
             return [
                 { value: "eb", label: "EB (Executive Board)" },
-                { value: "neb", label: "NEB (National Executive Board)" },
-                { value: "nmo", label: "NMO (National Member Organization)" },
-                { value: "lc", label: "LC (Local Committee)" },
-                { value: "aspirante", label: "Aspirante" },
-                { value: "participante", label: "Participante" },
+                { value: "cr", label: "CR (Country Representative)" },
+                { value: "supco", label: "SupCo (Conselho Supervisor)" },
             ];
         } else {
             return [
-                { value: "participante", label: "Participante" },
-                { value: "aspirante", label: "Aspirante" },
+                { value: "comite_aspirante", label: "Comitê Aspirante" },
+                { value: "observador_externo", label: "Observador Externo" },
+                { value: "comite_local", label: "Comitê Local" },
+                { value: "alumni", label: "Alumni" },
+                { value: "supco", label: "SupCo (Conselho Supervisor)" },
             ];
         }
     }, [isIfmsaEmail]);
-
+    
     // Validate form
     const validateForm = useCallback(() => {
         const requiredFields = [
