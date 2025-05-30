@@ -81,6 +81,8 @@ const Navbar: React.FC = () => {
         { href: "/historico", label: "Histórico", icon: Clock },
         { href: "/cr", label: "CRs", icon: Archive },
         { href: "/times", label: "Times", icon: Users },
+        { href: "/ag", label: "AGs", icon: Calendar },
+        { href: "/ag/admin", label: "AG Admin", icon: Settings },
         { href: "/config", label: "Configurações", icon: Settings },
     ];
 

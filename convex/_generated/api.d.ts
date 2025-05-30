@@ -13,6 +13,9 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as agConfig from "../agConfig.js";
+import type * as agRegistrations from "../agRegistrations.js";
+import type * as assemblies from "../assemblies.js";
 import type * as attendance from "../attendance.js";
 import type * as qrReaders from "../qrReaders.js";
 
@@ -25,6 +28,9 @@ import type * as qrReaders from "../qrReaders.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  agConfig: typeof agConfig;
+  agRegistrations: typeof agRegistrations;
+  assemblies: typeof assemblies;
   attendance: typeof attendance;
   qrReaders: typeof qrReaders;
 }>;
