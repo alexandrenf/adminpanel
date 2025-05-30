@@ -309,11 +309,14 @@ export const getPendingRegistrations = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("agRegistrations")
-      .withIndex("by_assembly_and_status")
+      .withIndex("by_assembly")
       .filter((q) => 
         q.and(
           q.eq(q.field("assemblyId"), args.assemblyId),
-          q.eq(q.field("status"), "pending")
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "pending_review")
+          )
         )
       )
       .order("desc")
@@ -647,9 +650,22 @@ export const updatePaymentExemption = mutation({
       throw new Error("Cannot update a cancelled registration");
     }
 
+    // Determine the new status based on exemption
+    let newStatus = registration.status;
+    if (args.isPaymentExempt) {
+      // If exempt, set to pending_review for admin review
+      newStatus = "pending_review";
+    } else {
+      // If not exempt and currently in pending_review but no receipt, go back to pending
+      if (registration.status === "pending_review" && !registration.receiptStorageId) {
+        newStatus = "pending";
+      }
+    }
+
     await ctx.db.patch(args.registrationId, {
       isPaymentExempt: args.isPaymentExempt,
       paymentExemptReason: args.paymentExemptReason,
+      status: newStatus,
     });
 
     return args.registrationId;

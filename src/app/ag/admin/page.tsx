@@ -370,6 +370,7 @@ export default function AGAdminPage() {
     const getStatusColor = (status: string) => {
         switch (status) {
             case "pending": return "bg-yellow-100 text-yellow-800 border-yellow-200";
+            case "pending_review": return "bg-orange-100 text-orange-800 border-orange-200";
             case "approved": return "bg-green-100 text-green-800 border-green-200";
             case "rejected": return "bg-red-100 text-red-800 border-red-200";
             case "cancelled": return "bg-gray-100 text-gray-800 border-gray-200";
@@ -380,10 +381,22 @@ export default function AGAdminPage() {
     const getStatusIcon = (status: string) => {
         switch (status) {
             case "pending": return <Clock className="w-4 h-4" />;
+            case "pending_review": return <FileText className="w-4 h-4" />;
             case "approved": return <CheckCircle className="w-4 h-4" />;
             case "rejected": return <XCircle className="w-4 h-4" />;
             case "cancelled": return <AlertTriangle className="w-4 h-4" />;
             default: return <Info className="w-4 h-4" />;
+        }
+    };
+
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+            case "pending": return "Pendente";
+            case "pending_review": return "Aguardando Análise";
+            case "approved": return "Aprovado";
+            case "rejected": return "Rejeitado";
+            case "cancelled": return "Cancelado";
+            default: return status;
         }
     };
 
@@ -453,7 +466,7 @@ export default function AGAdminPage() {
                             </TabsTrigger>
                             <TabsTrigger value="pending" className="flex items-center space-x-2">
                                 <Clock className="w-4 h-4" />
-                                <span>Pendentes</span>
+                                <span>Aguardando Revisão</span>
                             </TabsTrigger>
                         </TabsList>
 
@@ -661,7 +674,7 @@ export default function AGAdminPage() {
                                                                 <Badge className={getStatusColor(registration.status)}>
                                                                     <div className="flex items-center space-x-1">
                                                                         {getStatusIcon(registration.status)}
-                                                                        <span>{registration.status}</span>
+                                                                        <span>{getStatusLabel(registration.status)}</span>
                                                                     </div>
                                                                 </Badge>
                                                             </TableCell>
@@ -708,7 +721,7 @@ export default function AGAdminPage() {
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="flex items-center space-x-2">
                                             <Clock className="w-5 h-5 text-yellow-600" />
-                                            <span>Inscrições Pendentes</span>
+                                            <span>Aguardando Revisão</span>
                                         </CardTitle>
                                         <div className="flex items-center space-x-2">
                                             {selectedRegistrations.length > 0 && (
@@ -770,6 +783,7 @@ export default function AGAdminPage() {
                                                         <TableHead>Nome</TableHead>
                                                         <TableHead>Tipo</TableHead>
                                                         <TableHead>Email</TableHead>
+                                                        <TableHead>Status</TableHead>
                                                         <TableHead>Cidade/UF</TableHead>
                                                         <TableHead>Data</TableHead>
                                                         <TableHead>Ações</TableHead>
@@ -799,6 +813,11 @@ export default function AGAdminPage() {
                                                                 </Badge>
                                                             </TableCell>
                                                             <TableCell>{registration.email}</TableCell>
+                                                            <TableCell>
+                                                                <Badge className={getStatusColor(registration.status)}>
+                                                                    {getStatusLabel(registration.status)}
+                                                                </Badge>
+                                                            </TableCell>
                                                             <TableCell>
                                                                 {registration.cidade && registration.uf ? 
                                                                     `${registration.cidade}, ${registration.uf}` : 
@@ -1166,7 +1185,7 @@ export default function AGAdminPage() {
                                                     <Label className="font-semibold text-gray-700">Status Atual:</Label>
                                                     <Badge className={getStatusColor(selectedRegistration.status)}>
                                                         {getStatusIcon(selectedRegistration.status)}
-                                                        <span className="ml-1">{selectedRegistration.status}</span>
+                                                        <span className="ml-1">{getStatusLabel(selectedRegistration.status)}</span>
                                                     </Badge>
                                                 </div>
                                             </div>
