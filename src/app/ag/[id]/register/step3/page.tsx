@@ -76,7 +76,7 @@ export default function AGRegistrationStep3Page() {
     const params = useParams();
     const { toast } = useToast();
     
-    const assemblyId = params.id as string;
+    const assemblyId = params?.id;
     
     const [step1Data, setStep1Data] = useState<Step1FormData | null>(null);
     const [step2Data, setStep2Data] = useState<Step2FormData | null>(null);
@@ -84,7 +84,7 @@ export default function AGRegistrationStep3Page() {
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     
     // Fetch assembly data
-    const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
+    const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
 
     // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
@@ -194,6 +194,18 @@ export default function AGRegistrationStep3Page() {
             router.push(`/ag/${assemblyId}/register`);
         }
     }, [assemblyId, router, toast]);
+
+    // Show error if assemblyId is missing
+    if (!assemblyId) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-red-600">Erro</h1>
+                    <p className="mt-2">ID da assembleia não encontrado.</p>
+                </div>
+            </div>
+        );
+    }
 
     if (!session) {
         return (

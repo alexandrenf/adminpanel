@@ -30,17 +30,18 @@ export default function RegistrationSuccessPage() {
     const router = useRouter();
     const params = useParams();
     
-    const assemblyId = params.id as string;
-    const registrationId = params.registrationId as string;
+    // Get IDs with type safety
+    const assemblyId = params?.id;
+    const registrationId = params?.registrationId;
     
     // Queries
     const registration = useQuery(
         convexApi.agRegistrations?.getById, 
-        { id: registrationId as any }
+        registrationId ? { id: registrationId as any } : "skip"
     );
     const assembly = useQuery(
         convexApi.assemblies?.getById, 
-        { id: assemblyId as any }
+        assemblyId ? { id: assemblyId as any } : "skip"
     );
     const modality = useQuery(
         convexApi.registrationModalities?.getById,
@@ -56,9 +57,21 @@ export default function RegistrationSuccessPage() {
                 const result = await isIfmsaEmailSession(session);
                 setIsIfmsaEmail(result);
             };
-            checkEmail();
+            void checkEmail();
         }
     }, [session]);
+
+    // Show error if IDs are missing
+    if (!assemblyId || !registrationId) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-red-600">Erro</h1>
+                    <p className="mt-2">Parâmetros inválidos.</p>
+                </div>
+            </div>
+        );
+    }
 
     // Loading state
     if (isIfmsaEmail === null) {

@@ -76,7 +76,7 @@ export default function AGRegistrationStep4Page() {
     const params = useParams();
     const { toast } = useToast();
     
-    const assemblyId = params.id as string;
+    const assemblyId = params?.id;
     
     const [step1Data, setStep1Data] = useState<Step1FormData | null>(null);
     const [step2Data, setStep2Data] = useState<Step2FormData | null>(null);
@@ -93,7 +93,7 @@ export default function AGRegistrationStep4Page() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Fetch assembly data
-    const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
+    const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
     
     // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
