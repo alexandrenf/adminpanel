@@ -119,35 +119,49 @@ export default function AGRegistrationStep2Page() {
             return false;
         }
 
-        if (!formData.nome.trim()) {
+        // Validate step1 data exists (should be loaded from sessionStorage)
+        if (!step1Data) {
+            toast({
+                title: "❌ Dados da etapa 1 não encontrados",
+                description: "Por favor, complete a primeira etapa novamente.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        // Validate required step1 fields
+        if (!step1Data.nome?.trim()) {
             toast({
                 title: "❌ Nome obrigatório",
-                description: "Por favor, informe seu nome completo.",
+                description: "Por favor, volte e informe seu nome completo.",
                 variant: "destructive",
             });
             return false;
         }
 
-        if (!formData.email.trim() || !formData.email.includes('@')) {
+        if (!step1Data.email?.trim() || !step1Data.email.includes('@')) {
             toast({
                 title: "❌ Email inválido",
-                description: "Por favor, informe um email válido.",
+                description: "Por favor, volte e informe um email válido.",
                 variant: "destructive",
             });
             return false;
         }
 
-        if (!formData.telefone.trim()) {
+        if (!step1Data.celular?.trim()) {
             toast({
                 title: "❌ Telefone obrigatório",
-                description: "Por favor, informe seu telefone.",
+                description: "Por favor, volte e informe seu telefone.",
                 variant: "destructive",
             });
             return false;
         }
 
+        // Optional validation for step2 fields (they're mostly optional)
+        // We could add specific validations here if needed
+
         return true;
-    }, [formData, toast]);
+    }, [formData, step1Data, toast]);
 
     // Handle form submission
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
