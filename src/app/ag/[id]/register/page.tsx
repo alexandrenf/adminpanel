@@ -162,7 +162,7 @@ export default function AGRegistrationPage() {
             return [
                 { value: "eb", label: "EB (Executive Board)" },
                 { value: "cr", label: "CR (Country Representative)" },
-                { value: "supco", label: "SupCo (Support Committee)" },
+                { value: "supco", label: "SupCo (Conselho Supervisor)" },
             ];
         } else {
             return [
@@ -170,7 +170,7 @@ export default function AGRegistrationPage() {
                 { value: "observador_externo", label: "Observador Externo" },
                 { value: "comite_local", label: "Comitê Local" },
                 { value: "alumni", label: "Alumni" },
-                { value: "supco", label: "SupCo (Support Committee)" },
+                { value: "supco", label: "SupCo (Conselho Supervisor)" },
             ];
         }
     }, [isIfmsaEmail]);
