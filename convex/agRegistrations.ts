@@ -429,6 +429,7 @@ export const getStats = query({
 export const createFromForm = mutation({
   args: {
     assemblyId: v.id("assemblies"),
+    modalityId: v.optional(v.id("registrationModalities")),
     userId: v.string(),
     personalInfo: v.object({
       nome: v.string(),
@@ -482,6 +483,35 @@ export const createFromForm = mutation({
       throw new Error("Registration deadline has passed");
     }
 
+    // Check if modality is valid and can accept registrations
+    if (args.modalityId) {
+      const modality = await ctx.db.get(args.modalityId);
+      if (!modality || !modality.isActive) {
+        throw new Error("Selected registration modality is not available");
+      }
+
+      if (modality.assemblyId !== args.assemblyId) {
+        throw new Error("Modality does not belong to this assembly");
+      }
+
+      // Check modality capacity
+      if (modality.maxParticipants) {
+        const modalityRegistrations = await ctx.db
+          .query("agRegistrations")
+          .withIndex("by_modality")
+          .filter((q) => q.eq(q.field("modalityId"), args.modalityId))
+          .collect();
+
+        const activeModalityRegistrations = modalityRegistrations.filter(r => 
+          r.status !== "cancelled" && r.status !== "rejected"
+        );
+
+        if (activeModalityRegistrations.length >= modality.maxParticipants) {
+          throw new Error("This registration modality is full");
+        }
+      }
+    }
+
     // Check if user is already registered
     const existingRegistration = await ctx.db
       .query("agRegistrations")
@@ -498,7 +528,7 @@ export const createFromForm = mutation({
       throw new Error("User is already registered for this assembly");
     }
 
-    // Check max participants limit
+    // Check overall assembly max participants limit
     if (assembly.maxParticipants) {
       const currentRegistrations = await ctx.db
         .query("agRegistrations")
@@ -506,19 +536,21 @@ export const createFromForm = mutation({
         .filter((q) => 
           q.and(
             q.eq(q.field("assemblyId"), args.assemblyId),
-            q.eq(q.field("status"), "registered")
+            q.neq(q.field("status"), "cancelled"),
+            q.neq(q.field("status"), "rejected")
           )
         )
         .collect();
 
       if (currentRegistrations.length >= assembly.maxParticipants) {
-        throw new Error("Maximum number of participants reached");
+        throw new Error("Assembly has reached maximum number of participants");
       }
     }
 
     // Create registration with all detailed information
     return await ctx.db.insert("agRegistrations", {
       assemblyId: args.assemblyId,
+      modalityId: args.modalityId,
       participantType: args.personalInfo.role,
       participantId: args.userId,
       participantName: args.personalInfo.nome,
@@ -666,6 +698,58 @@ export const updatePaymentExemption = mutation({
       isPaymentExempt: args.isPaymentExempt,
       paymentExemptReason: args.paymentExemptReason,
       status: newStatus,
+    });
+
+    return args.registrationId;
+  },
+});
+
+// Change registration modality
+export const changeModality = mutation({
+  args: {
+    registrationId: v.id("agRegistrations"),
+    newModalityId: v.id("registrationModalities"),
+    changedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const registration = await ctx.db.get(args.registrationId);
+    if (!registration) {
+      throw new Error("Registration not found");
+    }
+
+    if (registration.status === "cancelled") {
+      throw new Error("Cannot change modality for a cancelled registration");
+    }
+
+    // Check if new modality is valid and can accept registrations
+    const newModality = await ctx.db.get(args.newModalityId);
+    if (!newModality || !newModality.isActive) {
+      throw new Error("Selected registration modality is not available");
+    }
+
+    if (newModality.assemblyId !== registration.assemblyId) {
+      throw new Error("Modality does not belong to this assembly");
+    }
+
+    // Check new modality capacity (excluding current registration)
+    if (newModality.maxParticipants) {
+      const modalityRegistrations = await ctx.db
+        .query("agRegistrations")
+        .withIndex("by_modality")
+        .filter((q) => q.eq(q.field("modalityId"), args.newModalityId))
+        .collect();
+
+      const activeModalityRegistrations = modalityRegistrations.filter(r => 
+        r.status !== "cancelled" && r.status !== "rejected" && r._id !== args.registrationId
+      );
+
+      if (activeModalityRegistrations.length >= newModality.maxParticipants) {
+        throw new Error("The selected registration modality is full");
+      }
+    }
+
+    await ctx.db.patch(args.registrationId, {
+      modalityId: args.newModalityId,
     });
 
     return args.registrationId;

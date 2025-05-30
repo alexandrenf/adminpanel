@@ -59,11 +59,28 @@ export default defineSchema({
     registrationDeadline: v.optional(v.number()), // timestamp
     maxParticipants: v.optional(v.number()),
     description: v.optional(v.string()),
+    // Payment settings
+    paymentRequired: v.boolean(), // Whether this assembly requires payment (AGEs default false, AGs default true)
   }).index("by_status", ["status"])
     .index("by_created_at", ["createdAt"]),
 
+  // Registration modalities (different registration types with pricing and limits)
+  registrationModalities: defineTable({
+    assemblyId: v.id("assemblies"),
+    name: v.string(), // e.g., "Participante", "Estudante", "AGE online"
+    description: v.optional(v.string()),
+    price: v.number(), // Price in cents (0 for free)
+    maxParticipants: v.optional(v.number()), // Limit for this modality
+    isActive: v.boolean(), // Whether this modality is accepting registrations
+    order: v.number(), // Display order
+    createdAt: v.number(),
+    createdBy: v.string(),
+  }).index("by_assembly", ["assemblyId"])
+    .index("by_assembly_and_active", ["assemblyId", "isActive"]),
+
   agRegistrations: defineTable({
     assemblyId: v.id("assemblies"),
+    modalityId: v.optional(v.id("registrationModalities")), // Which modality they registered for
     participantType: v.string(), // "eb" | "cr" | "comite"
     participantId: v.string(), // id of the participant
     participantName: v.string(),
@@ -127,7 +144,8 @@ export default defineSchema({
   }).index("by_assembly", ["assemblyId"])
     .index("by_participant", ["participantId"])
     .index("by_status", ["status"])
-    .index("by_assembly_and_status", ["assemblyId", "status"]),
+    .index("by_assembly_and_status", ["assemblyId", "status"])
+    .index("by_modality", ["modalityId"]),
 
   agParticipants: defineTable({
     assemblyId: v.id("assemblies"),

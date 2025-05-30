@@ -48,9 +48,13 @@ export const create = mutation({
     registrationDeadline: v.optional(v.number()),
     maxParticipants: v.optional(v.number()),
     description: v.optional(v.string()),
+    paymentRequired: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    
+    // Set default payment requirement based on type
+    const paymentRequired = args.paymentRequired ?? (args.type === "AG");
     
     return await ctx.db.insert("assemblies", {
       name: args.name,
@@ -67,6 +71,7 @@ export const create = mutation({
       registrationDeadline: args.registrationDeadline,
       maxParticipants: args.maxParticipants,
       description: args.description,
+      paymentRequired,
     });
   },
 });
@@ -85,6 +90,7 @@ export const update = mutation({
     registrationDeadline: v.optional(v.number()),
     maxParticipants: v.optional(v.number()),
     description: v.optional(v.string()),
+    paymentRequired: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const assembly = await ctx.db.get(args.id);
@@ -97,6 +103,7 @@ export const update = mutation({
       lastUpdatedBy: args.lastUpdatedBy,
     };
 
+    // Add all optional fields that were provided
     if (args.name !== undefined) updates.name = args.name;
     if (args.type !== undefined) updates.type = args.type;
     if (args.location !== undefined) updates.location = args.location;
@@ -106,6 +113,7 @@ export const update = mutation({
     if (args.registrationDeadline !== undefined) updates.registrationDeadline = args.registrationDeadline;
     if (args.maxParticipants !== undefined) updates.maxParticipants = args.maxParticipants;
     if (args.description !== undefined) updates.description = args.description;
+    if (args.paymentRequired !== undefined) updates.paymentRequired = args.paymentRequired;
 
     await ctx.db.patch(args.id, updates);
     return args.id;
@@ -288,12 +296,40 @@ export const getRegistrationStats = query({
       .filter((q) => q.eq(q.field("assemblyId"), args.assemblyId))
       .collect();
 
+    const modalities = await ctx.db
+      .query("registrationModalities")
+      .withIndex("by_assembly")
+      .filter((q) => q.eq(q.field("assemblyId"), args.assemblyId))
+      .collect();
+
+    const assembly = await ctx.db.get(args.assemblyId);
+
+    const activeRegistrations = registrations.filter(r => 
+      r.status !== "cancelled" && r.status !== "rejected"
+    );
+
     const stats = {
       totalParticipants: participants.length,
       totalRegistrations: registrations.length,
+      activeRegistrations: activeRegistrations.length,
       registrationsByType: {} as Record<string, number>,
       registrationsByStatus: {} as Record<string, number>,
       participantsByType: {} as Record<string, number>,
+      modalityStats: [] as Array<{
+        modalityId: string;
+        name: string;
+        price: number;
+        maxParticipants?: number;
+        currentRegistrations: number;
+        isFull: boolean;
+        isNearFull: boolean; // 90% capacity
+      }>,
+      assemblyCapacity: {
+        maxParticipants: assembly?.maxParticipants,
+        currentRegistrations: activeRegistrations.length,
+        isFull: assembly?.maxParticipants ? activeRegistrations.length >= assembly.maxParticipants : false,
+        isNearFull: assembly?.maxParticipants ? activeRegistrations.length >= (assembly.maxParticipants * 0.9) : false,
+      },
     };
 
     // Count registrations by type and status
@@ -306,6 +342,27 @@ export const getRegistrationStats = query({
     participants.forEach(participant => {
       stats.participantsByType[participant.type] = (stats.participantsByType[participant.type] || 0) + 1;
     });
+
+    // Calculate modality statistics
+    for (const modality of modalities) {
+      const modalityRegistrations = registrations.filter(r => 
+        r.modalityId === modality._id && r.status !== "cancelled" && r.status !== "rejected"
+      );
+
+      const currentCount = modalityRegistrations.length;
+      const isFull = modality.maxParticipants ? currentCount >= modality.maxParticipants : false;
+      const isNearFull = modality.maxParticipants ? currentCount >= (modality.maxParticipants * 0.9) : false;
+
+      stats.modalityStats.push({
+        modalityId: modality._id,
+        name: modality.name,
+        price: modality.price,
+        maxParticipants: modality.maxParticipants,
+        currentRegistrations: currentCount,
+        isFull,
+        isNearFull,
+      });
+    }
 
     return stats;
   },
