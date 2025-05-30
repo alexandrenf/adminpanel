@@ -690,18 +690,18 @@ export default function AGRegistrationPage() {
                                                 </PopoverTrigger>
                                                 <PopoverContent className="w-full p-0">
                                                     <Command>
-                                                        <CommandInput placeholder="Buscar comitê..." />
+                                                        <CommandInput placeholder="Buscar por ID do participante..." />
                                                         <CommandEmpty>
                                                             {comitesLocais?.length === 0 
                                                                 ? "Nenhum comitê encontrado no sistema."
                                                                 : "Nenhum comitê encontrado."
                                                             }
                                                         </CommandEmpty>
-                                                        <CommandGroup>
+                                                        <CommandGroup className="max-h-64 overflow-y-auto">
                                                             {comitesLocais?.map((comite) => (
                                                                 <CommandItem
                                                                     key={comite.id}
-                                                                    value={`${comite.name} ${comite.cidade || ''} ${comite.uf || ''}`}
+                                                                    value={comite.participantId}
                                                                     onSelect={() => {
                                                                         handleInputChange('comiteLocal', comite.participantId);
                                                                         setComiteLocalOpen(false);
