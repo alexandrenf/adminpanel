@@ -14,6 +14,14 @@ export const getByAssembly = query({
   },
 });
 
+// Get registration by ID
+export const getById = query({
+  args: { id: v.id("agRegistrations") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});
+
 // Get registrations by participant
 export const getByParticipant = query({
   args: { participantId: v.string() },
@@ -68,6 +76,17 @@ export const register = mutation({
     specialNeeds: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Check global AG config for registration enabled
+    const agConfig = await ctx.db
+      .query("agConfigs")
+      .withIndex("by_updated_at")
+      .order("desc")
+      .first();
+    
+    if (agConfig && !agConfig.registrationEnabled) {
+      throw new Error("Registrations are currently disabled globally");
+    }
+
     // Check if assembly exists and registration is open
     const assembly = await ctx.db.get(args.assemblyId);
     if (!assembly) {
@@ -469,6 +488,17 @@ export const createFromForm = mutation({
     status: v.string(),
   },
   handler: async (ctx, args) => {
+    // Check global AG config for registration enabled
+    const agConfig = await ctx.db
+      .query("agConfigs")
+      .withIndex("by_updated_at")
+      .order("desc")
+      .first();
+    
+    if (agConfig && !agConfig.registrationEnabled) {
+      throw new Error("Registrations are currently disabled globally");
+    }
+
     // Check if assembly exists and registration is open
     const assembly = await ctx.db.get(args.assemblyId);
     if (!assembly) {
@@ -557,7 +587,14 @@ export const createFromForm = mutation({
       participantRole: args.personalInfo.role,
       registeredAt: Date.now(),
       registeredBy: args.userId,
-      status: args.status,
+      status: agConfig?.autoApproval ? "approved" : args.status, // Auto-approve if enabled
+      
+      // If auto-approved, set review details
+      ...(agConfig?.autoApproval && {
+        reviewedAt: Date.now(),
+        reviewedBy: "system",
+        reviewNotes: "Auto-approved by system",
+      }),
       
       // Basic contact info (legacy fields)
       escola: args.personalInfo.comiteLocal || args.personalInfo.comiteAspirante,
@@ -661,6 +698,7 @@ export const getUserRegistrationStatus = query({
       status: registration.status,
       registeredAt: registration.registeredAt,
       hasReceipt: !!registration.receiptStorageId,
+      rejectionReason: registration.status === "rejected" ? registration.reviewNotes : undefined,
     };
   },
 });
@@ -709,7 +747,6 @@ export const changeModality = mutation({
   args: {
     registrationId: v.id("agRegistrations"),
     newModalityId: v.id("registrationModalities"),
-    changedBy: v.string(),
   },
   handler: async (ctx, args) => {
     const registration = await ctx.db.get(args.registrationId);
@@ -750,6 +787,127 @@ export const changeModality = mutation({
 
     await ctx.db.patch(args.registrationId, {
       modalityId: args.newModalityId,
+    });
+
+    return args.registrationId;
+  },
+});
+
+// Resubmit rejected registration
+export const resubmit = mutation({
+  args: {
+    registrationId: v.id("agRegistrations"),
+    updatedPersonalInfo: v.object({
+      nome: v.string(),
+      email: v.string(),
+      emailSolar: v.string(),
+      dataNascimento: v.string(),
+      cpf: v.string(),
+      nomeCracha: v.string(),
+      celular: v.string(),
+      uf: v.string(),
+      cidade: v.string(),
+      role: v.string(),
+      comiteLocal: v.optional(v.string()),
+      comiteAspirante: v.optional(v.string()),
+      autorizacaoCompartilhamento: v.boolean(),
+    }),
+    updatedAdditionalInfo: v.object({
+      experienciaAnterior: v.string(),
+      motivacao: v.string(),
+      expectativas: v.string(),
+      dietaRestricoes: v.string(),
+      alergias: v.string(),
+      medicamentos: v.string(),
+      necessidadesEspeciais: v.string(),
+      restricaoQuarto: v.string(),
+      pronomes: v.string(),
+      contatoEmergenciaNome: v.string(),
+      contatoEmergenciaTelefone: v.string(),
+      outrasObservacoes: v.string(),
+      participacaoComites: v.array(v.string()),
+      interesseVoluntariado: v.boolean(),
+    }),
+    resubmissionNote: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const registration = await ctx.db.get(args.registrationId);
+    if (!registration) {
+      throw new Error("Registration not found");
+    }
+
+    if (registration.status !== "rejected") {
+      throw new Error("Only rejected registrations can be resubmitted");
+    }
+
+    // Check if assembly is still open for registration
+    const assembly = await ctx.db.get(registration.assemblyId);
+    if (!assembly) {
+      throw new Error("Assembly not found");
+    }
+
+    if (!assembly.registrationOpen) {
+      throw new Error("Registration is closed for this assembly");
+    }
+
+    if (assembly.registrationDeadline && Date.now() > assembly.registrationDeadline) {
+      throw new Error("Registration deadline has passed");
+    }
+
+    // Check global AG config for registration enabled
+    const agConfig = await ctx.db
+      .query("agConfigs")
+      .withIndex("by_updated_at")
+      .order("desc")
+      .first();
+    
+    if (agConfig && !agConfig.registrationEnabled) {
+      throw new Error("Registrations are currently disabled globally");
+    }
+
+    // Update registration with new information and reset to pending
+    await ctx.db.patch(args.registrationId, {
+      // Update personal info
+      participantName: args.updatedPersonalInfo.nome,
+      email: args.updatedPersonalInfo.email,
+      emailSolar: args.updatedPersonalInfo.emailSolar,
+      dataNascimento: args.updatedPersonalInfo.dataNascimento,
+      cpf: args.updatedPersonalInfo.cpf,
+      nomeCracha: args.updatedPersonalInfo.nomeCracha,
+      celular: args.updatedPersonalInfo.celular,
+      uf: args.updatedPersonalInfo.uf,
+      cidade: args.updatedPersonalInfo.cidade,
+      participantType: args.updatedPersonalInfo.role,
+      participantRole: args.updatedPersonalInfo.role,
+      comiteLocal: args.updatedPersonalInfo.comiteLocal,
+      comiteAspirante: args.updatedPersonalInfo.comiteAspirante,
+      autorizacaoCompartilhamento: args.updatedPersonalInfo.autorizacaoCompartilhamento,
+      
+      // Update additional info
+      experienciaAnterior: args.updatedAdditionalInfo.experienciaAnterior,
+      motivacao: args.updatedAdditionalInfo.motivacao,
+      expectativas: args.updatedAdditionalInfo.expectativas,
+      dietaRestricoes: args.updatedAdditionalInfo.dietaRestricoes,
+      alergias: args.updatedAdditionalInfo.alergias,
+      medicamentos: args.updatedAdditionalInfo.medicamentos,
+      necessidadesEspeciais: args.updatedAdditionalInfo.necessidadesEspeciais,
+      restricaoQuarto: args.updatedAdditionalInfo.restricaoQuarto,
+      pronomes: args.updatedAdditionalInfo.pronomes,
+      contatoEmergenciaNome: args.updatedAdditionalInfo.contatoEmergenciaNome,
+      contatoEmergenciaTelefone: args.updatedAdditionalInfo.contatoEmergenciaTelefone,
+      outrasObservacoes: args.updatedAdditionalInfo.outrasObservacoes,
+      participacaoComites: args.updatedAdditionalInfo.participacaoComites,
+      interesseVoluntariado: args.updatedAdditionalInfo.interesseVoluntariado,
+      
+      // Reset status and add resubmission info
+      status: agConfig?.autoApproval ? "approved" : "pending",
+      resubmittedAt: Date.now(),
+      resubmissionNote: args.resubmissionNote,
+      
+      // Clear previous rejection data
+      reviewedAt: agConfig?.autoApproval ? Date.now() : undefined,
+      reviewedBy: agConfig?.autoApproval ? "system" : undefined,
+      reviewNotes: agConfig?.autoApproval ? "Auto-approved on resubmission" : undefined,
     });
 
     return args.registrationId;

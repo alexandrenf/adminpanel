@@ -391,4 +391,75 @@ export const updatePaymentRequired = mutation({
 
     return args.id;
   },
+});
+
+// Delete assembly and all related data
+export const deleteWithRelatedData = mutation({
+  args: {
+    id: v.id("assemblies"),
+    deletedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const assembly = await ctx.db.get(args.id);
+    if (!assembly) {
+      throw new Error("Assembly not found");
+    }
+
+    // Delete all registrations for this assembly
+    const registrations = await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_assembly")
+      .filter((q) => q.eq(q.field("assemblyId"), args.id))
+      .collect();
+
+    // Delete payment receipts from file storage
+    const registrationsWithReceipts = registrations.filter(r => r.receiptStorageId);
+    for (const registration of registrationsWithReceipts) {
+      try {
+        // Delete the file from storage
+        await ctx.storage.delete(registration.receiptStorageId as any);
+      } catch (error) {
+        // Continue even if file deletion fails (file might not exist)
+        console.warn(`Failed to delete receipt file ${registration.receiptStorageId}:`, error);
+      }
+    }
+
+    // Delete all registrations
+    for (const registration of registrations) {
+      await ctx.db.delete(registration._id);
+    }
+
+    // Delete all modalities for this assembly
+    const modalities = await ctx.db
+      .query("registrationModalities")
+      .withIndex("by_assembly")
+      .filter((q) => q.eq(q.field("assemblyId"), args.id))
+      .collect();
+
+    for (const modality of modalities) {
+      await ctx.db.delete(modality._id);
+    }
+
+    // Delete all participants for this assembly (if any)
+    const participants = await ctx.db
+      .query("agParticipants")
+      .withIndex("by_assembly")
+      .filter((q) => q.eq(q.field("assemblyId"), args.id))
+      .collect();
+
+    for (const participant of participants) {
+      await ctx.db.delete(participant._id);
+    }
+
+    // Finally, delete the assembly itself
+    await ctx.db.delete(args.id);
+
+    return {
+      deletedAssembly: args.id,
+      deletedRegistrations: registrations.length,
+      deletedModalities: modalities.length,
+      deletedParticipants: participants.length,
+      deletedFiles: registrationsWithReceipts.length,
+    };
+  },
 }); 

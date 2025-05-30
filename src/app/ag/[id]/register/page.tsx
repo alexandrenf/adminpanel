@@ -29,7 +29,7 @@ import {
 } from "../../../../components/ui/popover";
 import { Check, ChevronsUpDown, UserPlus, ArrowRight, Calendar, Users, MapPin } from "lucide-react";
 import { cn } from "~/lib/utils";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../convex/_generated/api";
 import { api } from "~/trpc/react";
@@ -58,6 +58,21 @@ type RegistrationFormData = {
     comiteLocal?: string;
     comiteAspirante?: string;
     autorizacaoCompartilhamento: boolean;
+    selectedModalityId?: string;
+    experienciaAnterior: string;
+    motivacao: string;
+    expectativas: string;
+    dietaRestricoes: string;
+    alergias: string;
+    medicamentos: string;
+    necessidadesEspeciais: string;
+    restricaoQuarto: string;
+    pronomes: string;
+    contatoEmergenciaNome: string;
+    contatoEmergenciaTelefone: string;
+    outrasObservacoes: string;
+    participacaoComites: string[];
+    interesseVoluntariado: boolean;
 };
 
 // Local committee type
@@ -69,20 +84,6 @@ type ComiteLocal = {
     uf?: string;
 };
 
-const initialFormData: RegistrationFormData = {
-    nome: "",
-    email: "",
-    emailSolar: "",
-    dataNascimento: "",
-    cpf: "",
-    nomeCracha: "",
-    celular: "",
-    uf: "",
-    cidade: "",
-    role: "",
-    autorizacaoCompartilhamento: false,
-};
-
 export default function AGRegistrationPage() {
     const { data: session } = useSession();
     const router = useRouter();
@@ -91,13 +92,16 @@ export default function AGRegistrationPage() {
     
     const assemblyId = params.id as string;
     
-    const [formData, setFormData] = useState<RegistrationFormData>(initialFormData);
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
-    const [comiteLocalOpen, setComiteLocalOpen] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    
-    // Fetch assembly data
+    // Convex queries
     const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
+    const registrationStatus = useQuery(
+        convexApi.agRegistrations?.getUserRegistrationStatus,
+        session?.user?.id ? { assemblyId: assemblyId as any, userId: session.user.id } : "skip"
+    );
+    const activeModalities = useQuery(
+        convexApi.registrationModalities?.getActiveByAssembly,
+        { assemblyId: assemblyId as any }
+    );
     
     // Fetch local committees for dropdown
     const { data: registrosData } = api.registros.get.useQuery();
@@ -124,6 +128,46 @@ export default function AGRegistrationPage() {
             // Add more committees as needed - this should come from your CSV processing
         ];
     }, [registrosData]);
+
+    // Initial form data
+    const initialFormData: RegistrationFormData = useMemo(() => ({
+        nome: "",
+        email: session?.user?.email || "",
+        emailSolar: "",
+        dataNascimento: "",
+        cpf: "",
+        nomeCracha: "",
+        celular: "",
+        uf: "",
+        cidade: "",
+        role: "",
+        comiteLocal: "",
+        comiteAspirante: "",
+        autorizacaoCompartilhamento: false,
+        selectedModalityId: "", // Initialize modality selection
+        experienciaAnterior: "",
+        motivacao: "",
+        expectativas: "",
+        dietaRestricoes: "",
+        alergias: "",
+        medicamentos: "",
+        necessidadesEspeciais: "",
+        restricaoQuarto: "",
+        pronomes: "",
+        contatoEmergenciaNome: "",
+        contatoEmergenciaTelefone: "",
+        outrasObservacoes: "",
+        participacaoComites: [],
+        interesseVoluntariado: false,
+    }), [session?.user?.email]);
+
+    const [formData, setFormData] = useState<RegistrationFormData>(initialFormData);
+    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
+    const [comiteLocalOpen, setComiteLocalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Convex mutations
+    const createRegistration = useMutation(convexApi.agRegistrations?.createFromForm);
 
     // Handle input changes
     const handleInputChange = useCallback((field: keyof RegistrationFormData, value: string | boolean) => {
@@ -209,8 +253,18 @@ export default function AGRegistrationPage() {
             return false;
         }
 
+        // Validate modality selection if modalities are available
+        if (activeModalities && activeModalities.length > 0 && !formData.selectedModalityId) {
+            toast({
+                title: "❌ Erro",
+                description: "Selecione uma modalidade de inscrição.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
         return true;
-    }, [formData, toast]);
+    }, [formData, toast, activeModalities]);
 
     // Handle form submission
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -221,21 +275,57 @@ export default function AGRegistrationPage() {
         setIsSubmitting(true);
         
         try {
-            // Here you would submit to your backend/Convex
-            // For now, we'll just simulate the submission and move to step 2
+            setIsSubmitting(true);
             
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+            if (!session?.user?.id) {
+                throw new Error("Usuário não autenticado");
+            }
             
-            toast({
-                title: "✅ Dados Salvos",
-                description: "Informações básicas salvas com sucesso. Prosseguindo para a próxima etapa.",
+            const registrationId = await createRegistration({
+                assemblyId: assemblyId as any,
+                modalityId: formData.selectedModalityId as any,
+                userId: session.user.id,
+                personalInfo: {
+                    nome: formData.nome,
+                    email: formData.email,
+                    emailSolar: formData.emailSolar,
+                    dataNascimento: formData.dataNascimento,
+                    cpf: formData.cpf,
+                    nomeCracha: formData.nomeCracha,
+                    celular: formData.celular,
+                    uf: formData.uf,
+                    cidade: formData.cidade,
+                    role: formData.role,
+                    comiteLocal: formData.comiteLocal,
+                    comiteAspirante: formData.comiteAspirante,
+                    autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
+                },
+                additionalInfo: {
+                    experienciaAnterior: formData.experienciaAnterior,
+                    motivacao: formData.motivacao,
+                    expectativas: formData.expectativas,
+                    dietaRestricoes: formData.dietaRestricoes,
+                    alergias: formData.alergias,
+                    medicamentos: formData.medicamentos,
+                    necessidadesEspeciais: formData.necessidadesEspeciais,
+                    restricaoQuarto: formData.restricaoQuarto,
+                    pronomes: formData.pronomes,
+                    contatoEmergenciaNome: formData.contatoEmergenciaNome,
+                    contatoEmergenciaTelefone: formData.contatoEmergenciaTelefone,
+                    outrasObservacoes: formData.outrasObservacoes,
+                    participacaoComites: formData.participacaoComites,
+                    interesseVoluntariado: formData.interesseVoluntariado,
+                },
+                status: "pending",
             });
-            
-            // Navigate to step 2 with form data
-            // You might want to store this in session storage or pass it via state
-            sessionStorage.setItem('agRegistrationStep1', JSON.stringify(formData));
-            router.push(`/ag/${assemblyId}/register/step2`);
-            
+
+            toast({
+                title: "✅ Inscrição Realizada!",
+                description: "Sua inscrição foi enviada com sucesso.",
+            });
+
+            // Redirect to success page instead of payment info
+            router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
         } catch (error) {
             toast({
                 title: "❌ Erro",
@@ -358,6 +448,31 @@ export default function AGRegistrationPage() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {/* Modality Selection */}
+                    {activeModalities && activeModalities.length > 0 && (
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="text-xl flex items-center space-x-2">
+                                    <Users className="w-5 h-5 text-purple-600" />
+                                    <span>Modalidade de Inscrição</span>
+                                </CardTitle>
+                                <p className="text-gray-600">Selecione a modalidade que melhor se adequa ao seu perfil</p>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid gap-4">
+                                    {activeModalities.map((modality) => (
+                                        <ModalityOption
+                                            key={modality._id}
+                                            modality={modality}
+                                            isSelected={formData.selectedModalityId === modality._id}
+                                            onSelect={() => handleInputChange('selectedModalityId', modality._id)}
+                                        />
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Registration Form */}
                     <Card className="shadow-lg border-0">
@@ -609,5 +724,67 @@ export default function AGRegistrationPage() {
                 </div>
             </div>
         </main>
+    );
+}
+
+// ModalityOption Component
+function ModalityOption({ modality, isSelected, onSelect }: {
+    modality: any;
+    isSelected: boolean;
+    onSelect: () => void;
+}) {
+    const formatPrice = (priceInCents: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(priceInCents / 100);
+    };
+
+    return (
+        <div 
+            className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                isSelected 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+            onClick={onSelect}
+        >
+            <div className="flex items-start justify-between">
+                <div className="flex-1">
+                    <div className="flex items-center space-x-3">
+                        <div className={`w-4 h-4 rounded-full border-2 ${
+                            isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                        }`}>
+                            {isSelected && (
+                                <div className="w-full h-full rounded-full bg-white scale-50"></div>
+                            )}
+                        </div>
+                        <h3 className="text-lg font-semibold">{modality.name}</h3>
+                    </div>
+                    
+                    {modality.description && (
+                        <p className="text-gray-600 mt-2 ml-7">{modality.description}</p>
+                    )}
+                    
+                    <div className="flex items-center space-x-4 mt-3 ml-7">
+                        <div>
+                            <span className="text-sm text-gray-500">Preço: </span>
+                            <span className="font-semibold text-green-600">
+                                {modality.price === 0 ? "Gratuito" : formatPrice(modality.price)}
+                            </span>
+                        </div>
+                        
+                        {modality.maxParticipants && (
+                            <div>
+                                <span className="text-sm text-gray-500">Vagas: </span>
+                                <span className="font-semibold">
+                                    {modality.maxParticipants}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 } 

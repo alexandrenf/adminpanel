@@ -1015,22 +1015,29 @@ export default function AGPage() {
                     );
                 case "rejected":
                     return (
-                        <Button 
-                            className="w-full bg-red-500 hover:bg-red-600"
-                            disabled
-                        >
-                            <XCircle className="w-4 h-4 mr-2" />
-                            Inscrição Rejeitada
-                        </Button>
+                        <div className="space-y-2">
+                            <Button 
+                                className="w-full bg-red-500 hover:bg-red-600"
+                                onClick={() => router.push(`/ag/${assembly._id}/register/resubmit/${registrationStatus.registrationId}`)}
+                            >
+                                <XCircle className="w-4 h-4 mr-2" />
+                                Rejeito - Corrigir
+                            </Button>
+                            {registrationStatus.rejectionReason && (
+                                <p className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                                    <strong>Motivo:</strong> {registrationStatus.rejectionReason}
+                                </p>
+                            )}
+                        </div>
                     );
                 default:
                     return (
                         <Button 
-                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                            onClick={() => router.push(`/ag/${assembly._id}/register`)}
+                            className="w-full"
+                            disabled
+                            variant="outline"
                         >
-                            <UserPlus className="w-4 h-4 mr-2" />
-                            Inscrever-se
+                            Status: {registrationStatus.status}
                         </Button>
                     );
             }

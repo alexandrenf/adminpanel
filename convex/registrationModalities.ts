@@ -41,6 +41,42 @@ export const getById = query({
   },
 });
 
+// Get modality statistics with current registration count
+export const getModalityStats = query({
+  args: { modalityId: v.id("registrationModalities") },
+  handler: async (ctx, args) => {
+    const modality = await ctx.db.get(args.modalityId);
+    if (!modality) {
+      return null;
+    }
+
+    // Count only active registrations (not rejected or cancelled)
+    const activeRegistrations = await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_modality")
+      .filter((q) => q.eq(q.field("modalityId"), args.modalityId))
+      .collect();
+
+    const currentCount = activeRegistrations.filter(r => 
+      r.status !== "rejected" && r.status !== "cancelled"
+    ).length;
+
+    return {
+      ...modality,
+      currentRegistrations: currentCount,
+      isFull: modality.maxParticipants ? currentCount >= modality.maxParticipants : false,
+      isNearFull: modality.maxParticipants ? currentCount >= (modality.maxParticipants * 0.9) : false,
+      activeRegistrations: activeRegistrations.filter(r => 
+        r.status !== "rejected" && r.status !== "cancelled"
+      ),
+      byStatus: activeRegistrations.reduce((acc, reg) => {
+        acc[reg.status] = (acc[reg.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+    };
+  },
+});
+
 // Create a new modality
 export const create = mutation({
   args: {
@@ -154,89 +190,16 @@ export const getStats = query({
   },
 });
 
-// Initialize default modalities for an assembly
-export const initializeDefaultModalities = mutation({
-  args: {
-    assemblyId: v.id("assemblies"),
-    assemblyType: v.string(), // "AG" | "AGE"
-    createdBy: v.string(),
-  },
+// Get all registrations for a specific modality
+export const getRegistrations = query({
+  args: { modalityId: v.id("registrationModalities") },
   handler: async (ctx, args) => {
-    const assembly = await ctx.db.get(args.assemblyId);
-    if (!assembly) {
-      throw new Error("Assembly not found");
-    }
-
-    // Check if modalities already exist
-    const existing = await ctx.db
-      .query("registrationModalities")
-      .withIndex("by_assembly")
-      .filter((q) => q.eq(q.field("assemblyId"), args.assemblyId))
+    return await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_modality")
+      .filter((q) => q.eq(q.field("modalityId"), args.modalityId))
+      .order("desc")
       .collect();
-
-    if (existing.length > 0) {
-      return existing.map(m => m._id);
-    }
-
-    const modalityIds = [];
-
-    if (args.assemblyType === "AGE") {
-      // AGE only has one modality: "AGE online" (free)
-      const modalityId = await ctx.db.insert("registrationModalities", {
-        assemblyId: args.assemblyId,
-        name: "AGE online",
-        description: "Participação online na Assembleia Geral Extraordinária",
-        price: 0,
-        maxParticipants: undefined, // No limit for AGE
-        isActive: true,
-        order: 1,
-        createdAt: Date.now(),
-        createdBy: args.createdBy,
-      });
-      modalityIds.push(modalityId);
-    } else {
-      // AG has multiple default modalities
-      const defaultModalities = [
-        {
-          name: "Participante",
-          description: "Participação presencial na Assembleia Geral",
-          price: 15000, // R$ 150.00 in cents
-          maxParticipants: 100,
-        },
-        {
-          name: "Estudante",
-          description: "Participação presencial com desconto estudantil",
-          price: 10000, // R$ 100.00 in cents
-          maxParticipants: 50,
-        },
-        {
-          name: "Convidado",
-          description: "Participação presencial para convidados especiais",
-          price: 0, // Free
-          maxParticipants: 20,
-        },
-      ];
-
-      for (let i = 0; i < defaultModalities.length; i++) {
-        const modality = defaultModalities[i];
-        if (!modality) continue;
-        
-        const modalityId = await ctx.db.insert("registrationModalities", {
-          assemblyId: args.assemblyId,
-          name: modality.name,
-          description: modality.description,
-          price: modality.price,
-          maxParticipants: modality.maxParticipants,
-          isActive: true,
-          order: i + 1,
-          createdAt: Date.now(),
-          createdBy: args.createdBy,
-        });
-        modalityIds.push(modalityId);
-      }
-    }
-
-    return modalityIds;
   },
 });
 

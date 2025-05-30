@@ -43,6 +43,15 @@ export default function PaymentInfoPage() {
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
     
+    // Get registration data to show modality
+    const registration = useQuery(convexApi.agRegistrations?.getById, { id: registrationId as any });
+    
+    // Get modality data if registration has one
+    const modality = useQuery(
+        convexApi.registrationModalities?.getById,
+        registration?.modalityId ? { id: registration.modalityId } : "skip"
+    );
+    
     // Get AG configuration for payment info
     const agConfig = useQuery(convexApi.agConfig?.get);
     
@@ -188,6 +197,40 @@ export default function PaymentInfoPage() {
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* Registration Modality Info */}
+                        {modality && (
+                            <Card className="bg-purple-50 border-purple-200">
+                                <CardContent className="pt-6">
+                                    <div className="flex items-center justify-center space-x-6">
+                                        <div className="text-center">
+                                            <h3 className="font-semibold text-purple-900 mb-2">Modalidade Selecionada</h3>
+                                            <div className="flex items-center justify-center space-x-4 text-sm">
+                                                <div className="flex items-center space-x-2">
+                                                    <Badge variant="outline" className="bg-white text-purple-700 border-purple-300">
+                                                        {modality.name}
+                                                    </Badge>
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    <CreditCard className="w-4 h-4 text-purple-600" />
+                                                    <span className="font-medium text-purple-800">
+                                                        {modality.price === 0 ? "Gratuito" : 
+                                                            new Intl.NumberFormat('pt-BR', {
+                                                                style: 'currency',
+                                                                currency: 'BRL'
+                                                            }).format(modality.price / 100)
+                                                        }
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {modality.description && (
+                                                <p className="text-xs text-purple-600 mt-2">{modality.description}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
 
                     {/* Registration Success Status */}
