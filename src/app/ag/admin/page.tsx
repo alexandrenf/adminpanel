@@ -549,7 +549,17 @@ export default function AGAdminPage() {
                             assemblyStartDate: new Date(assembly.startDate),
                             assemblyEndDate: new Date(assembly.endDate),
                             modalityName: modalityName,
-                            additionalInstructions: notes || "Sua inscrição foi aprovada pela equipe da IFMSA Brazil."
+                            additionalInstructions: notes || "Sua inscrição foi aprovada pela equipe da IFMSA Brazil.",
+                            paymentAmount: selectedRegistration.modalityId && modalities ? 
+                                (() => {
+                                    const modality = modalities.find(m => m._id === selectedRegistration.modalityId);
+                                    return modality?.price ? new Intl.NumberFormat('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                    }).format(modality.price / 100) : undefined;
+                                })() : undefined,
+                            isPaymentExempt: selectedRegistration.isPaymentExempt,
+                            paymentExemptReason: selectedRegistration.paymentExemptReason
                         });
                         console.log('✅ Approval email sent successfully');
                     }
