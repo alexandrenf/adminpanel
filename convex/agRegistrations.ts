@@ -912,4 +912,78 @@ export const resubmit = mutation({
 
     return args.registrationId;
   },
+});
+
+// Delete registration completely from database
+export const deleteRegistration = mutation({
+  args: {
+    registrationId: v.id("agRegistrations"),
+    deletedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const registration = await ctx.db.get(args.registrationId);
+    if (!registration) {
+      throw new Error("Registration not found");
+    }
+
+    // Delete payment receipt file if it exists
+    if (registration.receiptStorageId) {
+      try {
+        await ctx.storage.delete(registration.receiptStorageId as any);
+      } catch (error) {
+        // Continue even if file deletion fails (file might not exist)
+        console.warn(`Failed to delete receipt file ${registration.receiptStorageId}:`, error);
+      }
+    }
+
+    // Delete the registration record
+    await ctx.db.delete(args.registrationId);
+
+    return {
+      deletedRegistration: args.registrationId,
+      participantName: registration.participantName,
+      message: `Registration for ${registration.participantName} has been permanently deleted.`
+    };
+  },
+});
+
+// Bulk delete multiple registrations
+export const bulkDelete = mutation({
+  args: {
+    registrationIds: v.array(v.id("agRegistrations")),
+    deletedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const deletedRegistrations = [];
+    let deletedFiles = 0;
+
+    for (const registrationId of args.registrationIds) {
+      const registration = await ctx.db.get(registrationId);
+      if (registration) {
+        // Delete payment receipt file if it exists
+        if (registration.receiptStorageId) {
+          try {
+            await ctx.storage.delete(registration.receiptStorageId as any);
+            deletedFiles++;
+          } catch (error) {
+            console.warn(`Failed to delete receipt file ${registration.receiptStorageId}:`, error);
+          }
+        }
+
+        // Delete the registration record
+        await ctx.db.delete(registrationId);
+        deletedRegistrations.push({
+          id: registrationId,
+          name: registration.participantName
+        });
+      }
+    }
+
+    return {
+      deletedRegistrations: deletedRegistrations.length,
+      deletedFiles,
+      deletedItems: deletedRegistrations,
+      message: `${deletedRegistrations.length} registrations have been permanently deleted.`
+    };
+  },
 }); 

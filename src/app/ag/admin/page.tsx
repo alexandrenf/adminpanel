@@ -358,6 +358,10 @@ export default function AGAdminPage() {
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
     const [reviewNotes, setReviewNotes] = useState("");
+    const [isEditing, setIsEditing] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [registrationToDelete, setRegistrationToDelete] = useState<Registration | null>(null);
+    const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
     // Modality management state
     const [modalityDialogOpen, setModalityDialogOpen] = useState(false);
@@ -400,6 +404,8 @@ export default function AGAdminPage() {
     const createModality = useMutation(convexApi.registrationModalities?.create);
     const updateModality = useMutation(convexApi.registrationModalities?.update);
     const removeModality = useMutation(convexApi.registrationModalities?.remove);
+    const deleteRegistration = useMutation(convexApi.agRegistrations?.deleteRegistration);
+    const bulkDeleteRegistrations = useMutation(convexApi.agRegistrations?.bulkDelete);
 
     // Check IFMSA email on session change
     useEffect(() => {
@@ -579,6 +585,58 @@ export default function AGAdminPage() {
             });
         }
     }, [session?.user?.id, selectedRegistrations, bulkReject, toast]);
+
+    // Handle single registration deletion
+    const handleDeleteRegistration = useCallback(async (registrationId: string) => {
+        if (!session?.user?.id) return;
+
+        try {
+            const result = await deleteRegistration({
+                registrationId: registrationId as any,
+                deletedBy: session.user.id,
+            });
+            
+            toast({
+                title: "✅ Inscrição Deletada",
+                description: result.message,
+            });
+            
+            setDeleteDialogOpen(false);
+            setRegistrationToDelete(null);
+        } catch (error) {
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao deletar inscrição. Tente novamente.",
+                variant: "destructive",
+            });
+        }
+    }, [session?.user?.id, deleteRegistration, toast]);
+
+    // Handle bulk deletion
+    const handleBulkDelete = useCallback(async () => {
+        if (!session?.user?.id || selectedRegistrations.length === 0) return;
+
+        try {
+            const result = await bulkDeleteRegistrations({
+                registrationIds: selectedRegistrations as any,
+                deletedBy: session.user.id,
+            });
+            
+            toast({
+                title: "✅ Inscrições Deletadas",
+                description: result.message,
+            });
+            
+            setSelectedRegistrations([]);
+            setBulkDeleteDialogOpen(false);
+        } catch (error) {
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao deletar inscrições em lote. Tente novamente.",
+                variant: "destructive",
+            });
+        }
+    }, [session?.user?.id, selectedRegistrations, bulkDeleteRegistrations, toast]);
 
     // Modality management handlers
     const handleCreateModality = useCallback(async () => {
@@ -1143,17 +1201,29 @@ export default function AGAdminPage() {
                                                                 {new Date(registration.registeredAt).toLocaleDateString('pt-BR')}
                                                             </TableCell>
                                                             <TableCell>
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    onClick={() => {
-                                                                        setSelectedRegistration(registration);
-                                                                        setReviewDialogOpen(true);
-                                                                    }}
-                                                                >
-                                                                    <Eye className="w-3 h-3 mr-1" />
-                                                                    Ver
-                                                                </Button>
+                                                                <div className="flex items-center space-x-1">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => {
+                                                                            setSelectedRegistration(registration);
+                                                                            setReviewDialogOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        <Eye className="w-3 h-3 mr-1" />
+                                                                        Ver
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="destructive"
+                                                                        onClick={() => {
+                                                                            setRegistrationToDelete(registration);
+                                                                            setDeleteDialogOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        <Trash2 className="w-3 h-3" />
+                                                                    </Button>
+                                                                </div>
                                                             </TableCell>
                                                         </TableRow>
                                                     ))}
@@ -1202,6 +1272,15 @@ export default function AGAdminPage() {
                                                     >
                                                         <UserX className="w-3 h-3 mr-1" />
                                                         Rejeitar Selecionadas ({selectedRegistrations.length})
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={() => setBulkDeleteDialogOpen(true)}
+                                                        className="bg-red-700 hover:bg-red-800"
+                                                    >
+                                                        <Trash2 className="w-3 h-3 mr-1" />
+                                                        Deletar Selecionadas ({selectedRegistrations.length})
                                                     </Button>
                                                 </>
                                             )}
@@ -1298,14 +1377,8 @@ export default function AGAdminPage() {
                                                                             setReviewDialogOpen(true);
                                                                         }}
                                                                     >
-                                                                        <Eye className="w-3 h-3" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => handleApproveRegistration(registration._id)}
-                                                                        className="bg-green-600 hover:bg-green-700"
-                                                                    >
-                                                                        <UserCheck className="w-3 h-3" />
+                                                                        <Eye className="w-3 h-3 mr-1" />
+                                                                        Ver
                                                                     </Button>
                                                                     <Button
                                                                         size="sm"
@@ -1313,6 +1386,17 @@ export default function AGAdminPage() {
                                                                         onClick={() => handleRejectRegistration(registration._id)}
                                                                     >
                                                                         <UserX className="w-3 h-3" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="destructive"
+                                                                        onClick={() => {
+                                                                            setRegistrationToDelete(registration);
+                                                                            setDeleteDialogOpen(true);
+                                                                        }}
+                                                                        className="bg-red-700 hover:bg-red-800"
+                                                                    >
+                                                                        <Trash2 className="w-3 h-3" />
                                                                     </Button>
                                                                 </div>
                                                             </TableCell>
@@ -1744,6 +1828,58 @@ export default function AGAdminPage() {
                                     className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                                 >
                                     {editModalityId ? "Atualizar" : "Criar"} Modalidade
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                    
+                    {/* Delete Registration Confirmation Dialog */}
+                    <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Confirmar Exclusão</DialogTitle>
+                                <DialogDescription>
+                                    Tem certeza que deseja deletar permanentemente a inscrição de{" "}
+                                    <strong>{registrationToDelete?.participantName}</strong>?
+                                    Esta ação não pode ser desfeita.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button 
+                                    variant="destructive" 
+                                    onClick={() => registrationToDelete && handleDeleteRegistration(registrationToDelete._id)}
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Deletar Permanentemente
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Bulk Delete Confirmation Dialog */}
+                    <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Confirmar Exclusão em Lote</DialogTitle>
+                                <DialogDescription>
+                                    Tem certeza que deseja deletar permanentemente{" "}
+                                    <strong>{selectedRegistrations.length} inscrições</strong>?
+                                    Esta ação não pode ser desfeita e todos os dados serão permanentemente removidos.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setBulkDeleteDialogOpen(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button 
+                                    variant="destructive" 
+                                    onClick={handleBulkDelete}
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Deletar {selectedRegistrations.length} Inscrições
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
