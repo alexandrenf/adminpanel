@@ -63,6 +63,8 @@ const CreateOrEditEb = () => {
     const { data: maxOrder } = api.eb.getMaxOrder.useQuery();
 
     useEffect(() => {
+        if (!searchParams) return;
+        
         const id = searchParams.get("id");
         if (id) {
             setIsEditMode(true);

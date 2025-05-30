@@ -73,6 +73,8 @@ const CreateOrEditCR = () => {
     const { data: maxOrder } = api.cr.getMaxOrder.useQuery();
 
     useEffect(() => {
+        if (!searchParams) return;
+        
         const id = searchParams.get("id");
         if (id) {
             setIsEditMode(true);

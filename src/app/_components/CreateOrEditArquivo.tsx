@@ -32,7 +32,8 @@ const CreateOrEditArquivo = () => {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchParams = useSearchParams();
-    const { tipo = "" } = useParams<{ tipo: string }>();
+    const params = useParams<{ tipo: string }>();
+    const tipo = params?.tipo ?? "";
 
     const typeObject = allowedTypes.find(type => type.href === tipo);
     const label = typeObject ? typeObject.label : "";
@@ -72,6 +73,8 @@ const CreateOrEditArquivo = () => {
     );
 
     useEffect(() => {
+        if (!searchParams) return;
+        
         const id = searchParams.get("id");
         if (id) {
             setIsEditMode(true);
