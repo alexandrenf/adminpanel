@@ -356,8 +356,16 @@ export default function AGRegistrationPage() {
 
     // Check email domain
     useEffect(() => {
-        // Set isIfmsaEmail state for general participants (always false since we removed the auth check)
-        // Remove the auth check - general participants should be able to start registration
+        const checkIfmsaEmail = async () => {
+            if (session) {
+                const hasIfmsaEmail = await isIfmsaEmailSession(session);
+                setIsIfmsaEmail(hasIfmsaEmail);
+            } else {
+                setIsIfmsaEmail(false);
+            }
+        };
+        
+        checkIfmsaEmail();
     }, [session]);
 
     // Redirect if already registered
