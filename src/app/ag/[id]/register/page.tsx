@@ -66,9 +66,11 @@ type RegistrationFormData = {
 type ComiteLocal = {
     id: string;
     name: string;
-    sigla?: string;
+    participantId: string;
+    escola: string;
     cidade?: string;
     uf?: string;
+    agFiliacao?: string;
 };
 
 // Utility function to format dates without timezone conversion
@@ -679,7 +681,7 @@ export default function AGRegistrationPage() {
                                                         {comitesLocais === undefined ? (
                                                             "Carregando comitês..."
                                                         ) : formData.comiteLocal ? (
-                                                            comitesLocais.find((comite) => comite.name === formData.comiteLocal)?.name || formData.comiteLocal
+                                                            comitesLocais.find((comite) => comite.participantId === formData.comiteLocal)?.name || formData.comiteLocal
                                                         ) : (
                                                             "Selecione um comitê local..."
                                                         )}
@@ -699,16 +701,16 @@ export default function AGRegistrationPage() {
                                                             {comitesLocais?.map((comite) => (
                                                                 <CommandItem
                                                                     key={comite.id}
-                                                                    value={`${comite.name} ${comite.sigla || ''} ${comite.cidade || ''}`}
+                                                                    value={`${comite.name} ${comite.cidade || ''} ${comite.uf || ''}`}
                                                                     onSelect={() => {
-                                                                        handleInputChange('comiteLocal', comite.name);
+                                                                        handleInputChange('comiteLocal', comite.participantId);
                                                                         setComiteLocalOpen(false);
                                                                     }}
                                                                 >
                                                                     <Check
                                                                         className={cn(
                                                                             "mr-2 h-4 w-4",
-                                                                            formData.comiteLocal === comite.name ? "opacity-100" : "opacity-0"
+                                                                            formData.comiteLocal === comite.participantId ? "opacity-100" : "opacity-0"
                                                                         )}
                                                                     />
                                                                     <div>
