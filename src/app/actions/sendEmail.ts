@@ -31,6 +31,8 @@ interface RegistrationConfirmationData extends BaseEmailData {
   paymentRequired: boolean;
   paymentAmount?: string;
   registrationUrl?: string;
+  isPaymentExempt?: boolean;
+  paymentExemptReason?: string;
 }
 
 interface RegistrationApprovedData extends BaseEmailData {
@@ -41,6 +43,9 @@ interface RegistrationApprovedData extends BaseEmailData {
   modalityName: string;
   additionalInstructions?: string;
   qrCodeUrl?: string;
+  paymentAmount?: string;
+  isPaymentExempt?: boolean;
+  paymentExemptReason?: string;
 }
 
 interface RegistrationRejectedData extends BaseEmailData {
@@ -138,9 +143,13 @@ Detalhes da Inscrição:
 - Modalidade: ${confirmData.modalityName}
 
 ${confirmData.paymentRequired ? `
-IMPORTANTE: Sua inscrição requer pagamento de ${confirmData.paymentAmount}.
-Por favor, efetue o pagamento e envie o comprovante para que sua inscrição seja processada.
-${confirmData.registrationUrl ? `\nPara enviar o comprovante, acesse: ${confirmData.registrationUrl}` : ''}
+${confirmData.isPaymentExempt ? `
+PAGAMENTO: Isento de Pagamento
+${confirmData.paymentExemptReason ? `Motivo: ${confirmData.paymentExemptReason}` : ''}
+` : `
+PAGAMENTO: ${confirmData.paymentAmount}
+Status: Pagamento Necessário
+`}
 ` : 'Sua inscrição será analisada em breve.'}
 
 Em caso de dúvidas, entre em contato conosco.
@@ -459,18 +468,19 @@ Equipe IFMSA Brazil
       ${confirmData.paymentRequired ? `
             <div class="payment-section">
               <h3>💳 Informações de Pagamento</h3>
-              <p>Para completar sua inscrição, é necessário realizar o pagamento:</p>
-              <div class="payment-amount">${confirmData.paymentAmount}</div>
-              <p>Após o pagamento, envie o comprovante através do link abaixo para confirmar sua participação.</p>
-              ${confirmData.registrationUrl ? `
-              <a href="${confirmData.registrationUrl}" class="btn">Enviar Comprovante de Pagamento</a>
-              ` : ''}
-      </div>
-            ` : `
-            <div class="success-message">
-              <p>✨ Sua inscrição está sendo analisada e você receberá uma confirmação em breve!</p>
-    </div>
-            `}
+              ${confirmData.isPaymentExempt ? `
+                <div class="payment-exempt">
+                  <p><strong>Status:</strong> Isento de Pagamento</p>
+                  ${confirmData.paymentExemptReason ? `<p><strong>Motivo:</strong> ${confirmData.paymentExemptReason}</p>` : ''}
+                </div>
+              ` : `
+                <div class="payment-required">
+                  <p><strong>Valor:</strong> ${confirmData.paymentAmount}</p>
+                  <p><strong>Status:</strong> Pagamento Necessário</p>
+                </div>
+              `}
+            </div>
+            ` : 'Sua inscrição será analisada em breve.'}
             
             <h3>📞 Precisa de Ajuda?</h3>
             <p>Se você tiver alguma dúvida ou precisar de assistência, nossa equipe está pronta para ajudar. Entre em contato conosco através dos nossos canais de atendimento.</p>
@@ -479,7 +489,7 @@ Equipe IFMSA Brazil
           <!-- Footer -->
     <div class="footer">
             <p class="logo">IFMSA Brazil</p>
-            <p>Conectando estudantes de medicina em todo o Brasil</p>
+            <p>Estudantes de Medicina que fazem a diferença</p>
             <p>Este email foi enviado automaticamente, por favor não responda.</p>
     </div>
   </div>
@@ -506,6 +516,16 @@ Detalhes:
 - Local: ${approvedData.assemblyLocation}
 - Datas: ${approvedData.assemblyDates}
 - Modalidade: ${approvedData.modalityName}
+
+${approvedData.paymentAmount || approvedData.isPaymentExempt ? `
+${approvedData.isPaymentExempt ? `
+PAGAMENTO: Isento de Pagamento
+${approvedData.paymentExemptReason ? `Motivo: ${approvedData.paymentExemptReason}` : ''}
+` : `
+PAGAMENTO: ${approvedData.paymentAmount}
+Status: Pagamento Confirmado
+`}
+` : ''}
 
 ${approvedData.additionalInstructions ? `
 Instruções Adicionais:
@@ -840,7 +860,24 @@ Equipe IFMSA Brazil
               </div>
       </div>
       
-      ${approvedData.additionalInstructions ? `
+      ${approvedData.paymentAmount || approvedData.isPaymentExempt ? `
+            <div class="payment-section">
+              <h3>💳 Informações de Pagamento</h3>
+              ${approvedData.isPaymentExempt ? `
+                <div class="payment-exempt">
+                  <p><strong>Status:</strong> Isento de Pagamento</p>
+                  ${approvedData.paymentExemptReason ? `<p><strong>Motivo:</strong> ${approvedData.paymentExemptReason}</p>` : ''}
+                </div>
+              ` : `
+                <div class="payment-required">
+                  <p><strong>Valor:</strong> ${approvedData.paymentAmount}</p>
+                  <p><strong>Status:</strong> Pagamento Confirmado</p>
+                </div>
+              `}
+            </div>
+            ` : ''}
+            
+            ${approvedData.additionalInstructions ? `
             <div class="instructions-section">
               <h3>📝 Instruções Importantes</h3>
         <p>${approvedData.additionalInstructions}</p>
@@ -873,7 +910,7 @@ Equipe IFMSA Brazil
             <div class="celebration">🎊 🎉 🎊</div>
             <p class="logo">IFMSA Brazil</p>
             <p><strong>Nos vemos na assembleia!</strong></p>
-            <p>Conectando estudantes de medicina em todo o Brasil</p>
+            <p>Estudantes de Medicina que fazem a diferença</p>
             <p>Este email foi enviado automaticamente, por favor não responda.</p>
     </div>
   </div>

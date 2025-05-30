@@ -341,7 +341,9 @@ export default function AGRegistrationStep4Page() {
                     assemblyEndDate: new Date(assembly.endDate),
                     modalityName: selectedModalityData.name,
                     paymentRequired: selectedModalityData.price > 0,
-                    paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price : undefined,
+                    paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
+                    isPaymentExempt: isPaymentExempt,
+                    paymentExemptReason: exemptionReason
                 });
                 console.log('✅ Confirmation email sent successfully');
             } catch (emailError) {

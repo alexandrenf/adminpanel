@@ -36,6 +36,8 @@ export async function handleNewRegistration(registrationData: {
   modalityName: string;
   paymentRequired: boolean;
   paymentAmount?: number;
+  isPaymentExempt?: boolean;
+  paymentExemptReason?: string;
 }) {
   const assemblyDates = `${formatDateWithoutTimezone(registrationData.assemblyStartDate)} - ${formatDateWithoutTimezone(registrationData.assemblyEndDate)}`;
   
@@ -50,6 +52,8 @@ export async function handleNewRegistration(registrationData: {
     paymentRequired: registrationData.paymentRequired,
     paymentAmount: registrationData.paymentAmount ? `R$ ${registrationData.paymentAmount.toFixed(2)}` : undefined,
     registrationUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.registrationId}/payment`,
+    isPaymentExempt: registrationData.isPaymentExempt,
+    paymentExemptReason: registrationData.paymentExemptReason,
   });
 
   if (!result.success) {
@@ -73,6 +77,9 @@ export async function handleRegistrationApproval(registrationData: {
   assemblyEndDate: Date;
   modalityName: string;
   additionalInstructions?: string;
+  paymentAmount?: string;
+  isPaymentExempt?: boolean;
+  paymentExemptReason?: string;
 }) {
   const assemblyDates = `${formatDateWithoutTimezone(registrationData.assemblyStartDate)} - ${formatDateWithoutTimezone(registrationData.assemblyEndDate)}`;
   
@@ -86,6 +93,9 @@ export async function handleRegistrationApproval(registrationData: {
     modalityName: registrationData.modalityName,
     additionalInstructions: registrationData.additionalInstructions,
     qrCodeUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.registrationId}/qr-code`,
+    paymentAmount: registrationData.paymentAmount,
+    isPaymentExempt: registrationData.isPaymentExempt,
+    paymentExemptReason: registrationData.paymentExemptReason,
   });
 
   if (!result.success) {
