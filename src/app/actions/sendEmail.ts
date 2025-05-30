@@ -1403,130 +1403,23 @@ export async function sendEmailFromForm(formData: FormData): Promise<EmailResult
 
 // Utility functions for specific email types
 export async function sendRegistrationConfirmation(data: RegistrationConfirmationData): Promise<EmailResult> {
-  const { to, participantName, registrationId, assemblyName, assemblyLocation, assemblyDates, modalityName, paymentRequired, paymentAmount, registrationUrl } = data;
-
-  const subject = `Confirmação de Inscrição - ${assemblyName}`;
-  const message = `
-    <h2>Olá ${participantName},</h2>
-    <p>Recebemos sua inscrição para a <strong>${assemblyName}</strong>.</p>
-    
-    <h3>Detalhes da Inscrição:</h3>
-    <ul>
-      <li><strong>ID da Inscrição:</strong> ${registrationId}</li>
-      <li><strong>Evento:</strong> ${assemblyName}</li>
-      <li><strong>Local:</strong> ${assemblyLocation}</li>
-      <li><strong>Datas:</strong> ${assemblyDates}</li>
-      <li><strong>Modalidade:</strong> ${modalityName}</li>
-    </ul>
-
-    ${paymentRequired ? `
-    <h3>Informações de Pagamento:</h3>
-    <p>Valor a pagar: <strong>${paymentAmount}</strong></p>
-    <p>Para realizar o pagamento, acesse: <a href="${registrationUrl}">${registrationUrl}</a></p>
-    ` : ''}
-
-    <p>Esta inscrição está pendente de aprovação. Você receberá um email quando sua inscrição for aprovada.</p>
-    
-    <p>Em caso de dúvidas, entre em contato com nossa equipe de suporte.</p>
-    
-    <p>Atenciosamente,<br>Equipe IFMSA Brazil</p>
-  `;
-
   return sendEmail({
-    type: 'generic',
-    data: {
-      to,
-      participantName,
-      subject,
-      message,
-    }
+    type: 'registration_confirmation',
+    data: data
   });
 }
 
 export async function sendRegistrationApproval(data: RegistrationApprovedData): Promise<EmailResult> {
-  const { to, participantName, registrationId, assemblyName, assemblyLocation, assemblyDates, modalityName, additionalInstructions, qrCodeUrl } = data;
-
-  const subject = `🎉 Inscrição Aprovada - ${assemblyName}`;
-  const message = `
-    <h2>Parabéns ${participantName}!</h2>
-    <p>Sua inscrição para a <strong>${assemblyName}</strong> foi aprovada!</p>
-    
-    <h3>Detalhes da Inscrição:</h3>
-    <ul>
-      <li><strong>ID da Inscrição:</strong> ${registrationId}</li>
-      <li><strong>Evento:</strong> ${assemblyName}</li>
-      <li><strong>Local:</strong> ${assemblyLocation}</li>
-      <li><strong>Datas:</strong> ${assemblyDates}</li>
-      <li><strong>Modalidade:</strong> ${modalityName}</li>
-    </ul>
-
-    ${qrCodeUrl ? `
-    <h3>QR Code de Acesso:</h3>
-    <p>Apresente este QR Code no check-in do evento:</p>
-    <img src="${qrCodeUrl}" alt="QR Code de Acesso" style="max-width: 200px; margin: 20px 0;" />
-    ` : ''}
-
-    ${additionalInstructions ? `
-    <h3>Instruções Adicionais:</h3>
-    <p>${additionalInstructions}</p>
-    ` : ''}
-
-    <p>Estamos ansiosos para recebê-lo(a) no evento!</p>
-    
-    <p>Atenciosamente,<br>Equipe IFMSA Brazil</p>
-  `;
-
   return sendEmail({
-    type: 'generic',
-    data: {
-      to,
-      participantName,
-      subject,
-      message,
-    }
+    type: 'registration_approved',
+    data: data
   });
 }
 
 export async function sendRegistrationRejection(data: RegistrationRejectedData): Promise<EmailResult> {
-  const { to, participantName, registrationId, assemblyName, rejectionReason, canResubmit, resubmissionUrl, contactEmail } = data;
-
-  const subject = `Inscrição Não Aprovada - ${assemblyName}`;
-  const message = `
-    <h2>Olá ${participantName},</h2>
-    <p>Infelizmente sua inscrição para a <strong>${assemblyName}</strong> não foi aprovada.</p>
-    
-    <h3>Detalhes da Inscrição:</h3>
-    <ul>
-      <li><strong>ID da Inscrição:</strong> ${registrationId}</li>
-      <li><strong>Evento:</strong> ${assemblyName}</li>
-    </ul>
-
-    <h3>Motivo da Não Aprovação:</h3>
-    <p>${rejectionReason}</p>
-
-    ${canResubmit ? `
-    <h3>Reenvio da Inscrição:</h3>
-    <p>Você pode reenviar sua inscrição com as correções necessárias através do link:</p>
-    <p><a href="${resubmissionUrl}">${resubmissionUrl}</a></p>
-    ` : ''}
-
-    ${contactEmail ? `
-    <h3>Dúvidas?</h3>
-    <p>Se você tiver alguma dúvida, entre em contato com nossa equipe de suporte:</p>
-    <p><a href="mailto:${contactEmail}">${contactEmail}</a></p>
-    ` : ''}
-
-    <p>Atenciosamente,<br>Equipe IFMSA Brazil</p>
-  `;
-
   return sendEmail({
-    type: 'generic',
-    data: {
-      to,
-      participantName,
-      subject,
-      message,
-    }
+    type: 'registration_rejected',
+    data: data
   });
 }
 
