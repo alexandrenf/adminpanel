@@ -65,6 +65,8 @@ const CreateOrEditArquivado = () => {
     const { data: gestoes } = api.gestao.getAll.useQuery();
 
     useEffect(() => {
+        if (!searchParams) return;
+        
         const id = searchParams.get("id");
         const type = searchParams.get("type");
         const gestaoId = searchParams.get("gestaoId");

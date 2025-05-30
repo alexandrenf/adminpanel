@@ -1,0 +1,831 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { Button } from "../../../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../../../components/ui/card";
+import { Input } from "../../../../components/ui/input";
+import { Label } from "../../../../components/ui/label";
+import { Checkbox } from "../../../../components/ui/checkbox";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "../../../../components/ui/select";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+} from "../../../../components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "../../../../components/ui/popover";
+import { Check, ChevronsUpDown, UserPlus, ArrowRight, Calendar, Users, MapPin, XCircle } from "lucide-react";
+import { cn } from "~/lib/utils";
+import { useQuery, useMutation } from "convex/react";
+import { useToast } from "~/components/ui/use-toast";
+import { api as convexApi } from "../../../../../convex/_generated/api";
+import { api } from "~/trpc/react";
+import { isIfmsaEmailSession } from "~/server/lib/authcheck";
+import PrecisaLogin from "~/app/_components/PrecisaLogin";
+import { handleNewRegistration } from "~/app/actions/emailExamples";
+
+// Brazilian states
+const BRAZILIAN_STATES = [
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", 
+    "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", 
+    "RS", "RO", "RR", "SC", "SP", "SE", "TO"
+];
+
+// Registration form data type
+type RegistrationFormData = {
+    nome: string;
+    email: string;
+    emailSolar: string;
+    dataNascimento: string;
+    cpf: string;
+    nomeCracha: string;
+    celular: string;
+    uf: string;
+    cidade: string;
+    role: string;
+    comiteLocal?: string;
+    comiteAspirante?: string;
+    autorizacaoCompartilhamento: boolean;
+    selectedModalityId?: string;
+};
+
+// Local committee type
+type ComiteLocal = {
+    id: string;
+    name: string;
+    sigla?: string;
+    cidade?: string;
+    uf?: string;
+};
+
+export default function AGRegistrationPage() {
+    const { data: session } = useSession();
+    const router = useRouter();
+    const params = useParams();
+    const { toast } = useToast();
+    
+    // Get assemblyId with type safety
+    const assemblyId = params?.id;
+    
+    // Convex queries
+    const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
+    const registrationStatus = useQuery(
+        convexApi.agRegistrations?.getUserRegistrationStatus,
+        session?.user?.id && assemblyId ? { assemblyId: assemblyId as any, userId: session.user.id } : "skip"
+    );
+    const activeModalities = useQuery(
+        convexApi.registrationModalities?.getActiveByAssembly,
+        assemblyId ? { assemblyId: assemblyId as any } : "skip"
+    );
+    
+    // Add AG config query to check global registration settings
+    const agConfig = useQuery(convexApi.agConfig?.get);
+    
+    // Fetch local committees for dropdown
+    const { data: registrosData } = api.registros.get.useQuery();
+    const { data: ebData } = api.eb.getAll.useQuery();
+    const { data: crData } = api.cr.getAll.useQuery();
+    
+    // Process committees data
+    const comitesLocais = useMemo<ComiteLocal[]>(() => {
+        if (!registrosData?.url) return [];
+        
+        // For now, we'll create a more comprehensive placeholder structure
+        // In a real implementation, you'd fetch and process the CSV data here
+        return [
+            { id: "1", name: "ACEM - Associação dos Estudantes de Medicina de São Paulo", sigla: "ACEM", cidade: "São Paulo", uf: "SP" },
+            { id: "2", name: "ACEP - Associação dos Estudantes de Medicina de Pelotas", sigla: "ACEP", cidade: "Pelotas", uf: "RS" },
+            { id: "3", name: "ACERP - Associação dos Estudantes de Medicina de Ribeirão Preto", sigla: "ACERP", cidade: "Ribeirão Preto", uf: "SP" },
+            { id: "4", name: "ACESM - Associação dos Estudantes de Medicina de Santa Maria", sigla: "ACESM", cidade: "Santa Maria", uf: "RS" },
+            { id: "5", name: "AEMS - Associação dos Estudantes de Medicina de Salvador", sigla: "AEMS", cidade: "Salvador", uf: "BA" },
+            { id: "6", name: "CAEM-UnB - Centro Acadêmico de Medicina da UnB", sigla: "CAEM-UnB", cidade: "Brasília", uf: "DF" },
+            { id: "7", name: "CAEMFM - Centro Acadêmico de Medicina da UFMG", sigla: "CAEMFM", cidade: "Belo Horizonte", uf: "MG" },
+            { id: "8", name: "CAME - Centro Acadêmico de Medicina de Fortaleza", sigla: "CAME", cidade: "Fortaleza", uf: "CE" },
+            { id: "9", name: "CAMEC - Centro Acadêmico de Medicina de Campina Grande", sigla: "CAMEC", cidade: "Campina Grande", uf: "PB" },
+            { id: "10", name: "CAMED - Centro Acadêmico de Medicina de Recife", sigla: "CAMED", cidade: "Recife", uf: "PE" },
+            // Add more committees as needed - this should come from your CSV processing
+        ];
+    }, [registrosData]);
+
+    // Initial form data
+    const initialFormData: RegistrationFormData = useMemo(() => ({
+        nome: "",
+        email: session?.user?.email || "",
+        emailSolar: "",
+        dataNascimento: "",
+        cpf: "",
+        nomeCracha: "",
+        celular: "",
+        uf: "",
+        cidade: "",
+        role: "",
+        comiteLocal: "",
+        comiteAspirante: "",
+        autorizacaoCompartilhamento: false,
+        selectedModalityId: "", // Initialize modality selection
+    }), [session?.user?.email]);
+
+    const [formData, setFormData] = useState<RegistrationFormData>(initialFormData);
+    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
+    const [comiteLocalOpen, setComiteLocalOpen] = useState(false);
+    
+    // Convex mutations
+    const createRegistration = useMutation(convexApi.agRegistrations?.createFromForm);
+
+    // Handle input changes
+    const handleInputChange = useCallback((field: keyof RegistrationFormData, value: string | boolean) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+    }, []);
+
+    // Format CPF input
+    const formatCPF = useCallback((value: string) => {
+        const cleanValue = value.replace(/\D/g, '');
+        return cleanValue.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }, []);
+
+    // Format phone input
+    const formatPhone = useCallback((value: string) => {
+        const cleanValue = value.replace(/\D/g, '');
+        if (cleanValue.length <= 11) {
+            return cleanValue.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+        }
+        return value;
+    }, []);
+
+    // Role options based on user type
+    const getRoleOptions = useCallback(() => {
+        if (isIfmsaEmail) {
+            return [
+                { value: "eb", label: "EB (Executive Board)" },
+                { value: "cr", label: "CR (Country Representative)" },
+                { value: "supco", label: "SupCo (Support Committee)" },
+            ];
+        } else {
+            return [
+                { value: "comite_aspirante", label: "Comitê Aspirante" },
+                { value: "observador_externo", label: "Observador Externo" },
+                { value: "comite_local", label: "Comitê Local" },
+                { value: "alumni", label: "Alumni" },
+                { value: "supco", label: "SupCo (Support Committee)" },
+            ];
+        }
+    }, [isIfmsaEmail]);
+
+    // Validate form
+    const validateForm = useCallback(() => {
+        const requiredFields = [
+            'nome', 'email', 'emailSolar', 'dataNascimento', 
+            'cpf', 'nomeCracha', 'celular', 'uf', 'cidade', 'role'
+        ];
+        
+        for (const field of requiredFields) {
+            if (!formData[field as keyof RegistrationFormData]) {
+                toast({
+                    title: "❌ Erro",
+                    description: `O campo ${field} é obrigatório.`,
+                    variant: "destructive",
+                });
+                return false;
+            }
+        }
+
+        if (formData.role === 'comite_local' && !formData.comiteLocal) {
+            toast({
+                title: "❌ Erro",
+                description: "Selecione um comitê local.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        if (formData.role === 'comite_aspirante' && !formData.comiteAspirante) {
+            toast({
+                title: "❌ Erro",
+                description: "Informe o nome do comitê aspirante.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        if (!formData.autorizacaoCompartilhamento) {
+            toast({
+                title: "❌ Erro",
+                description: "É necessário autorizar o compartilhamento de dados.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        // Validate modality selection if modalities are available
+        if (activeModalities && activeModalities.length > 0 && !formData.selectedModalityId) {
+            toast({
+                title: "❌ Erro",
+                description: "Selecione uma modalidade de inscrição.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        return true;
+    }, [formData, toast, activeModalities]);
+
+    // Handle form submission
+    const handleSubmit = useCallback(async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (!validateForm()) return;
+        
+        // Check if this is an AGE (online assembly) - skip steps 2 and 3
+        if (assembly?.type === "AGE") {
+            // For AGE, create registration directly with auto-approval
+            try {
+                const registrationData = {
+                    assemblyId: assemblyId as any,
+                    modalityId: formData.selectedModalityId as any,
+                    userId: session!.user!.id,
+                    personalInfo: {
+                        nome: formData.nome,
+                        email: formData.email,
+                        emailSolar: formData.emailSolar,
+                        dataNascimento: formData.dataNascimento,
+                        cpf: formData.cpf,
+                        nomeCracha: formData.nomeCracha,
+                        celular: formData.celular,
+                        uf: formData.uf,
+                        cidade: formData.cidade,
+                        role: formData.role,
+                        comiteLocal: formData.comiteLocal,
+                        comiteAspirante: formData.comiteAspirante,
+                        autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
+                    },
+                    additionalInfo: {
+                        experienciaAnterior: "", // Empty for AGE
+                        motivacao: "AGE - Não especificado", // Default for AGE
+                        expectativas: "", // Empty for AGE
+                        dietaRestricoes: "", // Empty for AGE
+                        alergias: "", // Empty for AGE
+                        medicamentos: "", // Empty for AGE
+                        necessidadesEspeciais: "", // Empty for AGE
+                        restricaoQuarto: "", // Empty for AGE
+                        pronomes: "", // Empty for AGE
+                        contatoEmergenciaNome: "", // Empty for AGE
+                        contatoEmergenciaTelefone: "", // Empty for AGE
+                        outrasObservacoes: "", // Empty for AGE
+                        participacaoComites: [], // Empty for AGE
+                        interesseVoluntariado: false, // Default for AGE
+                    },
+                    status: "approved" as const, // Auto-approve AGE registrations
+                };
+
+                const registrationId = await createRegistration(registrationData);
+                
+                // Send confirmation email for AGE registration
+                try {
+                    const selectedModality = activeModalities?.find(m => m._id === formData.selectedModalityId);
+                    
+                    // Add null checks for safety
+                    if (!assembly || !selectedModality) {
+                        console.warn('⚠️ Cannot send AGE confirmation email: missing assembly or modality data');
+                    } else {
+                        await handleNewRegistration({
+                            registrationId: registrationId as string,
+                            participantName: formData.nome,
+                            participantEmail: formData.email,
+                            assemblyName: assembly.name,
+                            assemblyLocation: assembly.location,
+                            assemblyStartDate: new Date(assembly.startDate),
+                            assemblyEndDate: new Date(assembly.endDate),
+                            modalityName: selectedModality.name,
+                            paymentRequired: selectedModality.price ? selectedModality.price > 0 : false,
+                            paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price : undefined,
+                        });
+                        console.log('✅ AGE confirmation email sent successfully');
+                    }
+                } catch (emailError) {
+                    console.error('⚠️ Failed to send AGE confirmation email:', emailError);
+                    // Don't fail the registration if email fails
+                }
+                
+                toast({
+                    title: "✅ Inscrição Realizada com Sucesso!",
+                    description: "Sua inscrição AGE foi aprovada automaticamente.",
+                });
+                
+                // Navigate directly to success page
+                router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
+                
+            } catch (error) {
+                console.error("Error creating AGE registration:", error);
+                toast({
+                    title: "❌ Erro",
+                    description: "Erro ao finalizar inscrição AGE. Tente novamente.",
+                    variant: "destructive",
+                });
+            }
+        } else {
+            // For regular AG, save form data and continue to step 2
+            sessionStorage.setItem('agRegistrationStep1', JSON.stringify({
+                nome: formData.nome,
+                email: formData.email,
+                emailSolar: formData.emailSolar,
+                dataNascimento: formData.dataNascimento,
+                cpf: formData.cpf,
+                nomeCracha: formData.nomeCracha,
+                celular: formData.celular,
+                uf: formData.uf,
+                cidade: formData.cidade,
+                role: formData.role,
+                comiteLocal: formData.comiteLocal,
+                comiteAspirante: formData.comiteAspirante,
+                autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
+                selectedModalityId: formData.selectedModalityId,
+            }));
+
+            // Navigate to step 2
+            router.push(`/ag/${assemblyId}/register/step2`);
+        }
+    }, [validateForm, formData, assemblyId, assembly?.type, session, createRegistration, toast, router]);
+
+    // Check email domain
+    useEffect(() => {
+        const checkEmail = async () => {
+            if (session?.user?.email) {
+                const result = await isIfmsaEmailSession(session);
+                setIsIfmsaEmail(result);
+            }
+        };
+        void checkEmail();
+    }, [session?.user?.email]);
+
+    // Redirect if already registered
+    useEffect(() => {
+        if (registrationStatus?.status === "approved") {
+            router.push(`/ag/${assemblyId}/register/complete/${registrationStatus.registrationId}`);
+        }
+    }, [registrationStatus, router, assemblyId]);
+
+    // If no assemblyId, show error
+    if (!assemblyId) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-red-600">Erro</h1>
+                    <p className="mt-2">ID da assembleia não encontrado.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!session) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
+                <div className="absolute inset-0 opacity-20">
+                    <div className="w-full h-full" style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                    }}></div>
+                </div>
+                <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+                <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+                <div className="relative z-10 flex-grow flex items-center justify-center">
+                    <PrecisaLogin />
+                </div>
+            </main>
+        );
+    }
+
+    if (!assembly) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Carregando assembleia...</p>
+                </div>
+            </main>
+        );
+    }
+
+    // Check if registrations are globally disabled
+    if (agConfig && !agConfig.registrationEnabled) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Inscrições Desabilitadas</h1>
+                    <p className="text-gray-600 mb-4">
+                        As inscrições para assembleias gerais estão temporariamente desabilitadas.
+                    </p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
+    // Check if registration is closed for this assembly
+    if (!assembly.registrationOpen) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <XCircle className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Inscrições Fechadas</h1>
+                    <p className="text-gray-600 mb-4">
+                        As inscrições para esta assembleia estão fechadas.
+                    </p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
+    return (
+        <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+            <div className="container mx-auto px-6 py-12">
+                <div className="max-w-4xl mx-auto space-y-8">
+                    {/* Header */}
+                    <div className="text-center space-y-4">
+                        <div className="flex items-center justify-center space-x-4">
+                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                                <UserPlus className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
+                                    Inscrição - {assembly.name}
+                                </h1>
+                                <p className="text-gray-600">
+                                    {assembly.type === "AGE" 
+                                        ? "Etapa 1 de 1: Informações Pessoais" 
+                                        : "Etapa 1 de 4: Informações Pessoais"
+                                    }
+                                </p>
+                            </div>
+                        </div>
+                        
+                        {/* Assembly Info */}
+                        <Card className="bg-blue-50 border-blue-200">
+                            <CardContent className="pt-6">
+                                <div className="flex items-center justify-center space-x-6 text-sm">
+                                    <div className="flex items-center space-x-2">
+                                        <Calendar className="w-4 h-4 text-blue-600" />
+                                        <span>
+                                            {new Date(assembly.startDate).toLocaleDateString('pt-BR')} - {" "}
+                                            {new Date(assembly.endDate).toLocaleDateString('pt-BR')}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <MapPin className="w-4 h-4 text-blue-600" />
+                                        <span>{assembly.location}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Users className="w-4 h-4 text-blue-600" />
+                                        <span>{assembly.type === "AG" ? "Presencial" : "Online"}</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Modality Selection */}
+                    {activeModalities && activeModalities.length > 0 && (
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="text-xl flex items-center space-x-2">
+                                    <Users className="w-5 h-5 text-purple-600" />
+                                    <span>Modalidade de Inscrição</span>
+                                </CardTitle>
+                                <p className="text-gray-600">Selecione a modalidade que melhor se adequa ao seu perfil</p>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid gap-4">
+                                    {activeModalities.map((modality) => (
+                                        <ModalityOption
+                                            key={modality._id}
+                                            modality={modality}
+                                            isSelected={formData.selectedModalityId === modality._id}
+                                            onSelect={() => handleInputChange('selectedModalityId', modality._id)}
+                                        />
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Registration Form */}
+                    <Card className="shadow-lg border-0">
+                        <CardHeader>
+                            <CardTitle className="text-xl">Dados Pessoais</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                {/* Basic Information */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <Label htmlFor="nome">Nome Completo *</Label>
+                                        <Input
+                                            id="nome"
+                                            value={formData.nome}
+                                            onChange={(e) => handleInputChange('nome', e.target.value)}
+                                            placeholder="Seu nome completo"
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <Label htmlFor="nomeCracha">Nome para o Crachá *</Label>
+                                        <Input
+                                            id="nomeCracha"
+                                            value={formData.nomeCracha}
+                                            onChange={(e) => handleInputChange('nomeCracha', e.target.value)}
+                                            placeholder="Como quer que apareça no crachá"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <Label htmlFor="email">Email *</Label>
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            value={formData.email}
+                                            onChange={(e) => handleInputChange('email', e.target.value)}
+                                            placeholder="seu@email.com"
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <Label htmlFor="emailSolar">Email como consta no Solar *</Label>
+                                        <Input
+                                            id="emailSolar"
+                                            type="email"
+                                            value={formData.emailSolar}
+                                            onChange={(e) => handleInputChange('emailSolar', e.target.value)}
+                                            placeholder="Email usado no sistema Solar"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div>
+                                        <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
+                                        <Input
+                                            id="dataNascimento"
+                                            type="date"
+                                            value={formData.dataNascimento}
+                                            onChange={(e) => handleInputChange('dataNascimento', e.target.value)}
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <Label htmlFor="cpf">CPF *</Label>
+                                        <Input
+                                            id="cpf"
+                                            value={formData.cpf}
+                                            onChange={(e) => handleInputChange('cpf', formatCPF(e.target.value))}
+                                            placeholder="000.000.000-00"
+                                            maxLength={14}
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <Label htmlFor="celular">Celular *</Label>
+                                        <Input
+                                            id="celular"
+                                            value={formData.celular}
+                                            onChange={(e) => handleInputChange('celular', formatPhone(e.target.value))}
+                                            placeholder="(11) 99999-9999"
+                                            maxLength={15}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <Label htmlFor="uf">UF *</Label>
+                                        <Select value={formData.uf} onValueChange={(value) => handleInputChange('uf', value)}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione o estado" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {BRAZILIAN_STATES.map((state) => (
+                                                    <SelectItem key={state} value={state}>{state}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    
+                                    <div>
+                                        <Label htmlFor="cidade">Cidade *</Label>
+                                        <Input
+                                            id="cidade"
+                                            value={formData.cidade}
+                                            onChange={(e) => handleInputChange('cidade', e.target.value)}
+                                            placeholder="Sua cidade"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Role Selection */}
+                                <div className="space-y-4">
+                                    <div>
+                                        <Label htmlFor="role">
+                                            {isIfmsaEmail ? "Cargo/Função *" : "Categoria de Participação *"}
+                                        </Label>
+                                        <Select value={formData.role} onValueChange={(value) => handleInputChange('role', value)}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione sua categoria" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {getRoleOptions().map((option) => (
+                                                    <SelectItem key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Comitê Aspirante Text Field */}
+                                    {formData.role === 'comite_aspirante' && (
+                                        <div>
+                                            <Label htmlFor="comiteAspirante">Nome do Comitê Aspirante *</Label>
+                                            <Input
+                                                id="comiteAspirante"
+                                                value={formData.comiteAspirante || ''}
+                                                onChange={(e) => handleInputChange('comiteAspirante', e.target.value)}
+                                                placeholder="Nome do seu comitê aspirante"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Comitê Local Searchable Dropdown */}
+                                    {formData.role === 'comite_local' && (
+                                        <div>
+                                            <Label htmlFor="comiteLocal">Comitê Local *</Label>
+                                            <Popover open={comiteLocalOpen} onOpenChange={setComiteLocalOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={comiteLocalOpen}
+                                                        className="w-full justify-between"
+                                                    >
+                                                        {formData.comiteLocal
+                                                            ? comitesLocais.find((comite) => comite.id === formData.comiteLocal)?.name
+                                                            : "Selecione um comitê local..."}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-full p-0">
+                                                    <Command>
+                                                        <CommandInput placeholder="Buscar comitê..." />
+                                                        <CommandEmpty>Nenhum comitê encontrado.</CommandEmpty>
+                                                        <CommandGroup>
+                                                            {comitesLocais.map((comite) => (
+                                                                <CommandItem
+                                                                    key={comite.id}
+                                                                    value={`${comite.name} ${comite.sigla} ${comite.cidade}`}
+                                                                    onSelect={() => {
+                                                                        handleInputChange('comiteLocal', comite.id);
+                                                                        setComiteLocalOpen(false);
+                                                                    }}
+                                                                >
+                                                                    <Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            formData.comiteLocal === comite.id ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    <div>
+                                                                        <div className="font-medium">{comite.name}</div>
+                                                                        {comite.sigla && (
+                                                                            <div className="text-sm text-gray-500">
+                                                                                {comite.sigla} - {comite.cidade}, {comite.uf}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Data Sharing Authorization */}
+                                <div className="space-y-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <div className="flex items-start space-x-3">
+                                        <Checkbox
+                                            id="autorizacao"
+                                            checked={formData.autorizacaoCompartilhamento}
+                                            onCheckedChange={(checked) => 
+                                                handleInputChange('autorizacaoCompartilhamento', checked === true)
+                                            }
+                                        />
+                                        <div className="grid gap-1.5 leading-none">
+                                            <Label htmlFor="autorizacao" className="text-sm font-medium leading-relaxed">
+                                                Autorizo o compartilhamento de meus dados (nome completo e email) para os patrocinadores do evento. *
+                                            </Label>
+                                            <p className="text-xs text-gray-600">
+                                                Esta autorização é necessária para a participação no evento.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Submit Button */}
+                                <div className="flex justify-end">
+                                    <Button 
+                                        type="submit" 
+                                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                                    >
+                                        {assembly.type === "AGE" ? "Finalizar Inscrição" : "Continuar"}
+                                        <ArrowRight className="w-4 h-4 ml-2" />
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </main>
+    );
+}
+
+// ModalityOption Component
+function ModalityOption({ modality, isSelected, onSelect }: {
+    modality: any;
+    isSelected: boolean;
+    onSelect: () => void;
+}) {
+    const formatPrice = (priceInCents: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(priceInCents / 100);
+    };
+
+    return (
+        <div 
+            className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                isSelected 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+            onClick={onSelect}
+        >
+            <div className="flex items-start justify-between">
+                <div className="flex-1">
+                    <div className="flex items-center space-x-3">
+                        <div className={`w-4 h-4 rounded-full border-2 ${
+                            isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                        }`}>
+                            {isSelected && (
+                                <div className="w-full h-full rounded-full bg-white scale-50"></div>
+                            )}
+                        </div>
+                        <h3 className="text-lg font-semibold">{modality.name}</h3>
+                    </div>
+                    
+                    {modality.description && (
+                        <p className="text-gray-600 mt-2 ml-7">{modality.description}</p>
+                    )}
+                    
+                    <div className="flex items-center space-x-4 mt-3 ml-7">
+                        <div>
+                            <span className="text-sm text-gray-500">Preço: </span>
+                            <span className="font-semibold text-green-600">
+                                {modality.price === 0 ? "Gratuito" : formatPrice(modality.price)}
+                            </span>
+                        </div>
+                        
+                        {modality.maxParticipants && (
+                            <div>
+                                <span className="text-sm text-gray-500">Vagas: </span>
+                                <span className="font-semibold">
+                                    {modality.maxParticipants}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+} 

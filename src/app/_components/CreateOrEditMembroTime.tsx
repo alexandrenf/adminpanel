@@ -29,7 +29,8 @@ const CreateOrEditMembroTime = () => {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchParams = useSearchParams();
-    const { tipo = "" } = useParams<{ tipo: string }>();
+    const params = useParams<{ tipo: string }>();
+    const tipo = params?.tipo ?? "";
 
     const typeObject = allowedTimes.find(type => type.href === tipo);
     const label = typeObject ? typeObject.label : "";
@@ -70,12 +71,16 @@ const CreateOrEditMembroTime = () => {
     );
 
     useEffect(() => {
+        if (!searchParams) return;
+        
         const id = searchParams.get("id");
         if (id) {
             setIsEditMode(true);
             setMembroId(parseInt(id, 10));
+        } else {
+            setMembroId((latestMembroId.data ?? 0) + 1);
         }
-    }, [searchParams]);
+    }, [searchParams, latestMembroId.data]);
 
     useEffect(() => {
         if (membroData) {

@@ -70,6 +70,8 @@ const CreateNoticia = () => {
     );
 
     useEffect(() => {
+        if (!searchParams) return;
+        
         const id = searchParams.get("id");
         if (id) {
             setIsEditMode(true);

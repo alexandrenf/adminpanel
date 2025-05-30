@@ -47,19 +47,17 @@ export const create = mutation({
   },
 });
 
-// Delete a QR reader (mark as inactive)
+// Delete a QR reader (actually delete from database)
 export const remove = mutation({
   args: {
     id: v.id("qrReaders"),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
-      isActive: false,
-    });
+    await ctx.db.delete(args.id);
   },
 });
 
-// Clear all QR readers (used when creating Nova AG)
+// Clear all QR readers (actually delete from database)
 export const clearAll = mutation({
   args: {},
   handler: async (ctx) => {
@@ -69,9 +67,7 @@ export const clearAll = mutation({
       .collect();
 
     for (const reader of readers) {
-      await ctx.db.patch(reader._id, {
-        isActive: false,
-      });
+      await ctx.db.delete(reader._id);
     }
 
     return readers.length;
