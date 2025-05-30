@@ -419,15 +419,15 @@ Equipe IFMSA Brazil
       <td style="padding: 20px 0;">
         <div class="email-container">
           <!-- Header -->
-          <div class="header">
+    <div class="header">
             <div class="icon">✅</div>
             <h1>Inscrição Confirmada</h1>
-            <h2>${confirmData.assemblyName}</h2>
-          </div>
+      <h2>${confirmData.assemblyName}</h2>
+    </div>
           
           <!-- Content -->
-          <div class="content">
-            <p>Olá <strong>${confirmData.participantName}</strong>,</p>
+    <div class="content">
+      <p>Olá <strong>${confirmData.participantName}</strong>,</p>
             <p>Ficamos felizes em confirmar que sua inscrição foi recebida com sucesso!</p>
             
             <div class="status-badge">Inscrição Registrada</div>
@@ -454,9 +454,9 @@ Equipe IFMSA Brazil
                 <span class="detail-label">Modalidade:</span>
                 <span class="detail-value">${confirmData.modalityName}</span>
               </div>
-            </div>
-            
-            ${confirmData.paymentRequired ? `
+      </div>
+      
+      ${confirmData.paymentRequired ? `
             <div class="payment-section">
               <h3>💳 Informações de Pagamento</h3>
               <p>Para completar sua inscrição, é necessário realizar o pagamento:</p>
@@ -465,11 +465,11 @@ Equipe IFMSA Brazil
               ${confirmData.registrationUrl ? `
               <a href="${confirmData.registrationUrl}" class="btn">Enviar Comprovante de Pagamento</a>
               ` : ''}
-            </div>
+      </div>
             ` : `
             <div class="success-message">
               <p>✨ Sua inscrição está sendo analisada e você receberá uma confirmação em breve!</p>
-            </div>
+    </div>
             `}
             
             <h3>📞 Precisa de Ajuda?</h3>
@@ -477,12 +477,12 @@ Equipe IFMSA Brazil
           </div>
           
           <!-- Footer -->
-          <div class="footer">
+    <div class="footer">
             <p class="logo">IFMSA Brazil</p>
             <p>Conectando estudantes de medicina em todo o Brasil</p>
             <p>Este email foi enviado automaticamente, por favor não responda.</p>
-          </div>
-        </div>
+    </div>
+  </div>
       </td>
     </tr>
   </table>
@@ -801,19 +801,19 @@ Equipe IFMSA Brazil
       <td style="padding: 20px 0;">
         <div class="email-container">
           <!-- Header -->
-          <div class="header">
+    <div class="header">
             <div class="icon">🎉</div>
             <h1>Parabéns!</h1>
             <h2>Sua inscrição foi aprovada</h2>
-          </div>
+    </div>
           
           <!-- Content -->
-          <div class="content">
+    <div class="content">
             <div class="success-hero">
               <h3>Inscrição Aprovada!</h3>
               <p>Olá <strong>${approvedData.participantName}</strong>, sua participação está confirmada!</p>
-            </div>
-            
+      </div>
+      
             <div class="status-badge">✅ Aprovado</div>
             
             <div class="details-card">
@@ -838,16 +838,16 @@ Equipe IFMSA Brazil
                 <span class="detail-label">Modalidade:</span>
                 <span class="detail-value">${approvedData.modalityName}</span>
               </div>
-            </div>
-            
-            ${approvedData.additionalInstructions ? `
+      </div>
+      
+      ${approvedData.additionalInstructions ? `
             <div class="instructions-section">
               <h3>📝 Instruções Importantes</h3>
-              <p>${approvedData.additionalInstructions}</p>
-            </div>
-            ` : ''}
-            
-            ${approvedData.qrCodeUrl ? `
+        <p>${approvedData.additionalInstructions}</p>
+      </div>
+      ` : ''}
+      
+      ${approvedData.qrCodeUrl ? `
             <div class="details-card">
               <h3>📱 QR Code de Participação</h3>
               <p>Seu QR Code de participação está pronto! Use-o para fazer check-in no evento:</p>
@@ -855,8 +855,8 @@ Equipe IFMSA Brazil
               <p style="font-size: 14px; color: #64748b; margin-top: 15px;">
                 <strong>Dica:</strong> Salve este link nos seus favoritos para acesso rápido durante o evento.
               </p>
-            </div>
-            ` : ''}
+      </div>
+      ` : ''}
             
             <h3>🌟 Próximos Passos</h3>
             <p>Sua inscrição está confirmada! Agora você pode:</p>
@@ -866,17 +866,17 @@ Equipe IFMSA Brazil
               <li>Ficar atento aos comunicados que enviaremos</li>
               <li>Entrar em contato conosco se tiver alguma dúvida</li>
             </ul>
-          </div>
+    </div>
           
           <!-- Footer -->
-          <div class="footer">
+    <div class="footer">
             <div class="celebration">🎊 🎉 🎊</div>
             <p class="logo">IFMSA Brazil</p>
             <p><strong>Nos vemos na assembleia!</strong></p>
             <p>Conectando estudantes de medicina em todo o Brasil</p>
             <p>Este email foi enviado automaticamente, por favor não responda.</p>
-          </div>
-        </div>
+    </div>
+  </div>
       </td>
     </tr>
   </table>
