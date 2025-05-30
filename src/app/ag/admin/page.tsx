@@ -56,6 +56,28 @@ import { api as convexApi } from "../../../../convex/_generated/api";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
+// Helper functions for participant type and room restriction labels
+const getParticipantTypeLabel = (type: string) => {
+    switch (type?.toLowerCase()) {
+        case "eb": return "Executive Board";
+        case "cr": return "Country Representative";
+        case "comite_local": return "Comitê Local";
+        case "comite_aspirante": return "Comitê Aspirante";
+        case "supco": return "Conselho Supervisor";
+        case "observador_externo": return "Observador Externo";
+        case "alumni": return "Alumni";
+        default: return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || "N/A";
+    }
+};
+
+const getRoomRestrictionLabel = (restriction: string) => {
+    switch (restriction?.toLowerCase()) {
+        case "nao": return "Sem restrições";
+        case "mesmo_sexo": return "Mesmo sexo";
+        default: return restriction || "N/A";
+    }
+};
+
 type AGConfig = {
     _id: string;
     codeOfConductUrl?: string;
@@ -194,6 +216,29 @@ function ModalityRegistrationsView({ modality, onReviewRegistration }: {
             case "rejected": return "Rejeitado";
             case "cancelled": return "Cancelado";
             default: return status;
+        }
+    };
+
+    // Format participant type with polished labels
+    const getParticipantTypeLabel = (type: string) => {
+        switch (type?.toLowerCase()) {
+            case "eb": return "Executive Board";
+            case "cr": return "Country Representative";
+            case "comite_local": return "Comitê Local";
+            case "comite_aspirante": return "Comitê Aspirante";
+            case "supco": return "Conselho Supervisor";
+            case "observador_externo": return "Observador Externo";
+            case "alumni": return "Alumni";
+            default: return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || "N/A";
+        }
+    };
+
+    // Format room restrictions with polished labels
+    const getRoomRestrictionLabel = (restriction: string) => {
+        switch (restriction?.toLowerCase()) {
+            case "nao": return "Sem restrições";
+            case "mesmo_sexo": return "Mesmo sexo";
+            default: return restriction || "N/A";
         }
     };
 
@@ -1185,7 +1230,7 @@ export default function AGAdminPage() {
                                                             </TableCell>
                                                             <TableCell>
                                                                 <Badge variant="outline">
-                                                                    {registration.participantType.toUpperCase()}
+                                                                    {getParticipantTypeLabel(registration.participantType)}
                                                                 </Badge>
                                                             </TableCell>
                                                             <TableCell>{registration.email}</TableCell>
@@ -1349,7 +1394,7 @@ export default function AGAdminPage() {
                                                             </TableCell>
                                                             <TableCell>
                                                                 <Badge variant="outline">
-                                                                    {registration.participantType.toUpperCase()}
+                                                                    {getParticipantTypeLabel(registration.participantType)}
                                                                 </Badge>
                                                             </TableCell>
                                                             <TableCell>{registration.email}</TableCell>
@@ -1457,7 +1502,7 @@ export default function AGAdminPage() {
                                                 <div>
                                                     <Label className="font-semibold text-blue-700">Tipo de Participante:</Label>
                                                     <Badge variant="outline" className="text-xs">
-                                                        {selectedRegistration.participantType.toUpperCase()}
+                                                        {getParticipantTypeLabel(selectedRegistration.participantType)}
                                                     </Badge>
                                                 </div>
                                                 <div>
@@ -1593,7 +1638,7 @@ export default function AGAdminPage() {
                                                 {selectedRegistration.restricaoQuarto && (
                                                     <div>
                                                         <Label className="font-semibold text-purple-700">Restrições de Quarto:</Label>
-                                                        <p className="text-sm p-2 bg-purple-50 rounded">{selectedRegistration.restricaoQuarto}</p>
+                                                        <p className="text-sm p-2 bg-purple-50 rounded">{getRoomRestrictionLabel(selectedRegistration.restricaoQuarto)}</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -2025,6 +2070,6 @@ function ModalityCard({ modality, onEdit, onDelete }: {
                     </div>
                 </div>
             </CardContent>
-        </Card>
+        </Card> 
     );
 } 
