@@ -35,7 +35,7 @@ import { api as convexApi } from "../../../../../convex/_generated/api";
 import { api } from "~/trpc/react";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
-import { handleNewRegistration } from "~/app/actions/emailExamples";
+import { handleNewRegistration, handleRegistrationApproval } from "~/app/actions/emailExamples";
 
 // Brazilian states
 const BRAZILIAN_STATES = [
@@ -295,6 +295,7 @@ export default function AGRegistrationPage() {
                     if (!assembly || !selectedModality) {
                         console.warn('⚠️ Cannot send AGE confirmation email: missing assembly or modality data');
                     } else {
+                        // Send confirmation email first
                         await handleNewRegistration({
                             registrationId: registrationId as string,
                             participantName: formData.nome,
@@ -308,9 +309,23 @@ export default function AGRegistrationPage() {
                             paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price : undefined,
                         });
                         console.log('✅ AGE confirmation email sent successfully');
+
+                        // Send approval email since AGE is auto-approved
+                        await handleRegistrationApproval({
+                            registrationId: registrationId as string,
+                            participantName: formData.nome,
+                            participantEmail: formData.email,
+                            assemblyName: assembly.name,
+                            assemblyLocation: assembly.location,
+                            assemblyStartDate: new Date(assembly.startDate),
+                            assemblyEndDate: new Date(assembly.endDate),
+                            modalityName: selectedModality.name,
+                            additionalInstructions: "Sua inscrição AGE foi aprovada automaticamente. Você receberá mais informações sobre o evento em breve."
+                        });
+                        console.log('✅ AGE approval email sent successfully');
                     }
                 } catch (emailError) {
-                    console.error('⚠️ Failed to send AGE confirmation email:', emailError);
+                    console.error('⚠️ Failed to send AGE emails:', emailError);
                     // Don't fail the registration if email fails
                 }
                 
