@@ -55,6 +55,7 @@ import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../convex/_generated/api";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
+import { handleRegistrationApproval, handleRegistrationRejection } from "~/app/actions/emailExamples";
 
 // Helper functions for participant type and room restriction labels
 const getParticipantTypeLabel = (type: string) => {
@@ -73,7 +74,7 @@ const getParticipantTypeLabel = (type: string) => {
 const getRoomRestrictionLabel = (restriction: string) => {
     switch (restriction?.toLowerCase()) {
         case "nao": return "Sem restrições";
-        case "mesmo_sexo": return "Mesmo sexo";
+        case "mesmo_sexo": return "Somente com pessoas do mesmo sexo";
         default: return restriction || "N/A";
     }
 };
@@ -237,7 +238,7 @@ function ModalityRegistrationsView({ modality, onReviewRegistration }: {
     const getRoomRestrictionLabel = (restriction: string) => {
         switch (restriction?.toLowerCase()) {
             case "nao": return "Sem restrições";
-            case "mesmo_sexo": return "Mesmo sexo";
+            case "mesmo_sexo": return "Somente com pessoas do mesmo sexo";
             default: return restriction || "N/A";
         }
     };
@@ -527,9 +528,40 @@ export default function AGAdminPage() {
                 notes,
             });
             
+            // Send approval email
+            if (selectedRegistration && assemblies) {
+                try {
+                    const assembly = assemblies.find(a => a._id === selectedRegistration.assemblyId);
+                    let modalityName = "N/A";
+                    
+                    if (selectedRegistration.modalityId && modalities) {
+                        const modality = modalities.find(m => m._id === selectedRegistration.modalityId);
+                        modalityName = modality?.name || "N/A";
+                    }
+                    
+                    if (assembly) {
+                        await handleRegistrationApproval({
+                            registrationId: selectedRegistration._id,
+                            participantName: selectedRegistration.participantName,
+                            participantEmail: selectedRegistration.email || '',
+                            assemblyName: assembly.name,
+                            assemblyLocation: assembly.location,
+                            assemblyStartDate: new Date(assembly.startDate),
+                            assemblyEndDate: new Date(assembly.endDate),
+                            modalityName: modalityName,
+                            additionalInstructions: notes || "Sua inscrição foi aprovada pela equipe da IFMSA Brazil."
+                        });
+                        console.log('✅ Approval email sent successfully');
+                    }
+                } catch (emailError) {
+                    console.error('⚠️ Failed to send approval email:', emailError);
+                    // Don't fail the approval if email fails, just log the error
+                }
+            }
+            
             toast({
                 title: "✅ Inscrição Aprovada",
-                description: "A inscrição foi aprovada com sucesso.",
+                description: "A inscrição foi aprovada com sucesso e o participante foi notificado por email.",
             });
             
             setReviewDialogOpen(false);
@@ -542,7 +574,7 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, approveRegistration, toast]);
+    }, [session?.user?.id, approveRegistration, toast, selectedRegistration, assemblies, modalities]);
 
     const handleRejectRegistration = useCallback(async (registrationId: string, notes?: string) => {
         if (!session?.user?.id) return;
@@ -564,9 +596,31 @@ export default function AGAdminPage() {
                 notes,
             });
             
+            // Send rejection email
+            if (selectedRegistration && assemblies) {
+                try {
+                    const assembly = assemblies.find(a => a._id === selectedRegistration.assemblyId);
+                    
+                    if (assembly) {
+                        await handleRegistrationRejection({
+                            registrationId: selectedRegistration._id,
+                            participantName: selectedRegistration.participantName,
+                            participantEmail: selectedRegistration.email || '',
+                            assemblyName: assembly.name,
+                            rejectionReason: notes,
+                            canResubmit: true,
+                        });
+                        console.log('✅ Rejection email sent successfully');
+                    }
+                } catch (emailError) {
+                    console.error('⚠️ Failed to send rejection email:', emailError);
+                    // Don't fail the rejection if email fails, just log the error
+                }
+            }
+            
             toast({
                 title: "✅ Inscrição Rejeitada",
-                description: "A inscrição foi rejeitada com sucesso.",
+                description: "A inscrição foi rejeitada com sucesso e o participante foi notificado por email.",
             });
             
             setReviewDialogOpen(false);
@@ -579,7 +633,7 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, rejectRegistration, toast]);
+    }, [session?.user?.id, rejectRegistration, toast, selectedRegistration, assemblies]);
 
     const handleBulkApprove = useCallback(async () => {
         if (!session?.user?.id || selectedRegistrations.length === 0) return;
