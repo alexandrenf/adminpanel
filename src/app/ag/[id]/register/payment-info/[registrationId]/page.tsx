@@ -34,8 +34,9 @@ export default function PaymentInfoPage() {
     const params = useParams();
     const { toast } = useToast();
     
-    const assemblyId = params.id as string;
-    const registrationId = params.registrationId as string;
+    // Get IDs with type safety
+    const assemblyId = params?.id;
+    const registrationId = params?.registrationId;
     
     // State - all hooks at the top
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
@@ -47,11 +48,11 @@ export default function PaymentInfoPage() {
     // Queries - all hooks at the top
     const registration = useQuery(
         convexApi.agRegistrations?.getById, 
-        { id: registrationId as any }
+        registrationId ? { id: registrationId as any } : "skip"
     );
     const assembly = useQuery(
         convexApi.assemblies?.getById, 
-        { id: assemblyId as any }
+        assemblyId ? { id: assemblyId as any } : "skip"
     );
     const modality = useQuery(
         convexApi.registrationModalities?.getById,
@@ -65,7 +66,7 @@ export default function PaymentInfoPage() {
 
     // All callbacks at the top
     const handleUploadReceipt = useCallback(async () => {
-        if (!selectedFile) return;
+        if (!selectedFile || !registrationId || !assemblyId) return;
 
         setIsUploading(true);
         try {
@@ -193,9 +194,21 @@ export default function PaymentInfoPage() {
                 const result = await isIfmsaEmailSession(session);
                 setIsIfmsaEmail(result);
             };
-            checkEmail();
+            void checkEmail();
         }
     }, [session]);
+
+    // Show error if IDs are missing
+    if (!assemblyId || !registrationId) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-red-600">Erro</h1>
+                    <p className="mt-2">Parâmetros inválidos.</p>
+                </div>
+            </div>
+        );
+    }
 
     // Loading state
     if (isIfmsaEmail === null) {
