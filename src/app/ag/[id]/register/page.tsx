@@ -76,17 +76,18 @@ export default function AGRegistrationPage() {
     const params = useParams();
     const { toast } = useToast();
     
-    const assemblyId = params.id as string;
+    // Get assemblyId with type safety
+    const assemblyId = params?.id;
     
     // Convex queries
-    const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
+    const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
     const registrationStatus = useQuery(
         convexApi.agRegistrations?.getUserRegistrationStatus,
-        session?.user?.id ? { assemblyId: assemblyId as any, userId: session.user.id } : "skip"
+        session?.user?.id && assemblyId ? { assemblyId: assemblyId as any, userId: session.user.id } : "skip"
     );
     const activeModalities = useQuery(
         convexApi.registrationModalities?.getActiveByAssembly,
-        { assemblyId: assemblyId as any }
+        assemblyId ? { assemblyId: assemblyId as any } : "skip"
     );
     
     // Add AG config query to check global registration settings
@@ -330,47 +331,35 @@ export default function AGRegistrationPage() {
         }
     }, [validateForm, formData, assemblyId, assembly?.type, session, createRegistration, toast, router]);
 
-    // Check if user has IFMSA email
+    // Check email domain
     useEffect(() => {
         const checkEmail = async () => {
-            if (session) {
+            if (session?.user?.email) {
                 const result = await isIfmsaEmailSession(session);
                 setIsIfmsaEmail(result);
-            } else {
-                setIsIfmsaEmail(false);
             }
         };
-        checkEmail();
-    }, [session]);
+        void checkEmail();
+    }, [session?.user?.email]);
 
-    // Pre-populate email when session loads
+    // Redirect if already registered
     useEffect(() => {
-        if (session?.user?.email && !formData.email) {
-            // Check if there's saved data from session storage first
-            const savedData = sessionStorage.getItem('agRegistrationStep1');
-            if (savedData) {
-                try {
-                    const parsedData = JSON.parse(savedData) as RegistrationFormData;
-                    setFormData(parsedData);
-                } catch (error) {
-                    console.error("Error parsing saved step 1 data:", error);
-                    // Fallback to session data
-                    setFormData(prev => ({
-                        ...prev,
-                        email: session.user.email!,
-                        nome: session.user.name || "",
-                    }));
-                }
-            } else {
-                // No saved data, use session data
-                setFormData(prev => ({
-                    ...prev,
-                    email: session.user.email!,
-                    nome: session.user.name || "",
-                }));
-            }
+        if (registrationStatus?.status === "approved") {
+            router.push(`/ag/${assemblyId}/register/complete/${registrationStatus.registrationId}`);
         }
-    }, [session, formData.email]);
+    }, [registrationStatus, router, assemblyId]);
+
+    // If no assemblyId, show error
+    if (!assemblyId) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-red-600">Erro</h1>
+                    <p className="mt-2">ID da assembleia não encontrado.</p>
+                </div>
+            </div>
+        );
+    }
 
     if (!session) {
         return (
