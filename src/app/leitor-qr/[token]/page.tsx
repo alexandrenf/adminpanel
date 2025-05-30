@@ -21,7 +21,9 @@ type ScannedMember = {
 };
 
 export default function QrReaderPage() {
-    const { token } = useParams();
+    const params = useParams();
+    const token = params?.token as string;
+    
     const [isScanning, setIsScanning] = useState(true);
     const [scannedData, setScannedData] = useState<ScannedMember | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
