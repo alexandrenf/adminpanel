@@ -17,6 +17,7 @@ import type * as agConfig from "../agConfig.js";
 import type * as agRegistrations from "../agRegistrations.js";
 import type * as assemblies from "../assemblies.js";
 import type * as attendance from "../attendance.js";
+import type * as files from "../files.js";
 import type * as qrReaders from "../qrReaders.js";
 
 /**
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   agRegistrations: typeof agRegistrations;
   assemblies: typeof assemblies;
   attendance: typeof attendance;
+  files: typeof files;
   qrReaders: typeof qrReaders;
 }>;
 export declare const api: FilterApi<

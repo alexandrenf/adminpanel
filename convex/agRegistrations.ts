@@ -527,4 +527,69 @@ export const createFromForm = mutation({
       specialNeeds: args.additionalInfo.necessidadesEspeciais,
     });
   },
+});
+
+// Update registration with payment receipt
+export const updatePaymentReceipt = mutation({
+  args: {
+    registrationId: v.id("agRegistrations"),
+    receiptStorageId: v.string(),
+    receiptFileName: v.string(),
+    receiptFileType: v.string(),
+    receiptFileSize: v.number(),
+    uploadedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const registration = await ctx.db.get(args.registrationId);
+    if (!registration) {
+      throw new Error("Registration not found");
+    }
+
+    if (registration.status === "cancelled") {
+      throw new Error("Cannot update a cancelled registration");
+    }
+
+    await ctx.db.patch(args.registrationId, {
+      status: "pending_review", // Status changes to pending review after receipt upload
+      receiptStorageId: args.receiptStorageId,
+      receiptFileName: args.receiptFileName,
+      receiptFileType: args.receiptFileType,
+      receiptFileSize: args.receiptFileSize,
+      receiptUploadedAt: Date.now(),
+      receiptUploadedBy: args.uploadedBy,
+    });
+
+    return args.registrationId;
+  },
+});
+
+// Get user registration status for an assembly
+export const getUserRegistrationStatus = query({
+  args: { 
+    assemblyId: v.id("assemblies"),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const registration = await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_assembly")
+      .filter((q) => 
+        q.and(
+          q.eq(q.field("assemblyId"), args.assemblyId),
+          q.eq(q.field("participantId"), args.userId)
+        )
+      )
+      .first();
+
+    if (!registration) {
+      return null;
+    }
+
+    return {
+      registrationId: registration._id,
+      status: registration.status,
+      registeredAt: registration.registeredAt,
+      hasReceipt: !!registration.receiptStorageId,
+    };
+  },
 }); 

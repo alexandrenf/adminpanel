@@ -26,7 +26,8 @@ import {
     BarChart3,
     Download,
     AlertTriangle,
-    RefreshCw
+    RefreshCw,
+    CreditCard
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -933,6 +934,108 @@ export default function AGPage() {
 
     // Assembly User Card Component
     function AssemblyUserCard({ assembly }: { assembly: Assembly }) {
+        // Get user registration status for this assembly
+        const registrationStatus = useQuery(
+            convexApi.agRegistrations?.getUserRegistrationStatus,
+            session?.user?.id ? {
+                assemblyId: assembly._id as any,
+                userId: session.user.id
+            } : "skip"
+        );
+
+        const getRegistrationButton = () => {
+            if (!assembly.registrationOpen) {
+                return (
+                    <Button 
+                        className="w-full"
+                        disabled
+                        variant="outline"
+                    >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Inscrições Fechadas
+                    </Button>
+                );
+            }
+
+            if (!registrationStatus) {
+                return (
+                    <Button 
+                        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                        onClick={() => router.push(`/ag/${assembly._id}/register`)}
+                    >
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Inscrever-se
+                    </Button>
+                );
+            }
+
+            // User has a registration
+            switch (registrationStatus.status) {
+                case "pending":
+                    if (registrationStatus.hasReceipt) {
+                        return (
+                            <Button 
+                                className="w-full bg-amber-500 hover:bg-amber-600"
+                                disabled
+                            >
+                                <Clock className="w-4 h-4 mr-2" />
+                                Esperando Análise
+                            </Button>
+                        );
+                    } else {
+                        return (
+                            <Button 
+                                className="w-full bg-orange-500 hover:bg-orange-600"
+                                onClick={() => router.push(`/ag/${assembly._id}/register/payment-info/${registrationStatus.registrationId}`)}
+                            >
+                                <CreditCard className="w-4 h-4 mr-2" />
+                                Esperando Pagamento
+                            </Button>
+                        );
+                    }
+                case "pending_review":
+                    return (
+                        <Button 
+                            className="w-full bg-amber-500 hover:bg-amber-600"
+                            disabled
+                        >
+                            <Clock className="w-4 h-4 mr-2" />
+                            Esperando Análise
+                        </Button>
+                    );
+                case "approved":
+                    return (
+                        <Button 
+                            className="w-full bg-green-500 hover:bg-green-600"
+                            disabled
+                        >
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Inscrito(a)
+                        </Button>
+                    );
+                case "rejected":
+                    return (
+                        <Button 
+                            className="w-full bg-red-500 hover:bg-red-600"
+                            disabled
+                        >
+                            <XCircle className="w-4 h-4 mr-2" />
+                            Inscrição Rejeitada
+                        </Button>
+                    );
+                default:
+                    return (
+                        <Button 
+                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                            onClick={() => router.push(`/ag/${assembly._id}/register`)}
+                        >
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            Inscrever-se
+                        </Button>
+                    );
+            }
+        };
+
         return (
             <Card className="shadow-lg border-0 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
@@ -948,6 +1051,15 @@ export default function AGPage() {
                         ) : (
                             <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
                                 Inscrições Fechadas
+                            </Badge>
+                        )}
+                        {registrationStatus && (
+                            <Badge variant="outline" className="text-xs">
+                                {registrationStatus.status === "pending" && !registrationStatus.hasReceipt && "Pag. Pendente"}
+                                {registrationStatus.status === "pending" && registrationStatus.hasReceipt && "Em Análise"}
+                                {registrationStatus.status === "pending_review" && "Em Análise"}
+                                {registrationStatus.status === "approved" && "Aprovado"}
+                                {registrationStatus.status === "rejected" && "Rejeitado"}
                             </Badge>
                         )}
                     </div>
@@ -975,14 +1087,7 @@ export default function AGPage() {
                             </p>
                         )}
                         <div className="pt-3 border-t">
-                            <Button 
-                                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                                onClick={() => router.push(`/ag/${assembly._id}/register`)}
-                                disabled={!assembly.registrationOpen}
-                            >
-                                <UserPlus className="w-4 h-4 mr-2" />
-                                {assembly.registrationOpen ? "Inscrever-se" : "Inscrições Fechadas"}
-                            </Button>
+                            {getRegistrationButton()}
                         </div>
                     </div>
                 </CardContent>

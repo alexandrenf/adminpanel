@@ -71,7 +71,7 @@ export default defineSchema({
     participantStatus: v.optional(v.string()), // for comites: "Pleno" | "Não-pleno"
     registeredAt: v.number(), // timestamp
     registeredBy: v.string(), // user identifier who registered
-    status: v.string(), // "pending" | "approved" | "rejected" | "cancelled"
+    status: v.string(), // "pending" | "approved" | "rejected" | "cancelled" | "pending_review"
     // Additional participant data
     escola: v.optional(v.string()),
     regional: v.optional(v.string()),
@@ -86,6 +86,13 @@ export default defineSchema({
     reviewedAt: v.optional(v.number()),
     reviewedBy: v.optional(v.string()),
     reviewNotes: v.optional(v.string()),
+    // Payment receipt fields
+    receiptStorageId: v.optional(v.string()),
+    receiptFileName: v.optional(v.string()),
+    receiptFileType: v.optional(v.string()),
+    receiptFileSize: v.optional(v.number()),
+    receiptUploadedAt: v.optional(v.number()),
+    receiptUploadedBy: v.optional(v.string()),
   }).index("by_assembly", ["assemblyId"])
     .index("by_participant", ["participantId"])
     .index("by_status", ["status"])
