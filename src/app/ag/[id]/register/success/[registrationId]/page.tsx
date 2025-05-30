@@ -246,7 +246,7 @@ export default function RegistrationSuccessPage() {
                                 </div>
                                 <div>
                                     <Label className="font-semibold text-gray-700">Data de Início:</Label>
-                                    <p>{new Date(assembly.startDate).toLocaleDateString('pt-BR')}</p>
+                                    <p>{formatDateWithoutTimezone(assembly.startDate)}</p>
                                 </div>
                                 <div>
                                     <Label className="font-semibold text-gray-700">Data de Término:</Label>
@@ -254,7 +254,16 @@ export default function RegistrationSuccessPage() {
                                 </div>
                                 <div>
                                     <Label className="font-semibold text-gray-700">Duração:</Label>
-                                    <p>{Math.ceil((assembly.endDate - assembly.startDate) / (1000 * 60 * 60 * 24))} dias</p>
+                                    <p>
+                                        {(() => {
+                                            const diffTime = Math.abs(assembly.endDate - assembly.startDate);
+                                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                            // For events that start and end on different days, show the difference
+                                            // For events that start and end on the same day, show 1 day
+                                            const duration = diffDays === 0 ? 1 : diffDays;
+                                            return `${duration} ${duration === 1 ? 'dia' : 'dias'}`;
+                                        })()}
+                                    </p>
                                 </div>
                             </div>
                         </CardContent>
