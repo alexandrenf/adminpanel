@@ -19,6 +19,7 @@ import type * as assemblies from "../assemblies.js";
 import type * as attendance from "../attendance.js";
 import type * as files from "../files.js";
 import type * as qrReaders from "../qrReaders.js";
+import type * as registrationModalities from "../registrationModalities.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   attendance: typeof attendance;
   files: typeof files;
   qrReaders: typeof qrReaders;
+  registrationModalities: typeof registrationModalities;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

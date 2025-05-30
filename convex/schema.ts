@@ -60,7 +60,7 @@ export default defineSchema({
     maxParticipants: v.optional(v.number()),
     description: v.optional(v.string()),
     // Payment settings
-    paymentRequired: v.boolean(), // Whether this assembly requires payment (AGEs default false, AGs default true)
+    paymentRequired: v.optional(v.boolean()), // Whether this assembly requires payment (AGEs default false, AGs default true)
   }).index("by_status", ["status"])
     .index("by_created_at", ["createdAt"]),
 

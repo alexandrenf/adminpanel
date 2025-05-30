@@ -366,4 +366,29 @@ export const getRegistrationStats = query({
 
     return stats;
   },
+});
+
+// Update payment required field for existing assemblies
+export const updatePaymentRequired = mutation({
+  args: {
+    id: v.id("assemblies"),
+    lastUpdatedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const assembly = await ctx.db.get(args.id);
+    if (!assembly) {
+      throw new Error("Assembly not found");
+    }
+
+    // Set paymentRequired based on type (AG = true, AGE = false)
+    const paymentRequired = assembly.type === "AG";
+
+    await ctx.db.patch(args.id, {
+      paymentRequired,
+      lastUpdated: Date.now(),
+      lastUpdatedBy: args.lastUpdatedBy,
+    });
+
+    return args.id;
+  },
 }); 
