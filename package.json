@@ -41,6 +41,7 @@
     "@trpc/client": "next",
     "@trpc/react-query": "next",
     "@trpc/server": "next",
+    "@types/jszip": "^3.4.1",
     "@types/qrcode": "^1.5.5",
     "@uiw/react-md-editor": "^4.0.7",
     "@yudiel/react-qr-scanner": "^2.3.1",

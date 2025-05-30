@@ -12,7 +12,6 @@ import {
     Users, 
     Settings, 
     Plus,
-    Archive,
     Trash2,
     Edit,
     Eye,
@@ -488,100 +487,6 @@ const DeleteAGDialog = ({
 
 DeleteAGDialog.displayName = 'DeleteAGDialog';
 
-// Archive AG Dialog Component
-const ArchiveAGDialog = ({ 
-    isOpen, 
-    onOpenChange, 
-    assembly,
-    onConfirm 
-}: {
-    isOpen: boolean;
-    onOpenChange: (open: boolean) => void;
-    assembly: Assembly | null;
-    onConfirm: (assemblyId: string, confirmationText: string) => void;
-}) => {
-    const [confirmationText, setConfirmationText] = useState("");
-
-    const handleConfirm = () => {
-        if (assembly) {
-            onConfirm(assembly._id, confirmationText);
-        }
-    };
-
-    // Reset confirmation text when dialog opens
-    useEffect(() => {
-        if (isOpen) {
-            setConfirmationText("");
-        }
-    }, [isOpen]);
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center space-x-2">
-                        <Archive className="w-5 h-5 text-orange-600" />
-                        <span>Arquivar Assembleia Geral</span>
-                    </DialogTitle>
-                    <DialogDescription>
-                        Esta ação irá mover permanentemente todos os dados da AG para o banco de dados de arquivo.
-                    </DialogDescription>
-                </DialogHeader>
-                
-                <div className="py-4">
-                    <div className="space-y-4">
-                        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                            <p className="text-sm text-orange-800">
-                                <strong>⚠️ Atenção:</strong> Ao arquivar esta assembleia:
-                            </p>
-                            <ul className="mt-2 text-sm text-orange-700 list-disc list-inside space-y-1">
-                                <li>Todos os dados serão movidos para o banco de dados de arquivo</li>
-                                <li>A assembleia não aparecerá mais na lista ativa</li>
-                                <li>Todos os participantes pré-carregados serão arquivados</li>
-                                <li>Todas as inscrições de usuários serão arquivadas</li>
-                                <li>Todas as modalidades de inscrição serão arquivadas</li>
-                                <li>Comprovantes de pagamento serão preservados</li>
-                                <li>Um snapshot da configuração atual será salvo</li>
-                            </ul>
-                            <p className="mt-2 text-sm text-orange-800 font-medium">
-                                Os dados arquivados podem ser consultados na seção de "Arquivos", mas a assembleia não estará mais ativa.
-                            </p>
-                        </div>
-                        
-                        <div>
-                            <Label htmlFor="archive-confirmation">
-                                Para confirmar, digite o nome da AG: <strong>{assembly?.name}</strong>
-                            </Label>
-                            <Input
-                                id="archive-confirmation"
-                                value={confirmationText}
-                                onChange={(e) => setConfirmationText(e.target.value)}
-                                placeholder="Digite o nome da AG"
-                            />
-                        </div>
-                    </div>
-                </div>
-                
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancelar
-                    </Button>
-                    <Button 
-                        onClick={handleConfirm} 
-                        className="bg-orange-600 hover:bg-orange-700"
-                        disabled={confirmationText !== assembly?.name}
-                    >
-                        <Archive className="w-4 h-4 mr-2" />
-                        Arquivar AG
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-ArchiveAGDialog.displayName = 'ArchiveAGDialog';
-
 // Creation Progress Dialog - Fixed to prevent flickering
 const CreationProgressDialog = React.memo(({ 
     isOpen, 
@@ -643,7 +548,6 @@ export default function AGPage() {
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-    const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
     
     // formData for EDITING an existing assembly
@@ -660,8 +564,7 @@ export default function AGPage() {
     
     const createAssembly = useMutation(convexApi.assemblies?.create);
     const updateAssembly = useMutation(convexApi.assemblies?.update);
-    const archiveToSQL = useMutation(convexApi.assemblies?.archiveToSQL);
-    const deleteAssembly = useMutation(convexApi.assemblies?.remove);
+    const deleteAssembly = useMutation(convexApi.assemblies?.deleteWithRelatedData);
     const bulkInsertParticipants = useMutation(convexApi.assemblies?.bulkInsertParticipants);
     
     const { data: registrosData } = api.registros.get.useQuery();
@@ -678,10 +581,6 @@ export default function AGPage() {
 
     const handleDeleteDialogOpenChange = useCallback((open: boolean) => {
         setIsDeleteDialogOpen(open);
-    }, []);
-
-    const handleArchiveDialogOpenChange = useCallback((open: boolean) => {
-        setIsArchiveDialogOpen(open);
     }, []);
 
     // Function to get display names for participant types
@@ -837,24 +736,14 @@ export default function AGPage() {
         try {
             const result = await deleteAssembly({
                 id: assemblyId as any,
-                lastUpdatedBy: session.user.id,
+                deletedBy: session.user.id,
                 confirmationText,
             });
 
-            // Show detailed deletion summary
             toast({ 
                 title: "✅ AG Deletada Permanentemente", 
                 description: result?.message || `${selectedAssembly.name} e todos os dados relacionados foram deletados permanentemente.`,
             });
-
-            // Log deletion details for debugging/tracking
-            if (result) {
-                console.log(`Assembly deletion summary:`, {
-                    assemblyName: selectedAssembly.name,
-                    deletedRegistrations: result.deletedRegistrations,
-                    deletedParticipants: result.deletedParticipants,
-                });
-            }
 
             setIsDeleteDialogOpen(false);
             setSelectedAssembly(null);
@@ -868,37 +757,53 @@ export default function AGPage() {
         }
     }, [session?.user?.id, deleteAssembly, selectedAssembly, toast]);
 
-    // Handle archive AG confirmation
-    const handleArchiveAGConfirm = useCallback(async (assemblyId: string, confirmationText: string) => {
-        if (!session?.user?.id || !archiveToSQL || !selectedAssembly) return;
-
-        if (confirmationText !== selectedAssembly.name) {
-            toast({ title: "❌ Erro", description: "Nome de confirmação incorreto.", variant: "destructive" });
-            return;
-        }
-
+    // Handle download report
+    const handleDownloadReport = useCallback(async (assembly: Assembly) => {
         try {
-            const result = await archiveToSQL({
-                id: assemblyId as any,
-                archivedBy: session.user.id,
+            toast({ 
+                title: "📊 Gerando Relatório", 
+                description: "Preparando arquivo com todos os dados da AG...",
             });
+
+            const response = await fetch('/api/download-ag-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    assemblyId: assembly._id,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Erro ao gerar relatório');
+            }
+
+            // Create download link
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `relatorio_completo_${assembly.name.replace(/[^a-zA-Z0-9]/g, '_')}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
 
             toast({ 
-                title: "✅ AG Arquivada com Sucesso", 
-                description: `${selectedAssembly.name} foi arquivada e seus dados foram movidos para o banco de dados de arquivo.`,
+                title: "✅ Relatório Baixado", 
+                description: "Arquivo ZIP com dados da AG e comprovantes foi baixado com sucesso.",
             });
-
-            setIsArchiveDialogOpen(false);
-            setSelectedAssembly(null);
         } catch (error) {
-            console.error("Error archiving assembly:", error);
+            console.error("Error downloading report:", error);
             toast({ 
                 title: "❌ Erro", 
-                description: "Erro ao arquivar AG. Tente novamente.", 
+                description: "Erro ao baixar relatório. Tente novamente.", 
                 variant: "destructive" 
             });
         }
-    }, [session?.user?.id, archiveToSQL, selectedAssembly, toast]);
+    }, [toast]);
 
     useEffect(() => {
         const checkEmail = async () => {
@@ -939,9 +844,8 @@ export default function AGPage() {
             }
         };
 
-        const handleArchive = () => {
-            setSelectedAssembly(assembly);
-            setIsArchiveDialogOpen(true);
+        const handleDownload = () => {
+            handleDownloadReport(assembly);
         };
 
         const handleEdit = () => {
@@ -985,30 +889,26 @@ export default function AGPage() {
                             <Button
                                 size="sm"
                                 variant="outline"
+                                onClick={handleDownload}
+                                title="Baixar Relatório Completo"
+                            >
+                                <Download className="w-3 h-3" />
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
                                 onClick={handleEdit}
                             >
                                 <Edit className="w-3 h-3" />
                             </Button>
-                            {assembly.status === "active" && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={handleArchive}
-                                    className="hover:bg-yellow-50"
-                                >
-                                    <Archive className="w-3 h-3" />
-                                </Button>
-                            )}
-                            {assembly.status === "archived" && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={handleDelete}
-                                    className="hover:bg-red-50 text-red-600"
-                                >
-                                    <Trash2 className="w-3 h-3" />
-                                </Button>
-                            )}
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleDelete}
+                                className="hover:bg-red-50 text-red-600"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                            </Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -1339,13 +1239,6 @@ export default function AGPage() {
                 onConfirm={handleDeleteAGConfirm}
             />
 
-            <ArchiveAGDialog
-                isOpen={isArchiveDialogOpen}
-                onOpenChange={handleArchiveDialogOpenChange}
-                assembly={selectedAssembly}
-                onConfirm={handleArchiveAGConfirm}
-            />
-
             <CreationProgressDialog 
                 isOpen={isCreating}
                 creationProgress={creationProgress}
@@ -1367,14 +1260,6 @@ export default function AGPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center space-x-4">
-                            <Button 
-                                variant="outline"
-                                onClick={() => router.push("/ag/archived")}
-                                className="flex items-center space-x-2"
-                            >
-                                <Archive className="w-4 h-4" />
-                                <span>Ver Arquivadas</span>
-                            </Button>
                             <Button 
                                 onClick={() => setIsCreateDialogOpen(true)}
                                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"

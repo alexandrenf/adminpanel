@@ -147,11 +147,11 @@ export const archive = mutation({
   },
 });
 
-// Delete assembly (only if archived) with cascading deletion
-export const remove = mutation({
+// Delete assembly and all related data
+export const deleteWithRelatedData = mutation({
   args: {
     id: v.id("assemblies"),
-    lastUpdatedBy: v.string(),
+    deletedBy: v.string(),
     confirmationText: v.string(),
   },
   handler: async (ctx, args) => {
@@ -160,29 +160,47 @@ export const remove = mutation({
       throw new Error("Assembly not found");
     }
 
-    if (assembly.status !== "archived") {
-      throw new Error("Only archived assemblies can be deleted");
-    }
-
     // Verify confirmation text
     if (args.confirmationText !== assembly.name) {
       throw new Error("Confirmation text does not match assembly name");
     }
 
-    // CASCADING DELETE: Remove all related data permanently
-    
-    // 1. Delete all AG registrations for this assembly
+    // Delete all registrations for this assembly
     const registrations = await ctx.db
       .query("agRegistrations")
       .withIndex("by_assembly")
       .filter((q) => q.eq(q.field("assemblyId"), args.id))
       .collect();
 
+    // Delete payment receipts from file storage
+    const registrationsWithReceipts = registrations.filter(r => r.receiptStorageId);
+    for (const registration of registrationsWithReceipts) {
+      try {
+        // Delete the file from storage
+        await ctx.storage.delete(registration.receiptStorageId as any);
+      } catch (error) {
+        // Continue even if file deletion fails (file might not exist)
+        console.warn(`Failed to delete receipt file ${registration.receiptStorageId}:`, error);
+      }
+    }
+
+    // Delete all registrations
     for (const registration of registrations) {
       await ctx.db.delete(registration._id);
     }
 
-    // 2. Delete all AG participants for this assembly
+    // Delete all modalities for this assembly
+    const modalities = await ctx.db
+      .query("registrationModalities")
+      .withIndex("by_assembly")
+      .filter((q) => q.eq(q.field("assemblyId"), args.id))
+      .collect();
+
+    for (const modality of modalities) {
+      await ctx.db.delete(modality._id);
+    }
+
+    // Delete all participants for this assembly (if any)
     const participants = await ctx.db
       .query("agParticipants")
       .withIndex("by_assembly")
@@ -193,14 +211,15 @@ export const remove = mutation({
       await ctx.db.delete(participant._id);
     }
 
-    // 3. Finally, delete the assembly itself
+    // Finally, delete the assembly itself
     await ctx.db.delete(args.id);
 
-    // Return deletion summary
     return {
-      assemblyId: args.id,
+      deletedAssembly: args.id,
       deletedRegistrations: registrations.length,
+      deletedModalities: modalities.length,
       deletedParticipants: participants.length,
+      deletedFiles: registrationsWithReceipts.length,
       message: `Assembly "${assembly.name}" and all related data have been permanently deleted.`
     };
   },
@@ -393,95 +412,14 @@ export const updatePaymentRequired = mutation({
   },
 });
 
-// Delete assembly and all related data
-export const deleteWithRelatedData = mutation({
-  args: {
-    id: v.id("assemblies"),
-    deletedBy: v.string(),
-  },
+// Get all data for assembly report
+export const getAssemblyDataForReport = query({
+  args: { id: v.id("assemblies") },
   handler: async (ctx, args) => {
     const assembly = await ctx.db.get(args.id);
     if (!assembly) {
       throw new Error("Assembly not found");
     }
-
-    // Delete all registrations for this assembly
-    const registrations = await ctx.db
-      .query("agRegistrations")
-      .withIndex("by_assembly")
-      .filter((q) => q.eq(q.field("assemblyId"), args.id))
-      .collect();
-
-    // Delete payment receipts from file storage
-    const registrationsWithReceipts = registrations.filter(r => r.receiptStorageId);
-    for (const registration of registrationsWithReceipts) {
-      try {
-        // Delete the file from storage
-        await ctx.storage.delete(registration.receiptStorageId as any);
-      } catch (error) {
-        // Continue even if file deletion fails (file might not exist)
-        console.warn(`Failed to delete receipt file ${registration.receiptStorageId}:`, error);
-      }
-    }
-
-    // Delete all registrations
-    for (const registration of registrations) {
-      await ctx.db.delete(registration._id);
-    }
-
-    // Delete all modalities for this assembly
-    const modalities = await ctx.db
-      .query("registrationModalities")
-      .withIndex("by_assembly")
-      .filter((q) => q.eq(q.field("assemblyId"), args.id))
-      .collect();
-
-    for (const modality of modalities) {
-      await ctx.db.delete(modality._id);
-    }
-
-    // Delete all participants for this assembly (if any)
-    const participants = await ctx.db
-      .query("agParticipants")
-      .withIndex("by_assembly")
-      .filter((q) => q.eq(q.field("assemblyId"), args.id))
-      .collect();
-
-    for (const participant of participants) {
-      await ctx.db.delete(participant._id);
-    }
-
-    // Finally, delete the assembly itself
-    await ctx.db.delete(args.id);
-
-    return {
-      deletedAssembly: args.id,
-      deletedRegistrations: registrations.length,
-      deletedModalities: modalities.length,
-      deletedParticipants: participants.length,
-      deletedFiles: registrationsWithReceipts.length,
-    };
-  },
-});
-
-// Archive assembly to SQL database and remove from Convex
-export const archiveToSQL = mutation({
-  args: {
-    id: v.id("assemblies"),
-    archivedBy: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const assembly = await ctx.db.get(args.id);
-    if (!assembly) {
-      throw new Error("Assembly not found");
-    }
-
-    // Get current AG config for snapshot
-    const agConfig = await ctx.db
-      .query("agConfigs")
-      .withIndex("by_updated_at")
-      .order("desc")
-      .first();
 
     // Get all related data
     const participants = await ctx.db
@@ -502,199 +440,19 @@ export const archiveToSQL = mutation({
       .filter((q) => q.eq(q.field("assemblyId"), args.id))
       .collect();
 
-    // Call external API to archive data to SQL
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/archive-ag`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          assembly: {
-            id: assembly._id,
-            name: assembly.name,
-            type: assembly.type,
-            location: assembly.location,
-            startDate: assembly.startDate,
-            endDate: assembly.endDate,
-            originalStatus: assembly.status,
-            createdAt: assembly.createdAt,
-            createdBy: assembly.createdBy,
-            lastUpdated: assembly.lastUpdated,
-            lastUpdatedBy: assembly.lastUpdatedBy,
-            registrationOpen: assembly.registrationOpen,
-            registrationDeadline: assembly.registrationDeadline,
-            maxParticipants: assembly.maxParticipants,
-            description: assembly.description,
-            paymentRequired: assembly.paymentRequired,
-          },
-          participants: participants.map(p => ({
-            id: p._id,
-            assemblyId: p.assemblyId,
-            type: p.type,
-            participantId: p.participantId,
-            name: p.name,
-            role: p.role,
-            status: p.status,
-            escola: p.escola,
-            regional: p.regional,
-            cidade: p.cidade,
-            uf: p.uf,
-            agFiliacao: p.agFiliacao,
-            addedAt: p.addedAt,
-            addedBy: p.addedBy,
-          })),
-          registrations: await Promise.all(registrations.map(async (r) => {
-            let receiptFileData = null;
-            
-            // Download receipt file if it exists
-            if (r.receiptStorageId) {
-              try {
-                const fileUrl = await ctx.storage.getUrl(r.receiptStorageId);
-                if (fileUrl) {
-                  const fileResponse = await fetch(fileUrl);
-                  if (fileResponse.ok) {
-                    const buffer = await fileResponse.arrayBuffer();
-                    receiptFileData = Buffer.from(buffer).toString('base64');
-                  }
-                }
-              } catch (error) {
-                console.warn(`Failed to download receipt file ${r.receiptStorageId}:`, error);
-              }
-            }
+    // Get AG config for reference
+    const agConfig = await ctx.db
+      .query("agConfigs")
+      .withIndex("by_updated_at")
+      .order("desc")
+      .first();
 
-            return {
-              id: r._id,
-              assemblyId: r.assemblyId,
-              modalityId: r.modalityId,
-              participantType: r.participantType,
-              participantId: r.participantId,
-              participantName: r.participantName,
-              participantRole: r.participantRole,
-              participantStatus: r.participantStatus,
-              registeredAt: r.registeredAt,
-              registeredBy: r.registeredBy,
-              status: r.status,
-              escola: r.escola,
-              regional: r.regional,
-              cidade: r.cidade,
-              uf: r.uf,
-              agFiliacao: r.agFiliacao,
-              email: r.email,
-              phone: r.phone,
-              specialNeeds: r.specialNeeds,
-              emailSolar: r.emailSolar,
-              dataNascimento: r.dataNascimento,
-              cpf: r.cpf,
-              nomeCracha: r.nomeCracha,
-              celular: r.celular,
-              comiteLocal: r.comiteLocal,
-              comiteAspirante: r.comiteAspirante,
-              autorizacaoCompartilhamento: r.autorizacaoCompartilhamento,
-              experienciaAnterior: r.experienciaAnterior,
-              motivacao: r.motivacao,
-              expectativas: r.expectativas,
-              dietaRestricoes: r.dietaRestricoes,
-              alergias: r.alergias,
-              medicamentos: r.medicamentos,
-              necessidadesEspeciais: r.necessidadesEspeciais,
-              restricaoQuarto: r.restricaoQuarto,
-              pronomes: r.pronomes,
-              contatoEmergenciaNome: r.contatoEmergenciaNome,
-              contatoEmergenciaTelefone: r.contatoEmergenciaTelefone,
-              outrasObservacoes: r.outrasObservacoes,
-              participacaoComites: r.participacaoComites ? JSON.stringify(r.participacaoComites) : null,
-              interesseVoluntariado: r.interesseVoluntariado,
-              isPaymentExempt: r.isPaymentExempt,
-              paymentExemptReason: r.paymentExemptReason,
-              receiptFileName: r.receiptFileName,
-              receiptFileType: r.receiptFileType,
-              receiptFileSize: r.receiptFileSize,
-              receiptFileData,
-              receiptUploadedAt: r.receiptUploadedAt,
-              receiptUploadedBy: r.receiptUploadedBy,
-              reviewedAt: r.reviewedAt,
-              reviewedBy: r.reviewedBy,
-              reviewNotes: r.reviewNotes,
-              rejectionReason: r.rejectionReason,
-              resubmittedAt: r.resubmittedAt,
-              resubmissionNote: r.resubmissionNote,
-            };
-          })),
-          modalities: modalities.map(m => ({
-            id: m._id,
-            assemblyId: m.assemblyId,
-            name: m.name,
-            description: m.description,
-            price: m.price,
-            maxParticipants: m.maxParticipants,
-            isActive: m.isActive,
-            displayOrder: m.order,
-            createdAt: m.createdAt,
-            createdBy: m.createdBy,
-          })),
-          agConfig: agConfig ? {
-            codeOfConductUrl: agConfig.codeOfConductUrl,
-            paymentInfo: agConfig.paymentInfo,
-            paymentInstructions: agConfig.paymentInstructions,
-            bankDetails: agConfig.bankDetails,
-            pixKey: agConfig.pixKey,
-            registrationEnabled: agConfig.registrationEnabled,
-            autoApproval: agConfig.autoApproval,
-            originalCreatedAt: agConfig.createdAt,
-            originalUpdatedAt: agConfig.updatedAt,
-            originalUpdatedBy: agConfig.updatedBy,
-          } : null,
-          archivedBy: args.archivedBy,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to archive to SQL: ${errorText}`);
-      }
-
-      // Archive was successful, now delete from Convex
-      // Delete payment receipts from file storage
-      const registrationsWithReceipts = registrations.filter(r => r.receiptStorageId);
-      for (const registration of registrationsWithReceipts) {
-        try {
-          await ctx.storage.delete(registration.receiptStorageId as any);
-        } catch (error) {
-          console.warn(`Failed to delete receipt file ${registration.receiptStorageId}:`, error);
-        }
-      }
-
-      // Delete all registrations
-      for (const registration of registrations) {
-        await ctx.db.delete(registration._id);
-      }
-
-      // Delete all modalities
-      for (const modality of modalities) {
-        await ctx.db.delete(modality._id);
-      }
-
-      // Delete all participants
-      for (const participant of participants) {
-        await ctx.db.delete(participant._id);
-      }
-
-      // Finally, delete the assembly
-      await ctx.db.delete(args.id);
-
-      return {
-        message: "Assembly successfully archived to SQL database",
-        archivedAssembly: assembly.name,
-        archivedParticipants: participants.length,
-        archivedRegistrations: registrations.length,
-        archivedModalities: modalities.length,
-        deletedFiles: registrationsWithReceipts.length,
-      };
-
-    } catch (error) {
-      console.error("Error archiving assembly to SQL:", error);
-      throw new Error(`Failed to archive assembly: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return {
+      assembly,
+      participants,
+      registrations,
+      modalities,
+      agConfig,
+    };
   },
 }); 
