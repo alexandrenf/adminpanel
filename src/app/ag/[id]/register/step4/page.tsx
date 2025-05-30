@@ -133,7 +133,7 @@ export default function AGRegistrationStep4Page() {
         return new Intl.NumberFormat('pt-BR', {
             style: 'currency',
             currency: 'BRL'
-        }).format(price);
+        }).format(price / 100);
     }, []);
 
     // File validation
