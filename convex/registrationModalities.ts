@@ -209,11 +209,11 @@ export const canAcceptRegistration = query({
   handler: async (ctx, args) => {
     const modality = await ctx.db.get(args.modalityId);
     if (!modality || !modality.isActive) {
-      return false;
+      return { canAccept: false, reason: "Modality not available" };
     }
 
     if (!modality.maxParticipants) {
-      return true; // No limit
+      return { canAccept: true, reason: "No capacity limit" };
     }
 
     const activeRegistrations = await ctx.db
@@ -226,6 +226,15 @@ export const canAcceptRegistration = query({
       r.status !== "cancelled" && r.status !== "rejected"
     ).length;
 
-    return activeCount < modality.maxParticipants;
+    const canAccept = activeCount < modality.maxParticipants;
+    const availableSpots = modality.maxParticipants - activeCount;
+
+    return { 
+      canAccept, 
+      reason: canAccept ? `${availableSpots} spots available` : "Modality is full",
+      currentCount: activeCount,
+      maxParticipants: modality.maxParticipants,
+      availableSpots: Math.max(0, availableSpots)
+    };
   },
 }); 

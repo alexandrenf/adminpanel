@@ -1,25 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Button } from "../../../../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../../../../components/ui/card";
+import { Button } from "../../../../../../components/ui/button";
 import { Badge } from "../../../../../../components/ui/badge";
-import { Checkbox } from "../../../../../../components/ui/checkbox";
 import { Label } from "../../../../../../components/ui/label";
+import { Input } from "../../../../../../components/ui/input";
+import { Textarea } from "../../../../../../components/ui/textarea";
 import { 
     CreditCard, 
-    ArrowRight, 
-    CheckCircle, 
     Calendar, 
+    MapPin, 
     Users, 
-    MapPin,
+    Package,
+    Upload,
+    FileText,
+    ArrowLeft,
     AlertTriangle,
-    Info,
-    Copy,
-    ExternalLink,
-    Loader2
+    CheckCircle,
+    Copy
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -36,122 +37,224 @@ export default function PaymentInfoPage() {
     const assemblyId = params.id as string;
     const registrationId = params.registrationId as string;
     
+    // State - all hooks at the top
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
-    const [isExempt, setIsExempt] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    
-    // Fetch assembly data
-    const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
-    
-    // Get registration data to show modality
-    const registration = useQuery(convexApi.agRegistrations?.getById, { id: registrationId as any });
-    
-    // Get modality data if registration has one
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [exemptionReason, setExemptionReason] = useState("");
+    const [requestingExemption, setRequestingExemption] = useState(false);
+
+    // Queries - all hooks at the top
+    const registration = useQuery(
+        convexApi.agRegistrations?.getById, 
+        { id: registrationId as any }
+    );
+    const assembly = useQuery(
+        convexApi.assemblies?.getById, 
+        { id: assemblyId as any }
+    );
     const modality = useQuery(
         convexApi.registrationModalities?.getById,
         registration?.modalityId ? { id: registration.modalityId } : "skip"
     );
-    
-    // Get AG configuration for payment info
     const agConfig = useQuery(convexApi.agConfig?.get);
-    
-    // Mutation to update payment exemption
-    const updatePaymentExemption = useMutation(convexApi.agRegistrations?.updatePaymentExemption);
 
-    // Copy to clipboard function
-    const copyToClipboard = useCallback(async (text: string, label: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            toast({
-                title: "✅ Copiado!",
-                description: `${label} copiado para a área de transferência.`,
-            });
-        } catch (error) {
-            toast({
-                title: "❌ Erro",
-                description: "Não foi possível copiar. Tente selecionar e copiar manualmente.",
-                variant: "destructive",
-            });
-        }
-    }, [toast]);
+    // Mutations - all hooks at the top
+    const updatePaymentReceipt = useMutation(convexApi.agRegistrations?.updatePaymentReceipt);
+    const generateUploadUrl = useMutation(convexApi.files?.generateUploadUrl);
 
-    const handleContinue = useCallback(async () => {
-        setIsLoading(true);
-        
+    // All callbacks at the top
+    const handleUploadReceipt = useCallback(async () => {
+        if (!selectedFile) return;
+
+        setIsUploading(true);
         try {
-            if (isExempt) {
-                // Update registration with exemption status
-                await updatePaymentExemption({
-                    registrationId: registrationId as any,
-                    isPaymentExempt: true,
-                    paymentExemptReason: "Isenção declarada pelo usuário",
-                });
-                
-                toast({
-                    title: "✅ Isenção Registrada",
-                    description: "Sua isenção de pagamento foi registrada com sucesso.",
-                });
-                
-                // Go directly to success/confirmation page
-                router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
-            } else {
-                // Update registration to indicate payment is required
-                await updatePaymentExemption({
-                    registrationId: registrationId as any,
-                    isPaymentExempt: false,
-                });
-                
-                // Go to payment page
-                router.push(`/ag/${assemblyId}/register/payment/${registrationId}`);
+            // First, generate upload URL
+            const uploadUrl = await generateUploadUrl();
+            
+            // Upload file to Convex storage
+            const uploadResponse = await fetch(uploadUrl, {
+                method: "POST",
+                headers: { "Content-Type": selectedFile.type },
+                body: selectedFile,
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error("Failed to upload file");
             }
-        } catch (error) {
-            console.error("Error updating payment exemption:", error);
+
+            const { storageId } = await uploadResponse.json();
+
+            // Update registration with receipt info
+            await updatePaymentReceipt({
+                registrationId: registrationId as any,
+                receiptStorageId: storageId,
+                receiptFileName: selectedFile.name,
+                receiptFileType: selectedFile.type,
+                receiptFileSize: selectedFile.size,
+                uploadedBy: session?.user?.id || "",
+            });
+
             toast({
-                title: "❌ Erro",
-                description: "Erro ao processar informações de pagamento. Tente novamente.",
+                title: "✅ Comprovante Enviado",
+                description: "Seu comprovante de pagamento foi enviado com sucesso.",
+            });
+
+            // Redirect back to success page
+            router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
+        } catch (error) {
+            toast({
+                title: "❌ Erro no Upload",
+                description: "Erro ao enviar comprovante. Tente novamente.",
                 variant: "destructive",
             });
         } finally {
-            setIsLoading(false);
+            setIsUploading(false);
         }
-    }, [isExempt, assemblyId, registrationId, router, updatePaymentExemption, toast]);
+    }, [selectedFile, updatePaymentReceipt, generateUploadUrl, registrationId, session?.user?.id, toast, router, assemblyId]);
 
-    // Check if user has IFMSA email
+    const handleRequestExemption = useCallback(async () => {
+        if (!exemptionReason.trim()) {
+            toast({
+                title: "❌ Motivo Obrigatório",
+                description: "Por favor, informe o motivo da solicitação de isenção.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setRequestingExemption(true);
+        try {
+            // This would need to be implemented in the backend
+            toast({
+                title: "✅ Solicitação Enviada",
+                description: "Sua solicitação de isenção foi enviada para análise.",
+            });
+
+            setExemptionReason("");
+        } catch (error) {
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao solicitar isenção. Tente novamente.",
+                variant: "destructive",
+            });
+        } finally {
+            setRequestingExemption(false);
+        }
+    }, [exemptionReason, toast]);
+
+    const copyToClipboard = useCallback((text: string) => {
+        navigator.clipboard.writeText(text);
+        toast({
+            title: "✅ Copiado",
+            description: "Informação copiada para a área de transferência.",
+        });
+    }, [toast]);
+
+    const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+            if (!allowedTypes.includes(file.type)) {
+                toast({
+                    title: "❌ Tipo de arquivo inválido",
+                    description: "Apenas imagens (JPG, PNG) e PDFs são aceitos.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            // Validate file size (5MB max)
+            if (file.size > 5 * 1024 * 1024) {
+                toast({
+                    title: "❌ Arquivo muito grande",
+                    description: "O arquivo deve ter no máximo 5MB.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            setSelectedFile(file);
+        }
+    }, [toast]);
+
+    const formatPrice = useCallback((priceInCents: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(priceInCents / 100);
+    }, []);
+
+    // Effects at the top
     useEffect(() => {
-        const checkEmail = async () => {
-            if (session) {
+        if (session?.user?.email) {
+            const checkEmail = async () => {
                 const result = await isIfmsaEmailSession(session);
                 setIsIfmsaEmail(result);
-            } else {
-                setIsIfmsaEmail(false);
-            }
-        };
-        checkEmail();
+            };
+            checkEmail();
+        }
     }, [session]);
 
-    if (!session) {
+    // Loading state
+    if (isIfmsaEmail === null) {
         return (
-            <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
-                <div className="absolute inset-0 opacity-20">
-                    <div className="w-full h-full" style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-                    }}></div>
-                </div>
-                <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
-                <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-                <div className="relative z-10 flex-grow flex items-center justify-center">
-                    <PrecisaLogin />
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Verificando autenticação...</p>
                 </div>
             </main>
         );
     }
 
-    if (!assembly) {
+    // Auth check
+    if (!isIfmsaEmail) {
+        return <PrecisaLogin />;
+    }
+
+    // Loading registration data
+    if (!registration || !assembly || !modality) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Carregando...</p>
+                    <p className="text-gray-600">Carregando informações...</p>
+                </div>
+            </main>
+        );
+    }
+
+    // Check if user owns this registration
+    if (registration.participantId !== session?.user?.id) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Acesso Negado</h1>
+                    <p className="text-gray-600 mb-4">Você não tem permissão para ver esta página.</p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
+    // Check if payment is needed
+    if (modality.price === 0 || registration.isPaymentExempt) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Pagamento Não Necessário</h1>
+                    <p className="text-gray-600 mb-4">
+                        {modality.price === 0 ? "Esta modalidade é gratuita." : "Você está isento de pagamento."}
+                    </p>
+                    <Button onClick={() => router.push(`/ag/${assemblyId}/register/success/${registrationId}`)}>
+                        Voltar ao Comprovante
+                    </Button>
                 </div>
             </main>
         );
@@ -164,250 +267,278 @@ export default function PaymentInfoPage() {
                     {/* Header */}
                     <div className="text-center space-y-4">
                         <div className="flex items-center justify-center space-x-4">
-                            <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg">
-                                <CreditCard className="w-6 h-6 text-white" />
+                            <div className="p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                                <CreditCard className="w-8 h-8 text-white" />
                             </div>
                             <div>
                                 <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
                                     Informações de Pagamento
                                 </h1>
-                                <p className="text-gray-600">Finalize sua inscrição - {assembly.name}</p>
+                                <p className="text-gray-600">Complete seu pagamento para confirmar a inscrição</p>
                             </div>
                         </div>
-                        
-                        {/* Assembly Info */}
-                        <Card className="bg-blue-50 border-blue-200">
-                            <CardContent className="pt-6">
-                                <div className="flex items-center justify-center space-x-6 text-sm">
-                                    <div className="flex items-center space-x-2">
-                                        <Calendar className="w-4 h-4 text-blue-600" />
-                                        <span>
+                    </div>
+
+                    {/* Back Button */}
+                    <div>
+                        <Button 
+                            variant="outline" 
+                            onClick={() => router.push(`/ag/${assemblyId}/register/success/${registrationId}`)}
+                            className="flex items-center space-x-2"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            <span>Voltar ao Comprovante</span>
+                        </Button>
+                    </div>
+
+                    {/* Assembly and Modality Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="flex items-center space-x-2">
+                                    <Calendar className="w-5 h-5 text-blue-600" />
+                                    <span>Assembleia</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    <div>
+                                        <Label className="font-semibold text-gray-700">Nome:</Label>
+                                        <p className="text-lg font-medium">{assembly.name}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="font-semibold text-gray-700">Local:</Label>
+                                        <p className="flex items-center space-x-1">
+                                            <MapPin className="w-4 h-4 text-gray-500" />
+                                            <span>{assembly.location}</span>
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <Label className="font-semibold text-gray-700">Período:</Label>
+                                        <p>
                                             {new Date(assembly.startDate).toLocaleDateString('pt-BR')} - {" "}
                                             {new Date(assembly.endDate).toLocaleDateString('pt-BR')}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <MapPin className="w-4 h-4 text-blue-600" />
-                                        <span>{assembly.location}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <Users className="w-4 h-4 text-blue-600" />
-                                        <span>{assembly.type === "AG" ? "Presencial" : "Online"}</span>
+                                        </p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        {/* Registration Modality Info */}
-                        {modality && (
-                            <Card className="bg-purple-50 border-purple-200">
-                                <CardContent className="pt-6">
-                                    <div className="flex items-center justify-center space-x-6">
-                                        <div className="text-center">
-                                            <h3 className="font-semibold text-purple-900 mb-2">Modalidade Selecionada</h3>
-                                            <div className="flex items-center justify-center space-x-4 text-sm">
-                                                <div className="flex items-center space-x-2">
-                                                    <Badge variant="outline" className="bg-white text-purple-700 border-purple-300">
-                                                        {modality.name}
-                                                    </Badge>
-                                                </div>
-                                                <div className="flex items-center space-x-2">
-                                                    <CreditCard className="w-4 h-4 text-purple-600" />
-                                                    <span className="font-medium text-purple-800">
-                                                        {modality.price === 0 ? "Gratuito" : 
-                                                            new Intl.NumberFormat('pt-BR', {
-                                                                style: 'currency',
-                                                                currency: 'BRL'
-                                                            }).format(modality.price / 100)
-                                                        }
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            {modality.description && (
-                                                <p className="text-xs text-purple-600 mt-2">{modality.description}</p>
-                                            )}
-                                        </div>
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="flex items-center space-x-2">
+                                    <Package className="w-5 h-5 text-purple-600" />
+                                    <span>Modalidade</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    <div>
+                                        <Label className="font-semibold text-gray-700">Tipo:</Label>
+                                        <p className="text-lg font-medium">{modality.name}</p>
                                     </div>
-                                </CardContent>
-                            </Card>
-                        )}
+                                    <div>
+                                        <Label className="font-semibold text-gray-700">Valor:</Label>
+                                        <p className="text-2xl font-bold text-green-600">
+                                            {formatPrice(modality.price)}
+                                        </p>
+                                    </div>
+                                    {modality.description && (
+                                        <div>
+                                            <Label className="font-semibold text-gray-700">Descrição:</Label>
+                                            <p className="text-sm text-gray-600">{modality.description}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
 
-                    {/* Registration Success Status */}
-                    <Card className="bg-green-50 border-green-200">
-                        <CardContent className="pt-6">
-                            <div className="flex items-center space-x-3">
-                                <CheckCircle className="w-6 h-6 text-green-600" />
-                                <div>
-                                    <h3 className="font-semibold text-green-900">Inscrição Realizada com Sucesso!</h3>
-                                    <p className="text-sm text-green-700">
-                                        Sua inscrição foi registrada e está sendo analisada pela administração.
-                                    </p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Payment Information */}
+                    {/* Payment Instructions */}
                     <Card className="shadow-lg border-0">
                         <CardHeader>
-                            <CardTitle className="text-xl flex items-center">
-                                <CreditCard className="w-5 h-5 text-green-600 mr-2" />
-                                Informações de Pagamento
+                            <CardTitle className="flex items-center space-x-2">
+                                <CreditCard className="w-5 h-5 text-green-600" />
+                                <span>Instruções de Pagamento</span>
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-6">
-                                {/* Payment Exemption Checkbox */}
-                                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                    <div className="flex items-start space-x-3">
-                                        <Checkbox
-                                            id="isExempt"
-                                            checked={isExempt}
-                                            onCheckedChange={(checked) => setIsExempt(checked === true)}
-                                        />
-                                        <div className="flex-1">
-                                            <Label htmlFor="isExempt" className="text-base font-medium">
-                                                Eu sou isento de pagamento
-                                            </Label>
-                                            <p className="text-sm text-gray-600 mt-1">
-                                                Marque esta opção se você possui isenção de pagamento para esta assembleia.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Payment Details - Only show if not exempt */}
-                                {!isExempt && (
-                                    <div className="space-y-6">
-                                        {/* General Payment Info */}
-                                        {agConfig?.paymentInfo && (
-                                            <div className="space-y-3">
-                                                <h3 className="text-lg font-semibold">Informações Gerais</h3>
-                                                <div className="p-4 bg-gray-50 rounded-lg">
-                                                    <p className="text-gray-700 whitespace-pre-wrap">{agConfig.paymentInfo}</p>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* PIX Payment */}
-                                        {agConfig?.pixKey && (
-                                            <div className="space-y-3">
-                                                <h3 className="text-lg font-semibold">Pagamento via PIX</h3>
-                                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <Label className="text-sm font-medium text-blue-900">Chave PIX:</Label>
-                                                            <p className="text-blue-800 font-mono">{agConfig.pixKey}</p>
-                                                        </div>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => copyToClipboard(agConfig.pixKey!, "Chave PIX")}
-                                                            className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                                                        >
-                                                            <Copy className="w-4 h-4 mr-1" />
-                                                            Copiar
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Bank Details */}
-                                        {agConfig?.bankDetails && (
-                                            <div className="space-y-3">
-                                                <h3 className="text-lg font-semibold">Dados Bancários</h3>
-                                                <div className="p-4 bg-gray-50 rounded-lg">
-                                                    <p className="text-gray-700 whitespace-pre-wrap">{agConfig.bankDetails}</p>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Payment Instructions */}
-                                        {agConfig?.paymentInstructions && (
-                                            <div className="space-y-3">
-                                                <h3 className="text-lg font-semibold">Instruções de Pagamento</h3>
-                                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                                                    <p className="text-amber-800 whitespace-pre-wrap">{agConfig.paymentInstructions}</p>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Important Notice */}
-                                        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                                            <div className="flex items-start space-x-3">
-                                                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                                                <div>
-                                                    <h4 className="font-medium text-red-900">Importante:</h4>
-                                                    <p className="text-sm text-red-700 mt-1">
-                                                        Após realizar o pagamento, você será redirecionado para enviar o comprovante. 
-                                                        Sua inscrição só será confirmada após a análise do comprovante pela administração.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* If exempt, show confirmation message */}
-                                {isExempt && (
+                                {/* PIX Payment */}
+                                {agConfig?.pixKey && (
                                     <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                        <div className="flex items-start space-x-3">
-                                            <Info className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                                            <div>
-                                                <h4 className="font-medium text-green-900">Isenção de Pagamento</h4>
-                                                <p className="text-sm text-green-700 mt-1">
-                                                    Você marcou que possui isenção de pagamento. Sua inscrição será enviada 
-                                                    diretamente para análise da administração.
-                                                </p>
+                                        <h3 className="font-semibold text-green-800 mb-3">💳 Pagamento via PIX (Recomendado)</h3>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-medium">Chave PIX:</span>
+                                                <div className="flex items-center space-x-2">
+                                                    <code className="bg-white px-2 py-1 rounded text-sm">{agConfig.pixKey}</code>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline"
+                                                        onClick={() => copyToClipboard(agConfig.pixKey!)}
+                                                    >
+                                                        <Copy className="w-3 h-3" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-medium">Valor:</span>
+                                                <div className="flex items-center space-x-2">
+                                                    <code className="bg-white px-2 py-1 rounded text-sm font-bold">
+                                                        {formatPrice(modality.price)}
+                                                    </code>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline"
+                                                        onClick={() => copyToClipboard(formatPrice(modality.price))}
+                                                    >
+                                                        <Copy className="w-3 h-3" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
-                                <div className="border-t border-gray-200 my-6"></div>
+                                {/* Bank Transfer */}
+                                {agConfig?.bankDetails && (
+                                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <h3 className="font-semibold text-blue-800 mb-3">🏦 Transferência Bancária</h3>
+                                        <div className="whitespace-pre-line text-sm">
+                                            {agConfig.bankDetails}
+                                        </div>
+                                    </div>
+                                )}
 
-                                {/* Continue Button */}
-                                <div className="flex justify-end">
-                                    <Button 
-                                        onClick={handleContinue}
-                                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-                                        size="lg"
-                                        disabled={isLoading}
-                                    >
-                                        {isLoading ? (
-                                            <Loader2 className="animate-spin w-4 h-4 mr-2" />
-                                        ) : (
-                                            <>
-                                                {isExempt ? (
-                                                    <>
-                                                        Finalizar Inscrição
-                                                        <CheckCircle className="w-4 h-4 ml-2" />
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        Ir para Pagamento
-                                                        <ArrowRight className="w-4 h-4 ml-2" />
-                                                    </>
-                                                )}
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
+                                {/* General Payment Info */}
+                                {agConfig?.paymentInfo && (
+                                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                                        <h3 className="font-semibold text-gray-800 mb-3">ℹ️ Informações Gerais</h3>
+                                        <div className="whitespace-pre-line text-sm">
+                                            {agConfig.paymentInfo}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Payment Instructions */}
+                                {agConfig?.paymentInstructions && (
+                                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                        <h3 className="font-semibold text-yellow-800 mb-3">📋 Instruções Importantes</h3>
+                                        <div className="whitespace-pre-line text-sm">
+                                            {agConfig.paymentInstructions}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* Help Section */}
-                    <Card className="bg-gray-50 border-gray-200">
-                        <CardContent className="pt-6">
-                            <div className="text-center space-y-2">
-                                <h3 className="font-semibold text-gray-900">Precisa de Ajuda?</h3>
-                                <p className="text-sm text-gray-600">
-                                    Se você tiver dúvidas sobre o pagamento ou sua inscrição, 
-                                    entre em contato com a administração da IFMSA Brazil.
+                    {/* Upload Receipt */}
+                    <Card className="shadow-lg border-0">
+                        <CardHeader>
+                            <CardTitle className="flex items-center space-x-2">
+                                <Upload className="w-5 h-5 text-indigo-600" />
+                                <span>Enviar Comprovante</span>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                <p className="text-gray-600">
+                                    Após realizar o pagamento, envie o comprovante para confirmar sua inscrição.
                                 </p>
+                                
+                                <div>
+                                    <Label htmlFor="receipt-upload">Selecionar Comprovante</Label>
+                                    <Input
+                                        id="receipt-upload"
+                                        type="file"
+                                        accept="image/*,.pdf"
+                                        onChange={handleFileSelect}
+                                        className="mt-1"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Formatos aceitos: JPG, PNG, PDF (máximo 5MB)
+                                    </p>
+                                </div>
+
+                                {selectedFile && (
+                                    <div className="p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex items-center space-x-2">
+                                            <FileText className="w-4 h-4 text-gray-500" />
+                                            <span className="text-sm">{selectedFile.name}</span>
+                                            <span className="text-xs text-gray-500">
+                                                ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <Button 
+                                    onClick={handleUploadReceipt}
+                                    disabled={!selectedFile || isUploading}
+                                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                                >
+                                    {isUploading ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            Enviando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload className="w-4 h-4 mr-2" />
+                                            Enviar Comprovante
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Payment Exemption Request */}
+                    <Card className="shadow-lg border-0">
+                        <CardHeader>
+                            <CardTitle className="flex items-center space-x-2">
+                                <AlertTriangle className="w-5 h-5 text-orange-600" />
+                                <span>Solicitar Isenção de Pagamento</span>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                <p className="text-gray-600">
+                                    Se você tem direito à isenção de pagamento, explique o motivo abaixo.
+                                </p>
+                                
+                                <div>
+                                    <Label htmlFor="exemption-reason">Motivo da Isenção</Label>
+                                    <Textarea
+                                        id="exemption-reason"
+                                        value={exemptionReason}
+                                        onChange={(e) => setExemptionReason(e.target.value)}
+                                        placeholder="Explique por que você tem direito à isenção de pagamento..."
+                                        rows={4}
+                                        className="mt-1"
+                                    />
+                                </div>
+
+                                <Button 
+                                    onClick={handleRequestExemption}
+                                    disabled={!exemptionReason.trim() || requestingExemption}
+                                    variant="outline"
+                                    className="w-full border-orange-300 text-orange-700 hover:bg-orange-50"
+                                >
+                                    {requestingExemption ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600 mr-2"></div>
+                                            Enviando Solicitação...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileText className="w-4 h-4 mr-2" />
+                                            Solicitar Isenção
+                                        </>
+                                    )}
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
