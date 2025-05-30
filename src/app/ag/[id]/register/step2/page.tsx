@@ -30,7 +30,6 @@ import {
 import { useQuery } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../../convex/_generated/api";
-import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
 // Registration form data type (from step 1)
@@ -97,10 +96,9 @@ export default function AGRegistrationStep2Page() {
     const [step1Data, setStep1Data] = useState<Step1FormData | null>(null);
     const [formData, setFormData] = useState<Step2FormData>(initialStep2FormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     
     // Fetch assembly data
-    const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
+    const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
     
     // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
@@ -114,8 +112,35 @@ export default function AGRegistrationStep2Page() {
     const validateForm = useCallback(() => {
         if (!formData.aceitaTermos) {
             toast({
-                title: "❌ Erro",
-                description: "É necessário aceitar os termos e condições.",
+                title: "❌ Termos não aceitos",
+                description: "Você deve aceitar os termos e condições para continuar.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        if (!formData.nome.trim()) {
+            toast({
+                title: "❌ Nome obrigatório",
+                description: "Por favor, informe seu nome completo.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        if (!formData.email.trim() || !formData.email.includes('@')) {
+            toast({
+                title: "❌ Email inválido",
+                description: "Por favor, informe um email válido.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        if (!formData.telefone.trim()) {
+            toast({
+                title: "❌ Telefone obrigatório",
+                description: "Por favor, informe seu telefone.",
                 variant: "destructive",
             });
             return false;
@@ -128,24 +153,27 @@ export default function AGRegistrationStep2Page() {
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!validateForm() || !step1Data || !session?.user?.id) return;
-        
+        if (!validateForm()) return;
+
         setIsSubmitting(true);
-        
         try {
-            // Save step 2 data and navigate to step 3
-            sessionStorage.setItem('agRegistrationStep2', JSON.stringify(formData));
+            // Save step 2 data to session storage
+            const step2Data = {
+                ...formData,
+                userId: session?.user?.id || "",
+                assemblyId: assemblyId as string,
+            };
+            
+            sessionStorage.setItem('agRegistrationStep2', JSON.stringify(step2Data));
             
             toast({
-                title: "✅ Dados Salvos",
-                description: "Informações salvas com sucesso. Prosseguindo para a próxima etapa.",
+                title: "✅ Dados salvos",
+                description: "Prosseguindo para a próxima etapa...",
             });
-            
-            // Navigate to step 3 (Code of Conduct signature)
+
+            // Navigate to step 3
             router.push(`/ag/${assemblyId}/register/step3`);
-            
         } catch (error) {
-            console.error("Error saving step 2 data:", error);
             toast({
                 title: "❌ Erro",
                 description: "Erro ao salvar dados. Tente novamente.",
@@ -156,60 +184,16 @@ export default function AGRegistrationStep2Page() {
         }
     }, [validateForm, step1Data, session?.user?.id, assemblyId, formData, toast, router]);
 
-    // Check if user has IFMSA email
-    useEffect(() => {
-        const checkEmail = async () => {
-            if (session) {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
-            } else {
-                setIsIfmsaEmail(false);
-            }
-        };
-        checkEmail();
-    }, [session]);
-
     // Load step 1 data from session storage
     useEffect(() => {
-        const savedData = sessionStorage.getItem('agRegistrationStep1');
-        if (savedData) {
-            try {
-                const parsedData = JSON.parse(savedData) as Step1FormData;
-                setStep1Data(parsedData);
-            } catch (error) {
-                console.error("Error parsing step 1 data:", error);
-                toast({
-                    title: "❌ Erro",
-                    description: "Dados da etapa anterior não encontrados. Redirecionando...",
-                    variant: "destructive",
-                });
-                router.push(`/ag/${assemblyId}/register`);
-            }
+        const savedStep1 = sessionStorage.getItem('agRegistrationStep1');
+        if (savedStep1) {
+            setStep1Data(JSON.parse(savedStep1));
         } else {
-            toast({
-                title: "❌ Erro",
-                description: "Dados da etapa anterior não encontrados. Redirecionando...",
-                variant: "destructive",
-            });
+            // If no step 1 data, redirect back to step 1
             router.push(`/ag/${assemblyId}/register`);
         }
-
-        // Load step 2 data if it exists
-        const savedStep2Data = sessionStorage.getItem('agRegistrationStep2');
-        if (savedStep2Data) {
-            try {
-                const parsedStep2Data = JSON.parse(savedStep2Data) as Step2FormData;
-                setFormData(parsedStep2Data);
-            } catch (error) {
-                console.error("Error parsing step 2 data:", error);
-            }
-        }
-    }, [assemblyId, router, toast]);
-
-    // Save step 2 data whenever form changes
-    useEffect(() => {
-        sessionStorage.setItem('agRegistrationStep2', JSON.stringify(formData));
-    }, [formData]);
+    }, [assemblyId, router]);
 
     // Show error if assemblyId is missing
     if (!assemblyId) {

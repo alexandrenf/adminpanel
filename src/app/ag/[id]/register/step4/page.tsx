@@ -91,16 +91,16 @@ export default function AGRegistrationStep4Page() {
     const [step1Data, setStep1Data] = useState<Step1FormData | null>(null);
     const [step2Data, setStep2Data] = useState<Step2FormData | null>(null);
     const [step3Data, setStep3Data] = useState<Step3FormData | null>(null);
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
+    const [selectedModality, setSelectedModality] = useState<string>("");
+    const [isPaymentExempt, setIsPaymentExempt] = useState(false);
+    const [exemptionReason, setExemptionReason] = useState("");
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Payment states
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [dragActive, setDragActive] = useState(false);
-    const [isPaymentExempt, setIsPaymentExempt] = useState(false);
-    const [exemptionReason, setExemptionReason] = useState("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
@@ -406,19 +406,6 @@ export default function AGRegistrationStep4Page() {
             setIsUploading(false);
         }
     }, [validateForm, session?.user?.id, assemblyId, step1Data, step2Data, step3Data, isPaymentExempt, exemptionReason, selectedFile, createRegistration, generateUploadUrl, updateRegistrationReceipt, toast, router]);
-
-    // Check if user has IFMSA email
-    useEffect(() => {
-        const checkEmail = async () => {
-            if (session) {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
-            } else {
-                setIsIfmsaEmail(false);
-            }
-        };
-        checkEmail();
-    }, [session]);
 
     // Load previous steps data from session storage
     useEffect(() => {

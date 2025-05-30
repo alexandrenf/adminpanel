@@ -23,7 +23,6 @@ import {
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../../../convex/_generated/api";
-import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
 export default function PaymentUploadPage() {
@@ -36,7 +35,6 @@ export default function PaymentUploadPage() {
     const assemblyId = params?.id;
     const registrationId = params?.registrationId;
     
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -194,15 +192,7 @@ export default function PaymentUploadPage() {
 
     // Check if user has IFMSA email
     useEffect(() => {
-        const checkEmail = async () => {
-            if (session) {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
-            } else {
-                setIsIfmsaEmail(false);
-            }
-        };
-        checkEmail();
+        // Remove the auth check - general participants should be able to upload payment receipts
     }, [session]);
 
     // Show error if IDs are missing

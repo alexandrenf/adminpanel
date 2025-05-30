@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api as convexApi } from "../../../../../../../convex/_generated/api";
-import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
 export default function RegistrationCompletePage() {
@@ -30,22 +29,12 @@ export default function RegistrationCompletePage() {
     const assemblyId = params.id;
     const registrationId = params.registrationId;
     
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
-    
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
 
     // Check if user has IFMSA email
     useEffect(() => {
-        const checkEmail = async () => {
-            if (session) {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
-            } else {
-                setIsIfmsaEmail(false);
-            }
-        };
-        checkEmail();
+        // Remove the auth check - general participants should be able to see completion confirmation
     }, [session]);
 
     if (!session) {

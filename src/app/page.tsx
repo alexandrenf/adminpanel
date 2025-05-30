@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { Shield, Users, Settings, LogIn, LogOut } from "lucide-react";
+import { Shield, Users, Settings, LogIn, LogOut, AlertTriangle, Globe } from "lucide-react";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import { useEffect, useState } from "react";
 
@@ -41,16 +41,14 @@ export default function Home() {
         {/* Header */}
         <header className="pt-8 pb-4">
           <div className="container mx-auto px-6">
-            {!session && (
             <div className="flex items-center justify-center">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-white/10 backdrop-blur-sm rounded-xl">
-                  <Shield className="w-8 h-8 text-white" />
+                  <Globe className="w-8 h-8 text-white" />
                 </div>
-                <span className="text-2xl font-bold text-white">IFMSA Brazil</span>
+                <span className="text-2xl font-bold text-white">IFMSA Brazil Portal</span>
               </div>
             </div>
-            )}
           </div>
         </header>
 
@@ -63,51 +61,94 @@ export default function Home() {
               <CardHeader className="relative z-10 text-center py-12 px-8">
                 <div className="mb-6">
                   <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl mb-6 shadow-lg">
-                    <Users className="w-10 h-10 text-white" />
+                    <Globe className="w-10 h-10 text-white" />
                   </div>
                 </div>
                 <CardTitle className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 bg-clip-text text-transparent mb-4">
                   Portal IFMSA Brazil
                 </CardTitle>
                 <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                  Sistema para membros da IFMSA Brazil
+                  Portal geral da IFMSA Brazil - Conectando estudantes de medicina em todo o país
                 </p>
               </CardHeader>
 
               
               <CardContent className="relative z-10 px-8 pb-12">
                 <div className="max-w-2xl mx-auto">
-                  {/* Authentication info */}
+                  {/* General portal info */}
                   {!session && (
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-8 border border-blue-100">
-                      <div className="flex items-start space-x-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                            <Shield className="w-6 h-6 text-blue-600" />
+                    <>
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6 border border-blue-100">
+                        <div className="flex items-start space-x-4">
+                          <div className="flex-shrink-0">
+                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                              <Globe className="w-6 h-6 text-blue-600" />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 mb-2">Bem-vindo ao Portal IFMSA Brazil</h3>
+                            <p className="text-gray-700 text-sm leading-relaxed">
+                              Este é o portal oficial da IFMSA Brazil, onde você pode acessar informações, 
+                              recursos e se conectar com a comunidade de estudantes de medicina.
+                            </p>
                           </div>
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 mb-2">Acesso Restrito</h3>
-                          <p className="text-gray-700 text-sm leading-relaxed">
-                            Você só pode fazer login com uma conta Google{" "}
-                            <span className="font-semibold text-blue-700">@ifmsabrazil.org</span>
-                          </p>
+                      </div>
+
+                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-6 mb-8 border border-amber-200">
+                        <div className="flex items-start space-x-4">
+                          <div className="flex-shrink-0">
+                            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                              <AlertTriangle className="w-6 h-6 text-amber-600" />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 mb-2">Acesso Administrativo</h3>
+                            <p className="text-gray-700 text-sm leading-relaxed mb-2">
+                              Para acessar as funcionalidades administrativas, você deve fazer login com uma conta Google oficial:
+                            </p>
+                            <p className="text-amber-800 font-semibold text-sm">
+                              @ifmsabrazil.org
+                            </p>
+                            <p className="text-gray-600 text-xs mt-2">
+                              Apenas membros oficiais com contas institucionais podem acessar o painel administrativo.
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    </>
                   )}
 
                   {/* User info if logged in */}
                   {session && (
-                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 mb-8 border border-green-100">
+                    <div className={`rounded-2xl p-6 mb-8 border ${
+                      isIfmsaEmail 
+                        ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-100" 
+                        : "bg-gradient-to-r from-red-50 to-rose-50 border-red-200"
+                    }`}>
                       <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                          <Users className="w-6 h-6 text-green-600" />
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                          isIfmsaEmail ? "bg-green-100" : "bg-red-100"
+                        }`}>
+                          {isIfmsaEmail ? (
+                            <Shield className="w-6 h-6 text-green-600" />
+                          ) : (
+                            <AlertTriangle className="w-6 h-6 text-red-600" />
+                          )}
                         </div>
                         <div>
-                          <p className="text-sm text-green-700 font-medium">Logado como</p>
-                          <p className="text-lg font-semibold text-green-900">{session.user?.name}</p>
-                          <p className="text-sm text-green-600">{session.user?.email}</p>
+                          <p className={`text-sm font-medium ${
+                            isIfmsaEmail ? "text-green-700" : "text-red-700"
+                          }`}>
+                            {isIfmsaEmail ? "Acesso Administrativo Autorizado" : "Acesso Limitado"}
+                          </p>
+                          <p className="text-lg font-semibold text-gray-900">{session.user?.name}</p>
+                          <p className="text-sm text-gray-600">{session.user?.email}</p>
+                          {!isIfmsaEmail && (
+                            <p className="text-xs text-red-600 mt-1">
+                              Conta não autorizada para acesso administrativo
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -138,11 +179,11 @@ export default function Home() {
                     </Link>
                   </div>
 
-                  {/* Features preview for logged in users */}
+                  {/* Features preview for authorized users */}
                   {isIfmsaEmail && (
                     <div className="mt-12 pt-8 border-t border-gray-200">
                       <h3 className="text-lg font-semibold text-gray-900 mb-6 text-center">
-                        Acesso Rápido
+                        Painel Administrativo
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Link href="/comites-locais" className="group">
@@ -169,6 +210,26 @@ export default function Home() {
                       </div>
                     </div>
                   )}
+
+                  {/* Information for non-authorized users */}
+                  {session && !isIfmsaEmail && (
+                    <div className="mt-8 pt-6 border-t border-gray-200">
+                      <div className="text-center">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                          Precisa de Acesso Administrativo?
+                        </h3>
+                        <p className="text-gray-600 text-sm mb-4">
+                          Se você é membro oficial da IFMSA Brazil e precisa de acesso administrativo, 
+                          entre em contato com a coordenação para obter uma conta @ifmsabrazil.org.
+                        </p>
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <p className="text-xs text-gray-500">
+                            Apenas contas institucionais oficiais têm acesso às funcionalidades administrativas.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -179,7 +240,7 @@ export default function Home() {
         <footer className="py-6">
           <div className="container mx-auto px-6 text-center">
             <p className="text-white/70 text-sm">
-              © 2024 IFMSA Brazil - Portal de Administrador
+              © 2024 IFMSA Brazil - Portal Oficial
             </p>
           </div>
         </footer>
