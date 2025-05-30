@@ -91,7 +91,6 @@ export default function AGRegistrationStep4Page() {
     const [step1Data, setStep1Data] = useState<Step1FormData | null>(null);
     const [step2Data, setStep2Data] = useState<Step2FormData | null>(null);
     const [step3Data, setStep3Data] = useState<Step3FormData | null>(null);
-    const [selectedModality, setSelectedModality] = useState<string>("");
     const [isPaymentExempt, setIsPaymentExempt] = useState(false);
     const [exemptionReason, setExemptionReason] = useState("");
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -112,7 +111,7 @@ export default function AGRegistrationStep4Page() {
     const modalities = useQuery(convexApi.registrationModalities?.getByAssembly, { assemblyId: assemblyId as any });
     
     // Get the selected modality
-    const selectedModality = modalities?.find(m => m._id === step1Data?.selectedModalityId);
+    const selectedModalityData = modalities?.find(m => m._id === step1Data?.selectedModalityId);
     
     // File upload URL mutation
     const generateUploadUrl = useMutation(convexApi.files?.generateUploadUrl);
@@ -240,7 +239,7 @@ export default function AGRegistrationStep4Page() {
             return false;
         }
 
-        if (!selectedModality) {
+        if (!selectedModalityData) {
             toast({
                 title: "❌ Erro",
                 description: "Modalidade não encontrada.",
@@ -250,7 +249,7 @@ export default function AGRegistrationStep4Page() {
         }
 
         // If payment is required and not exempt, need file
-        if (selectedModality.price > 0 && !isPaymentExempt && !selectedFile) {
+        if (selectedModalityData.price > 0 && !isPaymentExempt && !selectedFile) {
             toast({
                 title: "❌ Comprovante obrigatório",
                 description: "Por favor, envie o comprovante de pagamento.",
@@ -270,7 +269,7 @@ export default function AGRegistrationStep4Page() {
         }
 
         return true;
-    }, [step1Data, step2Data, step3Data, selectedModality, isPaymentExempt, selectedFile, exemptionReason, toast]);
+    }, [step1Data, step2Data, step3Data, selectedModalityData, isPaymentExempt, selectedFile, exemptionReason, toast]);
 
     // Handle final submission
     const handleSubmit = useCallback(async () => {
@@ -327,7 +326,7 @@ export default function AGRegistrationStep4Page() {
             // Send confirmation email
             try {
                 // Add null checks for safety
-                if (!assembly || !selectedModality) {
+                if (!assembly || !selectedModalityData) {
                     console.warn('⚠️ Cannot send confirmation email: missing assembly or modality data');
                     return;
                 }
@@ -340,9 +339,9 @@ export default function AGRegistrationStep4Page() {
                     assemblyLocation: assembly.location,
                     assemblyStartDate: new Date(assembly.startDate),
                     assemblyEndDate: new Date(assembly.endDate),
-                    modalityName: selectedModality.name,
-                    paymentRequired: selectedModality.price > 0,
-                    paymentAmount: selectedModality.price > 0 ? selectedModality.price : undefined,
+                    modalityName: selectedModalityData.name,
+                    paymentRequired: selectedModalityData.price > 0,
+                    paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price : undefined,
                 });
                 console.log('✅ Confirmation email sent successfully');
             } catch (emailError) {
@@ -457,7 +456,7 @@ export default function AGRegistrationStep4Page() {
         );
     }
 
-    if (!assembly || !step1Data || !step2Data || !step3Data || !modalities || !selectedModality) {
+    if (!assembly || !step1Data || !step2Data || !step3Data || !modalities || !selectedModalityData) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
                 <div className="text-center">
@@ -505,7 +504,7 @@ export default function AGRegistrationStep4Page() {
     }
 
     // Check if payment is needed
-    const needsPayment = selectedModality.price > 0;
+    const needsPayment = selectedModalityData.price > 0;
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -573,17 +572,17 @@ export default function AGRegistrationStep4Page() {
                             <div className="space-y-3">
                                 <div>
                                     <Label className="font-semibold text-gray-700">Modalidade:</Label>
-                                    <p>{selectedModality.name}</p>
+                                    <p>{selectedModalityData.name}</p>
                                 </div>
                                 <div>
                                     <Label className="font-semibold text-gray-700">Descrição:</Label>
-                                    <p className="text-sm text-gray-600">{selectedModality.description}</p>
+                                    <p className="text-sm text-gray-600">{selectedModalityData.description}</p>
                                 </div>
                                 <div>
                                     <Label className="font-semibold text-gray-700">Valor:</Label>
                                     <div className="flex items-center space-x-2">
-                                        <Badge variant={selectedModality.price === 0 ? "secondary" : "default"} className="text-lg">
-                                            {selectedModality.price === 0 ? "GRATUITO" : formatPrice(selectedModality.price)}
+                                        <Badge variant={selectedModalityData.price === 0 ? "secondary" : "default"} className="text-lg">
+                                            {selectedModalityData.price === 0 ? "GRATUITO" : formatPrice(selectedModalityData.price)}
                                         </Badge>
                                     </div>
                                 </div>
@@ -624,12 +623,12 @@ export default function AGRegistrationStep4Page() {
                                                         <span className="font-medium">Valor:</span>
                                                         <div className="flex items-center space-x-2">
                                                             <code className="bg-white px-2 py-1 rounded text-sm font-bold">
-                                                                {formatPrice(selectedModality.price)}
+                                                                {formatPrice(selectedModalityData.price)}
                                                             </code>
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="outline"
-                                                                onClick={() => copyToClipboard(formatPrice(selectedModality.price))}
+                                                                onClick={() => copyToClipboard(formatPrice(selectedModalityData.price))}
                                                             >
                                                                 <Copy className="w-3 h-3" />
                                                             </Button>
