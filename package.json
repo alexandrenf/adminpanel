@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npx convex deploy --cmd 'npm run build:next'",
+    "build": "bunx convex deploy --cmd 'bun run build:next'",
     "build:next": "next build",
     "db:generate": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
@@ -58,7 +58,7 @@
     "next": "^14.2.29",
     "next-auth": "^4.24.11",
     "node-fetch": "^3.3.2",
-    "nodemailer": "^7.0.3",
+    "nodemailer": "6.9.9",
     "pica": "^9.0.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
