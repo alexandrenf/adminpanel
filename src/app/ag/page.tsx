@@ -27,7 +27,10 @@ import {
     Download,
     AlertTriangle,
     RefreshCw,
-    CreditCard
+    CreditCard,
+    Package,
+    FileText,
+    UserCheck
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -485,6 +488,100 @@ const DeleteAGDialog = ({
 
 DeleteAGDialog.displayName = 'DeleteAGDialog';
 
+// Archive AG Dialog Component
+const ArchiveAGDialog = ({ 
+    isOpen, 
+    onOpenChange, 
+    assembly,
+    onConfirm 
+}: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    assembly: Assembly | null;
+    onConfirm: (assemblyId: string, confirmationText: string) => void;
+}) => {
+    const [confirmationText, setConfirmationText] = useState("");
+
+    const handleConfirm = () => {
+        if (assembly) {
+            onConfirm(assembly._id, confirmationText);
+        }
+    };
+
+    // Reset confirmation text when dialog opens
+    useEffect(() => {
+        if (isOpen) {
+            setConfirmationText("");
+        }
+    }, [isOpen]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center space-x-2">
+                        <Archive className="w-5 h-5 text-orange-600" />
+                        <span>Arquivar Assembleia Geral</span>
+                    </DialogTitle>
+                    <DialogDescription>
+                        Esta ação irá mover permanentemente todos os dados da AG para o banco de dados de arquivo.
+                    </DialogDescription>
+                </DialogHeader>
+                
+                <div className="py-4">
+                    <div className="space-y-4">
+                        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                            <p className="text-sm text-orange-800">
+                                <strong>⚠️ Atenção:</strong> Ao arquivar esta assembleia:
+                            </p>
+                            <ul className="mt-2 text-sm text-orange-700 list-disc list-inside space-y-1">
+                                <li>Todos os dados serão movidos para o banco de dados de arquivo</li>
+                                <li>A assembleia não aparecerá mais na lista ativa</li>
+                                <li>Todos os participantes pré-carregados serão arquivados</li>
+                                <li>Todas as inscrições de usuários serão arquivadas</li>
+                                <li>Todas as modalidades de inscrição serão arquivadas</li>
+                                <li>Comprovantes de pagamento serão preservados</li>
+                                <li>Um snapshot da configuração atual será salvo</li>
+                            </ul>
+                            <p className="mt-2 text-sm text-orange-800 font-medium">
+                                Os dados arquivados podem ser consultados na seção de "Arquivos", mas a assembleia não estará mais ativa.
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <Label htmlFor="archive-confirmation">
+                                Para confirmar, digite o nome da AG: <strong>{assembly?.name}</strong>
+                            </Label>
+                            <Input
+                                id="archive-confirmation"
+                                value={confirmationText}
+                                onChange={(e) => setConfirmationText(e.target.value)}
+                                placeholder="Digite o nome da AG"
+                            />
+                        </div>
+                    </div>
+                </div>
+                
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        Cancelar
+                    </Button>
+                    <Button 
+                        onClick={handleConfirm} 
+                        className="bg-orange-600 hover:bg-orange-700"
+                        disabled={confirmationText !== assembly?.name}
+                    >
+                        <Archive className="w-4 h-4 mr-2" />
+                        Arquivar AG
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+ArchiveAGDialog.displayName = 'ArchiveAGDialog';
+
 // Creation Progress Dialog - Fixed to prevent flickering
 const CreationProgressDialog = React.memo(({ 
     isOpen, 
@@ -546,6 +643,7 @@ export default function AGPage() {
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
     const [selectedAssembly, setSelectedAssembly] = useState<Assembly | null>(null);
     
     // formData for EDITING an existing assembly
@@ -557,9 +655,12 @@ export default function AGPage() {
     const assemblies = useQuery(convexApi.assemblies?.getAll);
     const activeAssemblies = useQuery(convexApi.assemblies?.getActive);
     
+    // Add AG config query to check global registration settings
+    const agConfig = useQuery(convexApi.agConfig?.get);
+    
     const createAssembly = useMutation(convexApi.assemblies?.create);
     const updateAssembly = useMutation(convexApi.assemblies?.update);
-    const archiveAssembly = useMutation(convexApi.assemblies?.archive);
+    const archiveToSQL = useMutation(convexApi.assemblies?.archiveToSQL);
     const deleteAssembly = useMutation(convexApi.assemblies?.remove);
     const bulkInsertParticipants = useMutation(convexApi.assemblies?.bulkInsertParticipants);
     
@@ -577,6 +678,10 @@ export default function AGPage() {
 
     const handleDeleteDialogOpenChange = useCallback((open: boolean) => {
         setIsDeleteDialogOpen(open);
+    }, []);
+
+    const handleArchiveDialogOpenChange = useCallback((open: boolean) => {
+        setIsArchiveDialogOpen(open);
     }, []);
 
     // Function to get display names for participant types
@@ -762,7 +867,39 @@ export default function AGPage() {
             });
         }
     }, [session?.user?.id, deleteAssembly, selectedAssembly, toast]);
-    
+
+    // Handle archive AG confirmation
+    const handleArchiveAGConfirm = useCallback(async (assemblyId: string, confirmationText: string) => {
+        if (!session?.user?.id || !archiveToSQL || !selectedAssembly) return;
+
+        if (confirmationText !== selectedAssembly.name) {
+            toast({ title: "❌ Erro", description: "Nome de confirmação incorreto.", variant: "destructive" });
+            return;
+        }
+
+        try {
+            const result = await archiveToSQL({
+                id: assemblyId as any,
+                archivedBy: session.user.id,
+            });
+
+            toast({ 
+                title: "✅ AG Arquivada com Sucesso", 
+                description: `${selectedAssembly.name} foi arquivada e seus dados foram movidos para o banco de dados de arquivo.`,
+            });
+
+            setIsArchiveDialogOpen(false);
+            setSelectedAssembly(null);
+        } catch (error) {
+            console.error("Error archiving assembly:", error);
+            toast({ 
+                title: "❌ Erro", 
+                description: "Erro ao arquivar AG. Tente novamente.", 
+                variant: "destructive" 
+            });
+        }
+    }, [session?.user?.id, archiveToSQL, selectedAssembly, toast]);
+
     useEffect(() => {
         const checkEmail = async () => {
             if (session) {
@@ -802,25 +939,9 @@ export default function AGPage() {
             }
         };
 
-        const handleArchive = async () => {
-            if (!session?.user?.id || !archiveAssembly) return;
-            
-            try {
-                await archiveAssembly({
-                    id: assembly._id as any,
-                    lastUpdatedBy: session.user.id,
-                });
-                toast({
-                    title: "✅ AG Arquivada",
-                    description: `${assembly.name} foi arquivada com sucesso.`,
-                });
-            } catch (error) {
-                toast({
-                    title: "❌ Erro",
-                    description: "Erro ao arquivar AG. Tente novamente.",
-                    variant: "destructive",
-                });
-            }
+        const handleArchive = () => {
+            setSelectedAssembly(assembly);
+            setIsArchiveDialogOpen(true);
         };
 
         const handleEdit = () => {
@@ -933,17 +1054,49 @@ export default function AGPage() {
     }
 
     // Assembly User Card Component
-    function AssemblyUserCard({ assembly }: { assembly: Assembly }) {
+    function AssemblyUserCard({ assembly, agConfig }: { assembly: Assembly; agConfig: any }) {
         // Get user registration status for this assembly
         const registrationStatus = useQuery(
             convexApi.agRegistrations?.getUserRegistrationStatus,
-            session?.user?.id ? {
-                assemblyId: assembly._id as any,
-                userId: session.user.id
-            } : "skip"
+            session?.user?.id ? { assemblyId: assembly._id as any, userId: session.user.id } : "skip"
         );
 
+        // Get the user's registration details if they have one
+        const userRegistration = useQuery(
+            convexApi.agRegistrations?.getById,
+            registrationStatus?.registrationId ? { id: registrationStatus.registrationId } : "skip"
+        );
+
+        // Get the modality for the user's registration to check if payment is needed
+        const userModality = useQuery(
+            convexApi.registrationModalities?.getById,
+            userRegistration?.modalityId ? { id: userRegistration.modalityId } : "skip"
+        );
+
+        // Get file URL for receipt download
+        const receiptFileUrl = useQuery(
+            convexApi.files?.getFileUrl,
+            userRegistration?.receiptStorageId ? { storageId: userRegistration.receiptStorageId } : "skip"
+        );
+
+        const router = useRouter();
+
         const getRegistrationButton = () => {
+            // Check if registrations are globally disabled
+            if (agConfig && !agConfig.registrationEnabled) {
+                return (
+                    <Button 
+                        className="w-full"
+                        disabled
+                        variant="outline"
+                    >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Inscrições Desabilitadas Globalmente
+                    </Button>
+                );
+            }
+
+            // Check if registration is closed for this assembly
             if (!assembly.registrationOpen) {
                 return (
                     <Button 
@@ -958,9 +1111,10 @@ export default function AGPage() {
             }
 
             if (!registrationStatus) {
+                // No registration found - show register button
                 return (
                     <Button 
-                        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                        className="w-full bg-blue-600 hover:bg-blue-700"
                         onClick={() => router.push(`/ag/${assembly._id}/register`)}
                     >
                         <UserPlus className="w-4 h-4 mr-2" />
@@ -972,17 +1126,10 @@ export default function AGPage() {
             // User has a registration
             switch (registrationStatus.status) {
                 case "pending":
-                    if (registrationStatus.hasReceipt) {
-                        return (
-                            <Button 
-                                className="w-full bg-amber-500 hover:bg-amber-600"
-                                disabled
-                            >
-                                <Clock className="w-4 h-4 mr-2" />
-                                Esperando Análise
-                            </Button>
-                        );
-                    } else {
+                    // Check if this is a free modality or payment exempt
+                    const needsPayment = userModality && userModality.price > 0 && !userRegistration?.isPaymentExempt;
+                    
+                    if (needsPayment && !registrationStatus.hasReceipt) {
                         return (
                             <Button 
                                 className="w-full bg-orange-500 hover:bg-orange-600"
@@ -990,6 +1137,16 @@ export default function AGPage() {
                             >
                                 <CreditCard className="w-4 h-4 mr-2" />
                                 Esperando Pagamento
+                            </Button>
+                        );
+                    } else {
+                        return (
+                            <Button 
+                                className="w-full bg-amber-500 hover:bg-amber-600"
+                                disabled
+                            >
+                                <Clock className="w-4 h-4 mr-2" />
+                                Em Análise
                             </Button>
                         );
                     }
@@ -1000,18 +1157,30 @@ export default function AGPage() {
                             disabled
                         >
                             <Clock className="w-4 h-4 mr-2" />
-                            Esperando Análise
+                            Em Análise
                         </Button>
                     );
                 case "approved":
                     return (
-                        <Button 
-                            className="w-full bg-green-500 hover:bg-green-600"
-                            disabled
-                        >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Inscrito(a)
-                        </Button>
+                        <div className="space-y-2">
+                            <Button 
+                                className="w-full bg-green-500 hover:bg-green-600"
+                                onClick={() => router.push(`/ag/${assembly._id}/register/success/${registrationStatus.registrationId}`)}
+                            >
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Ver Comprovante
+                            </Button>
+                            {userRegistration?.receiptStorageId && receiptFileUrl && (
+                                <Button 
+                                    className="w-full bg-blue-500 hover:bg-blue-600"
+                                    onClick={() => window.open(receiptFileUrl, '_blank')}
+                                    variant="outline"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Baixar Comprovante de Pagamento
+                                </Button>
+                            )}
+                        </div>
                     );
                 case "rejected":
                     return (
@@ -1020,8 +1189,8 @@ export default function AGPage() {
                                 className="w-full bg-red-500 hover:bg-red-600"
                                 onClick={() => router.push(`/ag/${assembly._id}/register/resubmit/${registrationStatus.registrationId}`)}
                             >
-                                <XCircle className="w-4 h-4 mr-2" />
-                                Rejeito - Corrigir
+                                <AlertTriangle className="w-4 h-4 mr-2" />
+                                Inscrição Rejeitada - Reenviar
                             </Button>
                             {registrationStatus.rejectionReason && (
                                 <p className="text-xs text-red-600 bg-red-50 p-2 rounded">
@@ -1033,11 +1202,10 @@ export default function AGPage() {
                 default:
                     return (
                         <Button 
-                            className="w-full"
+                            className="w-full bg-gray-500 hover:bg-gray-600"
                             disabled
-                            variant="outline"
                         >
-                            Status: {registrationStatus.status}
+                            Status Desconhecido
                         </Button>
                     );
             }
@@ -1171,6 +1339,13 @@ export default function AGPage() {
                 onConfirm={handleDeleteAGConfirm}
             />
 
+            <ArchiveAGDialog
+                isOpen={isArchiveDialogOpen}
+                onOpenChange={handleArchiveDialogOpenChange}
+                assembly={selectedAssembly}
+                onConfirm={handleArchiveAGConfirm}
+            />
+
             <CreationProgressDialog 
                 isOpen={isCreating}
                 creationProgress={creationProgress}
@@ -1191,13 +1366,21 @@ export default function AGPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center space-x-4">
+                            <Button 
+                                variant="outline"
+                                onClick={() => router.push("/ag/archived")}
+                                className="flex items-center space-x-2"
+                            >
+                                <Archive className="w-4 h-4" />
+                                <span>Ver Arquivadas</span>
+                            </Button>
                             <Button 
                                 onClick={() => setIsCreateDialogOpen(true)}
-                                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                             >
                                 <Plus className="w-4 h-4 mr-2" />
-                                Nova AG
+                                Nova Assembleia
                             </Button>
                         </div>
                     </CardContent>
@@ -1234,7 +1417,7 @@ export default function AGPage() {
                 {/* Available Assemblies */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     {activeAssemblies?.map((assembly) => (
-                        <AssemblyUserCard key={assembly._id} assembly={assembly as Assembly} />
+                        <AssemblyUserCard key={assembly._id} assembly={assembly as Assembly} agConfig={agConfig} />
                     ))}
                 </div>
 

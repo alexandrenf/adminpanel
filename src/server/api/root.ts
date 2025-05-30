@@ -13,6 +13,7 @@ import { crRouter } from "./routers/crRouter";
 import { regionalRouter } from "./routers/regionalRouter";
 import { configRouter } from "./routers/configRouter";
 import { registrosRouter } from "~/server/api/routers/registrosRouter";
+import { archivedAgRouter } from "~/server/api/routers/archivedAg";
 
 /**
  * This is the primary router for your server.
@@ -34,6 +35,7 @@ export const appRouter = createTRPCRouter({
   times: timesRouter,
   config: configRouter,
   registros: registrosRouter,
+  archivedAg: archivedAgRouter,
 });
 
 // export type definition of API

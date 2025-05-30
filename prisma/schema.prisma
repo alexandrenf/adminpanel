@@ -62,6 +62,7 @@ model User {
     posts         Post[]
     blogs         Blog[]
     registros     Registros[]
+    archivedAssemblies ArchivedAssembly[]
 }
 
 model VerificationToken {
@@ -186,4 +187,184 @@ model Registros {
     updatedById String
 
     @@index([updatedById])
+}
+
+// Archived AG data structures - when AGs are archived, data moves from Convex to Prisma
+model ArchivedAssembly {
+    id              String   @id // Original Convex ID
+    name            String
+    type            String   // "AG" | "AGE"
+    location        String
+    startDate       DateTime
+    endDate         DateTime
+    originalStatus  String   // Original status from Convex
+    createdAt       DateTime
+    createdBy       String
+    lastUpdated     DateTime
+    lastUpdatedBy   String
+    
+    // Registration settings
+    registrationOpen     Boolean
+    registrationDeadline DateTime?
+    maxParticipants      Int?
+    description          String?
+    paymentRequired      Boolean?
+    
+    // Archive metadata
+    archivedAt           DateTime @default(now())
+    archivedBy           String
+    archivedByUser       User     @relation(fields: [archivedBy], references: [id])
+    
+    // Relations to archived data
+    participants         ArchivedAGParticipant[]
+    registrations        ArchivedAGRegistration[]
+    modalities          ArchivedRegistrationModality[]
+    configSnapshot      ArchivedAGConfig?
+    
+    @@index([name])
+    @@index([archivedAt])
+    @@index([type])
+}
+
+model ArchivedAGParticipant {
+    id              String           @id // Original Convex ID
+    assemblyId      String
+    assembly        ArchivedAssembly @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+    
+    type            String
+    participantId   String
+    name            String
+    role            String?
+    status          String?
+    escola          String?
+    regional        String?
+    cidade          String?
+    uf              String?
+    agFiliacao      String?
+    
+    addedAt         DateTime
+    addedBy         String
+    
+    @@index([assemblyId])
+    @@index([participantId])
+    @@index([type])
+}
+
+model ArchivedRegistrationModality {
+    id                  String           @id // Original Convex ID
+    assemblyId          String
+    assembly            ArchivedAssembly @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+    
+    name                String
+    description         String?
+    price               Int              // Price in cents
+    maxParticipants     Int?
+    isActive            Boolean
+    displayOrder        Int
+    createdAt           DateTime
+    createdBy           String
+    
+    registrations       ArchivedAGRegistration[]
+    
+    @@index([assemblyId])
+}
+
+model ArchivedAGRegistration {
+    id                         String                        @id // Original Convex ID
+    assemblyId                 String
+    assembly                   ArchivedAssembly              @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+    modalityId                 String?
+    modality                   ArchivedRegistrationModality? @relation(fields: [modalityId], references: [id])
+    
+    participantType            String
+    participantId              String
+    participantName            String
+    participantRole            String?
+    participantStatus          String?
+    registeredAt               DateTime
+    registeredBy               String
+    status                     String // "pending" | "approved" | "rejected" | "cancelled"
+    
+    // Contact and basic info
+    escola                     String?
+    regional                   String?
+    cidade                     String?
+    uf                         String?
+    agFiliacao                 String?
+    email                      String?
+    phone                      String?
+    specialNeeds               String?
+    
+    // Detailed personal information
+    emailSolar                 String?
+    dataNascimento             String?
+    cpf                        String?
+    nomeCracha                 String?
+    celular                    String?
+    comiteLocal                String?
+    comiteAspirante            String?
+    autorizacaoCompartilhamento Boolean?
+    
+    // Additional information
+    experienciaAnterior        String?
+    motivacao                  String?
+    expectativas               String?
+    dietaRestricoes            String?
+    alergias                   String?
+    medicamentos               String?
+    necessidadesEspeciais      String?
+    restricaoQuarto            String?
+    pronomes                   String?
+    contatoEmergenciaNome      String?
+    contatoEmergenciaTelefone  String?
+    outrasObservacoes          String?
+    participacaoComites        String? // JSON string of array
+    interesseVoluntariado      Boolean?
+    
+    // Payment information
+    isPaymentExempt            Boolean?
+    paymentExemptReason        String?
+    
+    // Receipt information (file data, not storage reference)
+    receiptFileName            String?
+    receiptFileType            String?
+    receiptFileSize            Int?
+    receiptFileData            String? @db.LongText // Base64 encoded file data
+    receiptUploadedAt          DateTime?
+    receiptUploadedBy          String?
+    
+    // Review information
+    reviewedAt                 DateTime?
+    reviewedBy                 String?
+    reviewNotes                String?
+    rejectionReason            String?
+    resubmittedAt              DateTime?
+    resubmissionNote           String?
+    
+    @@index([assemblyId])
+    @@index([participantId])
+    @@index([status])
+}
+
+model ArchivedAGConfig {
+    id                      String           @id @default(cuid())
+    assemblyId              String           @unique
+    assembly                ArchivedAssembly @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+    
+    // Config snapshot at time of archiving
+    codeOfConductUrl        String?
+    paymentInfo             String?
+    paymentInstructions     String?
+    bankDetails             String?
+    pixKey                  String?
+    registrationEnabled     Boolean
+    autoApproval            Boolean
+    
+    // Original timestamps
+    originalCreatedAt       DateTime
+    originalUpdatedAt       DateTime
+    originalUpdatedBy       String
+    
+    // Archive metadata
+    archivedAt              DateTime @default(now())
 }

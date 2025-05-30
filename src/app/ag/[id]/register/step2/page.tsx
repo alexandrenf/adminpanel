@@ -93,6 +93,9 @@ export default function AGRegistrationStep2Page() {
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
     
+    // Add AG config query to check global registration settings
+    const agConfig = useQuery(convexApi.agConfig?.get);
+    
     // Handle input changes
     const handleInputChange = useCallback((field: keyof Step2FormData, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -227,6 +230,42 @@ export default function AGRegistrationStep2Page() {
         );
     }
 
+    // Check if registrations are globally disabled
+    if (agConfig && !agConfig.registrationEnabled) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Inscrições Desabilitadas</h1>
+                    <p className="text-gray-600 mb-4">
+                        As inscrições para assembleias gerais estão temporariamente desabilitadas.
+                    </p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
+    // Check if registration is closed for this assembly
+    if (!assembly.registrationOpen) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <AlertTriangle className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Inscrições Fechadas</h1>
+                    <p className="text-gray-600 mb-4">
+                        As inscrições para esta assembleia estão fechadas.
+                    </p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
             <div className="container mx-auto px-6 py-12">
@@ -241,7 +280,7 @@ export default function AGRegistrationStep2Page() {
                                 <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
                                     Inscrição - {assembly.name}
                                 </h1>
-                                <p className="text-gray-600">Etapa 2 de 3: Informações Adicionais</p>
+                                <p className="text-gray-600">Etapa 2 de 4: Informações de Saúde e Acessibilidade</p>
                             </div>
                         </div>
                         

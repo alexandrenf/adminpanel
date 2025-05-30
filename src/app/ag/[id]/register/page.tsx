@@ -27,7 +27,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "../../../../components/ui/popover";
-import { Check, ChevronsUpDown, UserPlus, ArrowRight, Calendar, Users, MapPin } from "lucide-react";
+import { Check, ChevronsUpDown, UserPlus, ArrowRight, Calendar, Users, MapPin, XCircle } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -59,20 +59,6 @@ type RegistrationFormData = {
     comiteAspirante?: string;
     autorizacaoCompartilhamento: boolean;
     selectedModalityId?: string;
-    experienciaAnterior: string;
-    motivacao: string;
-    expectativas: string;
-    dietaRestricoes: string;
-    alergias: string;
-    medicamentos: string;
-    necessidadesEspeciais: string;
-    restricaoQuarto: string;
-    pronomes: string;
-    contatoEmergenciaNome: string;
-    contatoEmergenciaTelefone: string;
-    outrasObservacoes: string;
-    participacaoComites: string[];
-    interesseVoluntariado: boolean;
 };
 
 // Local committee type
@@ -102,6 +88,9 @@ export default function AGRegistrationPage() {
         convexApi.registrationModalities?.getActiveByAssembly,
         { assemblyId: assemblyId as any }
     );
+    
+    // Add AG config query to check global registration settings
+    const agConfig = useQuery(convexApi.agConfig?.get);
     
     // Fetch local committees for dropdown
     const { data: registrosData } = api.registros.get.useQuery();
@@ -145,26 +134,11 @@ export default function AGRegistrationPage() {
         comiteAspirante: "",
         autorizacaoCompartilhamento: false,
         selectedModalityId: "", // Initialize modality selection
-        experienciaAnterior: "",
-        motivacao: "",
-        expectativas: "",
-        dietaRestricoes: "",
-        alergias: "",
-        medicamentos: "",
-        necessidadesEspeciais: "",
-        restricaoQuarto: "",
-        pronomes: "",
-        contatoEmergenciaNome: "",
-        contatoEmergenciaTelefone: "",
-        outrasObservacoes: "",
-        participacaoComites: [],
-        interesseVoluntariado: false,
     }), [session?.user?.email]);
 
     const [formData, setFormData] = useState<RegistrationFormData>(initialFormData);
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     const [comiteLocalOpen, setComiteLocalOpen] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Convex mutations
     const createRegistration = useMutation(convexApi.agRegistrations?.createFromForm);
@@ -272,70 +246,89 @@ export default function AGRegistrationPage() {
         
         if (!validateForm()) return;
         
-        setIsSubmitting(true);
-        
-        try {
-            setIsSubmitting(true);
-            
-            if (!session?.user?.id) {
-                throw new Error("Usuário não autenticado");
+        // Check if this is an AGE (online assembly) - skip steps 2 and 3
+        if (assembly?.type === "AGE") {
+            // For AGE, create registration directly with auto-approval
+            try {
+                const registrationData = {
+                    assemblyId: assemblyId as any,
+                    modalityId: formData.selectedModalityId as any,
+                    userId: session!.user!.id,
+                    personalInfo: {
+                        nome: formData.nome,
+                        email: formData.email,
+                        emailSolar: formData.emailSolar,
+                        dataNascimento: formData.dataNascimento,
+                        cpf: formData.cpf,
+                        nomeCracha: formData.nomeCracha,
+                        celular: formData.celular,
+                        uf: formData.uf,
+                        cidade: formData.cidade,
+                        role: formData.role,
+                        comiteLocal: formData.comiteLocal,
+                        comiteAspirante: formData.comiteAspirante,
+                        autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
+                    },
+                    additionalInfo: {
+                        experienciaAnterior: "", // Empty for AGE
+                        motivacao: "AGE - Não especificado", // Default for AGE
+                        expectativas: "", // Empty for AGE
+                        dietaRestricoes: "", // Empty for AGE
+                        alergias: "", // Empty for AGE
+                        medicamentos: "", // Empty for AGE
+                        necessidadesEspeciais: "", // Empty for AGE
+                        restricaoQuarto: "", // Empty for AGE
+                        pronomes: "", // Empty for AGE
+                        contatoEmergenciaNome: "", // Empty for AGE
+                        contatoEmergenciaTelefone: "", // Empty for AGE
+                        outrasObservacoes: "", // Empty for AGE
+                        participacaoComites: [], // Empty for AGE
+                        interesseVoluntariado: false, // Default for AGE
+                    },
+                    status: "approved" as const, // Auto-approve AGE registrations
+                };
+
+                const registrationId = await createRegistration(registrationData);
+                
+                toast({
+                    title: "✅ Inscrição Realizada com Sucesso!",
+                    description: "Sua inscrição AGE foi aprovada automaticamente.",
+                });
+                
+                // Navigate directly to success page
+                router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
+                
+            } catch (error) {
+                console.error("Error creating AGE registration:", error);
+                toast({
+                    title: "❌ Erro",
+                    description: "Erro ao finalizar inscrição AGE. Tente novamente.",
+                    variant: "destructive",
+                });
             }
-            
-            const registrationId = await createRegistration({
-                assemblyId: assemblyId as any,
-                modalityId: formData.selectedModalityId as any,
-                userId: session.user.id,
-                personalInfo: {
-                    nome: formData.nome,
-                    email: formData.email,
-                    emailSolar: formData.emailSolar,
-                    dataNascimento: formData.dataNascimento,
-                    cpf: formData.cpf,
-                    nomeCracha: formData.nomeCracha,
-                    celular: formData.celular,
-                    uf: formData.uf,
-                    cidade: formData.cidade,
-                    role: formData.role,
-                    comiteLocal: formData.comiteLocal,
-                    comiteAspirante: formData.comiteAspirante,
-                    autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
-                },
-                additionalInfo: {
-                    experienciaAnterior: formData.experienciaAnterior,
-                    motivacao: formData.motivacao,
-                    expectativas: formData.expectativas,
-                    dietaRestricoes: formData.dietaRestricoes,
-                    alergias: formData.alergias,
-                    medicamentos: formData.medicamentos,
-                    necessidadesEspeciais: formData.necessidadesEspeciais,
-                    restricaoQuarto: formData.restricaoQuarto,
-                    pronomes: formData.pronomes,
-                    contatoEmergenciaNome: formData.contatoEmergenciaNome,
-                    contatoEmergenciaTelefone: formData.contatoEmergenciaTelefone,
-                    outrasObservacoes: formData.outrasObservacoes,
-                    participacaoComites: formData.participacaoComites,
-                    interesseVoluntariado: formData.interesseVoluntariado,
-                },
-                status: "pending",
-            });
+        } else {
+            // For regular AG, save form data and continue to step 2
+            sessionStorage.setItem('agRegistrationStep1', JSON.stringify({
+                nome: formData.nome,
+                email: formData.email,
+                emailSolar: formData.emailSolar,
+                dataNascimento: formData.dataNascimento,
+                cpf: formData.cpf,
+                nomeCracha: formData.nomeCracha,
+                celular: formData.celular,
+                uf: formData.uf,
+                cidade: formData.cidade,
+                role: formData.role,
+                comiteLocal: formData.comiteLocal,
+                comiteAspirante: formData.comiteAspirante,
+                autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
+                selectedModalityId: formData.selectedModalityId,
+            }));
 
-            toast({
-                title: "✅ Inscrição Realizada!",
-                description: "Sua inscrição foi enviada com sucesso.",
-            });
-
-            // Redirect to success page instead of payment info
-            router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
-        } catch (error) {
-            toast({
-                title: "❌ Erro",
-                description: "Erro ao salvar dados. Tente novamente.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsSubmitting(false);
+            // Navigate to step 2
+            router.push(`/ag/${assemblyId}/register/step2`);
         }
-    }, [validateForm, toast, assemblyId, router, formData]);
+    }, [validateForm, formData, assemblyId, assembly?.type, session, createRegistration, toast, router]);
 
     // Check if user has IFMSA email
     useEffect(() => {
@@ -407,6 +400,42 @@ export default function AGRegistrationPage() {
         );
     }
 
+    // Check if registrations are globally disabled
+    if (agConfig && !agConfig.registrationEnabled) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Inscrições Desabilitadas</h1>
+                    <p className="text-gray-600 mb-4">
+                        As inscrições para assembleias gerais estão temporariamente desabilitadas.
+                    </p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
+    // Check if registration is closed for this assembly
+    if (!assembly.registrationOpen) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <XCircle className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Inscrições Fechadas</h1>
+                    <p className="text-gray-600 mb-4">
+                        As inscrições para esta assembleia estão fechadas.
+                    </p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
             <div className="container mx-auto px-6 py-12">
@@ -421,7 +450,12 @@ export default function AGRegistrationPage() {
                                 <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
                                     Inscrição - {assembly.name}
                                 </h1>
-                                <p className="text-gray-600">Etapa 1 de 3: Informações Pessoais</p>
+                                <p className="text-gray-600">
+                                    {assembly.type === "AGE" 
+                                        ? "Etapa 1 de 1: Informações Pessoais" 
+                                        : "Etapa 1 de 4: Informações Pessoais"
+                                    }
+                                </p>
                             </div>
                         </div>
                         
@@ -702,20 +736,10 @@ export default function AGRegistrationPage() {
                                 <div className="flex justify-end">
                                     <Button 
                                         type="submit" 
-                                        disabled={isSubmitting}
                                         className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                                     >
-                                        {isSubmitting ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Salvando...
-                                            </>
-                                        ) : (
-                                            <>
-                                                Continuar
-                                                <ArrowRight className="w-4 h-4 ml-2" />
-                                            </>
-                                        )}
+                                        {assembly.type === "AGE" ? "Finalizar Inscrição" : "Continuar"}
+                                        <ArrowRight className="w-4 h-4 ml-2" />
                                     </Button>
                                 </div>
                             </form>

@@ -81,17 +81,13 @@ export default function AGRegistrationStep3Page() {
     const [step1Data, setStep1Data] = useState<Step1FormData | null>(null);
     const [step2Data, setStep2Data] = useState<Step2FormData | null>(null);
     const [formData, setFormData] = useState<Step3FormData>(initialStep3FormData);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
 
-    // Get AG configuration
+    // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
-
-    // Registration mutation
-    const createRegistration = useMutation(convexApi.agRegistrations?.createFromForm);
 
     // Handle input changes
     const handleInputChange = useCallback((field: keyof Step3FormData, value: string | boolean) => {
@@ -134,75 +130,20 @@ export default function AGRegistrationStep3Page() {
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!validateForm() || !step1Data || !step2Data || !session?.user?.id) return;
+        if (!validateForm() || !step1Data || !step2Data) return;
         
-        setIsSubmitting(true);
+        // Save step3 data to session storage
+        sessionStorage.setItem('agRegistrationStep3', JSON.stringify({
+            nomeCompleto: formData.nomeCompleto,
+            cidade: formData.cidade,
+            dataAssinatura: formData.dataAssinatura,
+            aceitoCodigo: formData.aceitoCodigo,
+        }));
         
-        try {
-            // Combine all steps data
-            const registrationData = {
-                assemblyId: assemblyId as any,
-                userId: session.user.id,
-                personalInfo: {
-                    nome: step1Data.nome,
-                    email: step1Data.email,
-                    emailSolar: step1Data.emailSolar,
-                    dataNascimento: step1Data.dataNascimento,
-                    cpf: step1Data.cpf,
-                    nomeCracha: step1Data.nomeCracha,
-                    celular: step1Data.celular,
-                    uf: step1Data.uf,
-                    cidade: step1Data.cidade,
-                    role: step1Data.role,
-                    comiteLocal: step1Data.comiteLocal,
-                    comiteAspirante: step1Data.comiteAspirante,
-                    autorizacaoCompartilhamento: step1Data.autorizacaoCompartilhamento,
-                },
-                additionalInfo: {
-                    experienciaAnterior: "", // Empty since removed
-                    motivacao: "Não especificado", // Default value since removed but still required by API
-                    expectativas: "", // Empty since removed
-                    dietaRestricoes: step2Data.dietaRestricoes,
-                    alergias: step2Data.alergias,
-                    medicamentos: step2Data.medicamentos,
-                    necessidadesEspeciais: step2Data.necessidadesEspeciais,
-                    restricaoQuarto: step2Data.restricaoQuarto,
-                    pronomes: step2Data.pronomes,
-                    contatoEmergenciaNome: step2Data.contatoEmergenciaNome,
-                    contatoEmergenciaTelefone: step2Data.contatoEmergenciaTelefone,
-                    outrasObservacoes: step2Data.outrasObservacoes,
-                    participacaoComites: [], // Empty array since removed
-                    interesseVoluntariado: false, // Default since removed
-                },
-                status: "pending" as const,
-            };
-
-            // Create registration
-            const registrationId = await createRegistration(registrationData);
-            
-            toast({
-                title: "✅ Inscrição Realizada com Sucesso!",
-                description: "Sua inscrição foi enviada e está sendo analisada.",
-            });
-            
-            // Clear session storage
-            sessionStorage.removeItem('agRegistrationStep1');
-            sessionStorage.removeItem('agRegistrationStep2');
-            
-            // Navigate to payment information page
-            router.push(`/ag/${assemblyId}/register/payment-info/${registrationId}`);
-            
-        } catch (error) {
-            console.error("Error creating registration:", error);
-            toast({
-                title: "❌ Erro",
-                description: "Erro ao finalizar inscrição. Tente novamente.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [validateForm, step1Data, step2Data, session?.user?.id, assemblyId, createRegistration, formData, toast, router]);
+        // Navigate to step 4 (payment)
+        router.push(`/ag/${assemblyId}/register/step4`);
+        
+    }, [validateForm, step1Data, step2Data, formData, assemblyId, router]);
 
     // Check if user has IFMSA email
     useEffect(() => {
@@ -282,6 +223,42 @@ export default function AGRegistrationStep3Page() {
         );
     }
 
+    // Check if registrations are globally disabled
+    if (agConfig && !agConfig.registrationEnabled) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Inscrições Desabilitadas</h1>
+                    <p className="text-gray-600 mb-4">
+                        As inscrições para assembleias gerais estão temporariamente desabilitadas.
+                    </p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
+    // Check if registration is closed for this assembly
+    if (!assembly.registrationOpen) {
+        return (
+            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <AlertTriangle className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Inscrições Fechadas</h1>
+                    <p className="text-gray-600 mb-4">
+                        As inscrições para esta assembleia estão fechadas.
+                    </p>
+                    <Button onClick={() => router.push("/ag")}>
+                        Voltar às Assembleias
+                    </Button>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
             <div className="container mx-auto px-6 py-12">
@@ -296,7 +273,7 @@ export default function AGRegistrationStep3Page() {
                                 <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
                                     Inscrição - {assembly.name}
                                 </h1>
-                                <p className="text-gray-600">Etapa 3 de 3: Código de Conduta</p>
+                                <p className="text-gray-600">Etapa 3 de 4: Código de Conduta</p>
                             </div>
                         </div>
                         
@@ -442,20 +419,10 @@ export default function AGRegistrationStep3Page() {
                                         
                                         <Button 
                                             type="submit" 
-                                            disabled={isSubmitting}
                                             className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
                                         >
-                                            {isSubmitting ? (
-                                                <>
-                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                    Finalizando...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    Assinar e Continuar
-                                                    <PenTool className="w-4 h-4 ml-2" />
-                                                </>
-                                            )}
+                                            Assinar e Continuar
+                                            <PenTool className="w-4 h-4 ml-2" />
                                         </Button>
                                     </div>
                                 </form>
