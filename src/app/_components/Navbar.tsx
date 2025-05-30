@@ -119,7 +119,8 @@ const Navbar: React.FC = () => {
                     {/* Desktop Navigation */}
                     <div className="hidden md:flex md:ml-6 md:space-x-1">
                         {navLinks.map((link) => {
-                            const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
+                            const currentPath = pathname ?? "";
+                            const isActive = currentPath === link.href || (link.href !== "/" && currentPath.startsWith(link.href));
                             return (
                                 <Link
                                     key={link.label}
@@ -210,7 +211,8 @@ const Navbar: React.FC = () => {
                                     {/* Navigation links */}
                                     <div className="flex-1 py-4 space-y-1">
                                         {navLinks.map((link) => {
-                                            const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
+                                            const currentPath = pathname ?? "";
+                                            const isActive = currentPath === link.href || (link.href !== "/" && currentPath.startsWith(link.href));
                                             return (
                                                 <Link
                                                     key={link.label}

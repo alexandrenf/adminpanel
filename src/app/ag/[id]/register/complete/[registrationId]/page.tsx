@@ -25,10 +25,10 @@ import PrecisaLogin from "~/app/_components/PrecisaLogin";
 export default function RegistrationCompletePage() {
     const { data: session } = useSession();
     const router = useRouter();
-    const params = useParams();
+    const params = useParams() as { id: string; registrationId: string };
     
-    const assemblyId = params.id as string;
-    const registrationId = params.registrationId as string;
+    const assemblyId = params.id;
+    const registrationId = params.registrationId;
     
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     
