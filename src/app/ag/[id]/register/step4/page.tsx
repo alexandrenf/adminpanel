@@ -31,6 +31,7 @@ import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../../convex/_generated/api";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
+import { handleNewRegistration } from "~/app/actions/emailExamples";
 
 // Registration form data types (from previous steps)
 type Step1FormData = {
@@ -313,6 +314,32 @@ export default function AGRegistrationStep4Page() {
             };
 
             const registrationId = await createRegistration(registrationData);
+
+            // Send confirmation email
+            try {
+                // Add null checks for safety
+                if (!assembly || !selectedModality) {
+                    console.warn('⚠️ Cannot send confirmation email: missing assembly or modality data');
+                    return;
+                }
+
+                await handleNewRegistration({
+                    registrationId: registrationId as string,
+                    participantName: step1Data!.nome,
+                    participantEmail: step1Data!.email,
+                    assemblyName: assembly.name,
+                    assemblyLocation: assembly.location,
+                    assemblyStartDate: new Date(assembly.startDate),
+                    assemblyEndDate: new Date(assembly.endDate),
+                    modalityName: selectedModality.name,
+                    paymentRequired: selectedModality.price > 0,
+                    paymentAmount: selectedModality.price > 0 ? selectedModality.price : undefined,
+                });
+                console.log('✅ Confirmation email sent successfully');
+            } catch (emailError) {
+                console.error('⚠️ Failed to send confirmation email:', emailError);
+                // Don't fail the registration if email fails
+            }
 
             // If payment receipt was uploaded, attach it to the registration
             if (selectedFile && !isPaymentExempt) {

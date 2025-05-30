@@ -35,6 +35,7 @@ import { api as convexApi } from "../../../../../convex/_generated/api";
 import { api } from "~/trpc/react";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
+import { handleNewRegistration } from "~/app/actions/emailExamples";
 
 // Brazilian states
 const BRAZILIAN_STATES = [
@@ -290,6 +291,33 @@ export default function AGRegistrationPage() {
                 };
 
                 const registrationId = await createRegistration(registrationData);
+                
+                // Send confirmation email for AGE registration
+                try {
+                    const selectedModality = activeModalities?.find(m => m._id === formData.selectedModalityId);
+                    
+                    // Add null checks for safety
+                    if (!assembly || !selectedModality) {
+                        console.warn('⚠️ Cannot send AGE confirmation email: missing assembly or modality data');
+                    } else {
+                        await handleNewRegistration({
+                            registrationId: registrationId as string,
+                            participantName: formData.nome,
+                            participantEmail: formData.email,
+                            assemblyName: assembly.name,
+                            assemblyLocation: assembly.location,
+                            assemblyStartDate: new Date(assembly.startDate),
+                            assemblyEndDate: new Date(assembly.endDate),
+                            modalityName: selectedModality.name,
+                            paymentRequired: selectedModality.price ? selectedModality.price > 0 : false,
+                            paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price : undefined,
+                        });
+                        console.log('✅ AGE confirmation email sent successfully');
+                    }
+                } catch (emailError) {
+                    console.error('⚠️ Failed to send AGE confirmation email:', emailError);
+                    // Don't fail the registration if email fails
+                }
                 
                 toast({
                     title: "✅ Inscrição Realizada com Sucesso!",
