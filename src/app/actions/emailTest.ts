@@ -111,9 +111,19 @@ Configuration details:
 export async function testRegistrationConfirmation() {
   console.log('Testing registration confirmation email...');
   
+  // Get the current user's session
+  const session = await getServerAuthSession();
+  if (!session?.user?.email) {
+    return {
+      success: false,
+      message: 'No authenticated user found',
+      error: 'UNAUTHORIZED'
+    };
+  }
+
   const testData = {
-    to: env.WEBMASTER_EMAIL,
-    participantName: 'João Silva (Test)',
+    to: session.user.email,
+    participantName: session.user.name || 'Test User',
     registrationId: 'TEST-REG-' + Date.now(),
     assemblyName: 'AG Nacional 2024 - TESTE',
     assemblyLocation: 'São Paulo, SP',
