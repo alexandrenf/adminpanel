@@ -18,9 +18,10 @@ import {
     AlertTriangle,
     Info,
     Copy,
-    ExternalLink
+    ExternalLink,
+    Loader2
 } from "lucide-react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../../../convex/_generated/api";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
@@ -37,12 +38,16 @@ export default function PaymentInfoPage() {
     
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     const [isExempt, setIsExempt] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
     
     // Get AG configuration for payment info
     const agConfig = useQuery(convexApi.agConfig?.get);
+    
+    // Mutation to update payment exemption
+    const updatePaymentExemption = useMutation(convexApi.agRegistrations?.updatePaymentExemption);
 
     // Copy to clipboard function
     const copyToClipboard = useCallback(async (text: string, label: string) => {
@@ -55,21 +60,52 @@ export default function PaymentInfoPage() {
         } catch (error) {
             toast({
                 title: "❌ Erro",
-                description: "Erro ao copiar para a área de transferência.",
+                description: "Não foi possível copiar. Tente selecionar e copiar manualmente.",
                 variant: "destructive",
             });
         }
     }, [toast]);
 
-    const handleContinue = useCallback(() => {
-        if (isExempt) {
-            // If exempt, go directly to success/confirmation page
-            router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
-        } else {
-            // Otherwise, go to payment page
-            router.push(`/ag/${assemblyId}/register/payment/${registrationId}`);
+    const handleContinue = useCallback(async () => {
+        setIsLoading(true);
+        
+        try {
+            if (isExempt) {
+                // Update registration with exemption status
+                await updatePaymentExemption({
+                    registrationId: registrationId as any,
+                    isPaymentExempt: true,
+                    paymentExemptReason: "Isenção declarada pelo usuário",
+                });
+                
+                toast({
+                    title: "✅ Isenção Registrada",
+                    description: "Sua isenção de pagamento foi registrada com sucesso.",
+                });
+                
+                // Go directly to success/confirmation page
+                router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
+            } else {
+                // Update registration to indicate payment is required
+                await updatePaymentExemption({
+                    registrationId: registrationId as any,
+                    isPaymentExempt: false,
+                });
+                
+                // Go to payment page
+                router.push(`/ag/${assemblyId}/register/payment/${registrationId}`);
+            }
+        } catch (error) {
+            console.error("Error updating payment exemption:", error);
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao processar informações de pagamento. Tente novamente.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
         }
-    }, [isExempt, assemblyId, registrationId, router]);
+    }, [isExempt, assemblyId, registrationId, router, updatePaymentExemption, toast]);
 
     // Check if user has IFMSA email
     useEffect(() => {
@@ -295,16 +331,23 @@ export default function PaymentInfoPage() {
                                         onClick={handleContinue}
                                         className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                                         size="lg"
+                                        disabled={isLoading}
                                     >
-                                        {isExempt ? (
-                                            <>
-                                                Finalizar Inscrição
-                                                <CheckCircle className="w-4 h-4 ml-2" />
-                                            </>
+                                        {isLoading ? (
+                                            <Loader2 className="animate-spin w-4 h-4 mr-2" />
                                         ) : (
                                             <>
-                                                Ir para Pagamento
-                                                <ArrowRight className="w-4 h-4 ml-2" />
+                                                {isExempt ? (
+                                                    <>
+                                                        Finalizar Inscrição
+                                                        <CheckCircle className="w-4 h-4 ml-2" />
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        Ir para Pagamento
+                                                        <ArrowRight className="w-4 h-4 ml-2" />
+                                                    </>
+                                                )}
                                             </>
                                         )}
                                     </Button>

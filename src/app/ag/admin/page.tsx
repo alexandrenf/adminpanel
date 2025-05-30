@@ -42,7 +42,9 @@ import {
     Loader2,
     Download,
     AlertTriangle,
-    Info
+    Info,
+    ExternalLink,
+    ImageIcon
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -87,7 +89,71 @@ type Registration = {
     escola?: string;
     regional?: string;
     agFiliacao?: string;
+    
+    // Detailed personal information from registration form
+    emailSolar?: string;
+    dataNascimento?: string;
+    cpf?: string;
+    nomeCracha?: string;
+    celular?: string;
+    comiteLocal?: string;
+    comiteAspirante?: string;
+    autorizacaoCompartilhamento?: boolean;
+    
+    // Additional information from registration form
+    experienciaAnterior?: string;
+    motivacao?: string;
+    expectativas?: string;
+    dietaRestricoes?: string;
+    alergias?: string;
+    medicamentos?: string;
+    necessidadesEspeciais?: string;
+    restricaoQuarto?: string;
+    pronomes?: string;
+    contatoEmergenciaNome?: string;
+    contatoEmergenciaTelefone?: string;
+    outrasObservacoes?: string;
+    participacaoComites?: string[];
+    interesseVoluntariado?: boolean;
+    
+    // Payment information
+    isPaymentExempt?: boolean;
+    paymentExemptReason?: string;
+    
+    // Payment receipt fields
+    receiptStorageId?: string;
+    receiptFileName?: string;
+    receiptFileType?: string;
+    receiptFileSize?: number;
+    receiptUploadedAt?: number;
+    receiptUploadedBy?: string;
 };
+
+// Payment Receipt Viewer Component
+function PaymentReceiptViewer({ storageId }: { storageId: string }) {
+    const fileUrl = useQuery(convexApi.files?.getFileUrl, { storageId });
+    
+    if (!fileUrl) {
+        return (
+            <Button size="sm" disabled>
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                Carregando...
+            </Button>
+        );
+    }
+    
+    return (
+        <Button 
+            size="sm" 
+            variant="outline"
+            onClick={() => window.open(fileUrl, '_blank')}
+            className="text-blue-600 hover:text-blue-700"
+        >
+            <ExternalLink className="w-3 h-3 mr-1" />
+            Ver Comprovante
+        </Button>
+    );
+}
 
 export default function AGAdminPage() {
     const { data: session } = useSession();
@@ -793,71 +859,344 @@ export default function AGAdminPage() {
 
                     {/* Registration Review Dialog */}
                     <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
-                        <DialogContent className="sm:max-w-[600px]">
+                        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                                <DialogTitle>Revisar Inscrição</DialogTitle>
+                                <DialogTitle className="flex items-center space-x-2">
+                                    <Eye className="w-5 h-5" />
+                                    <span>Detalhes Completos da Inscrição</span>
+                                </DialogTitle>
                                 <DialogDescription>
-                                    Revise os detalhes da inscrição e aprove ou rejeite.
+                                    Revise todos os detalhes da inscrição e aprove ou rejeite.
                                 </DialogDescription>
                             </DialogHeader>
                             
                             {selectedRegistration && (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <Label className="font-semibold">Nome:</Label>
-                                            <p>{selectedRegistration.participantName}</p>
-                                        </div>
-                                        <div>
-                                            <Label className="font-semibold">Tipo:</Label>
-                                            <p>{selectedRegistration.participantType.toUpperCase()}</p>
-                                        </div>
-                                        <div>
-                                            <Label className="font-semibold">Email:</Label>
-                                            <p>{selectedRegistration.email}</p>
-                                        </div>
-                                        <div>
-                                            <Label className="font-semibold">Telefone:</Label>
-                                            <p>{selectedRegistration.phone || "N/A"}</p>
-                                        </div>
-                                        <div>
-                                            <Label className="font-semibold">Cidade/UF:</Label>
-                                            <p>
-                                                {selectedRegistration.cidade && selectedRegistration.uf ? 
-                                                    `${selectedRegistration.cidade}, ${selectedRegistration.uf}` : 
-                                                    "N/A"
-                                                }
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <Label className="font-semibold">Data da Inscrição:</Label>
-                                            <p>{new Date(selectedRegistration.registeredAt).toLocaleString('pt-BR')}</p>
-                                        </div>
-                                    </div>
-                                    
-                                    {selectedRegistration.specialNeeds && (
-                                        <div>
-                                            <Label className="font-semibold">Necessidades Especiais:</Label>
-                                            <p className="mt-1 p-2 bg-gray-50 rounded">{selectedRegistration.specialNeeds}</p>
-                                        </div>
+                                <div className="space-y-6">
+                                    {/* Basic Information */}
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg flex items-center space-x-2">
+                                                <Users className="w-4 h-4" />
+                                                <span>Informações Básicas</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label className="font-semibold text-blue-700">Nome Completo:</Label>
+                                                    <p className="text-sm">{selectedRegistration.participantName}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-blue-700">Nome no Crachá:</Label>
+                                                    <p className="text-sm">{selectedRegistration.nomeCracha || "N/A"}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-blue-700">Tipo de Participante:</Label>
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {selectedRegistration.participantType.toUpperCase()}
+                                                    </Badge>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-blue-700">Pronomes:</Label>
+                                                    <p className="text-sm">{selectedRegistration.pronomes || "N/A"}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-blue-700">Data de Nascimento:</Label>
+                                                    <p className="text-sm">{selectedRegistration.dataNascimento || "N/A"}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-blue-700">CPF:</Label>
+                                                    <p className="text-sm">{selectedRegistration.cpf || "N/A"}</p>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Contact Information */}
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg flex items-center space-x-2">
+                                                <Info className="w-4 h-4" />
+                                                <span>Contato e Localização</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label className="font-semibold text-green-700">Email Principal:</Label>
+                                                    <p className="text-sm">{selectedRegistration.email}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-green-700">Email Solar:</Label>
+                                                    <p className="text-sm">{selectedRegistration.emailSolar || "N/A"}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-green-700">Celular:</Label>
+                                                    <p className="text-sm">{selectedRegistration.celular || selectedRegistration.phone || "N/A"}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-green-700">Cidade/UF:</Label>
+                                                    <p className="text-sm">
+                                                        {selectedRegistration.cidade && selectedRegistration.uf ? 
+                                                            `${selectedRegistration.cidade}, ${selectedRegistration.uf}` : 
+                                                            "N/A"
+                                                        }
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-green-700">Comitê Local:</Label>
+                                                    <p className="text-sm">{selectedRegistration.comiteLocal || "N/A"}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-green-700">Comitê Aspirante:</Label>
+                                                    <p className="text-sm">{selectedRegistration.comiteAspirante || "N/A"}</p>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Emergency Contact */}
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg flex items-center space-x-2">
+                                                <AlertTriangle className="w-4 h-4" />
+                                                <span>Contato de Emergência</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label className="font-semibold text-red-700">Nome:</Label>
+                                                    <p className="text-sm">{selectedRegistration.contatoEmergenciaNome || "N/A"}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-red-700">Telefone:</Label>
+                                                    <p className="text-sm">{selectedRegistration.contatoEmergenciaTelefone || "N/A"}</p>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Medical and Dietary Information */}
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg flex items-center space-x-2">
+                                                <FileText className="w-4 h-4" />
+                                                <span>Informações Médicas e Dietéticas</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="space-y-3">
+                                                {selectedRegistration.dietaRestricoes && (
+                                                    <div>
+                                                        <Label className="font-semibold text-purple-700">Restrições Alimentares:</Label>
+                                                        <p className="text-sm p-2 bg-purple-50 rounded">{selectedRegistration.dietaRestricoes}</p>
+                                                    </div>
+                                                )}
+                                                {selectedRegistration.alergias && (
+                                                    <div>
+                                                        <Label className="font-semibold text-purple-700">Alergias:</Label>
+                                                        <p className="text-sm p-2 bg-purple-50 rounded">{selectedRegistration.alergias}</p>
+                                                    </div>
+                                                )}
+                                                {selectedRegistration.medicamentos && (
+                                                    <div>
+                                                        <Label className="font-semibold text-purple-700">Medicamentos:</Label>
+                                                        <p className="text-sm p-2 bg-purple-50 rounded">{selectedRegistration.medicamentos}</p>
+                                                    </div>
+                                                )}
+                                                {selectedRegistration.necessidadesEspeciais && (
+                                                    <div>
+                                                        <Label className="font-semibold text-purple-700">Necessidades Especiais:</Label>
+                                                        <p className="text-sm p-2 bg-purple-50 rounded">{selectedRegistration.necessidadesEspeciais}</p>
+                                                    </div>
+                                                )}
+                                                {selectedRegistration.restricaoQuarto && (
+                                                    <div>
+                                                        <Label className="font-semibold text-purple-700">Restrições de Quarto:</Label>
+                                                        <p className="text-sm p-2 bg-purple-50 rounded">{selectedRegistration.restricaoQuarto}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Experience and Motivation */}
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg flex items-center space-x-2">
+                                                <CheckCircle className="w-4 h-4" />
+                                                <span>Experiência e Motivação</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            {selectedRegistration.experienciaAnterior && (
+                                                <div>
+                                                    <Label className="font-semibold text-indigo-700">Experiência Anterior:</Label>
+                                                    <p className="text-sm p-2 bg-indigo-50 rounded">{selectedRegistration.experienciaAnterior}</p>
+                                                </div>
+                                            )}
+                                            {selectedRegistration.motivacao && (
+                                                <div>
+                                                    <Label className="font-semibold text-indigo-700">Motivação:</Label>
+                                                    <p className="text-sm p-2 bg-indigo-50 rounded">{selectedRegistration.motivacao}</p>
+                                                </div>
+                                            )}
+                                            {selectedRegistration.expectativas && (
+                                                <div>
+                                                    <Label className="font-semibold text-indigo-700">Expectativas:</Label>
+                                                    <p className="text-sm p-2 bg-indigo-50 rounded">{selectedRegistration.expectativas}</p>
+                                                </div>
+                                            )}
+                                            {selectedRegistration.participacaoComites && selectedRegistration.participacaoComites.length > 0 && (
+                                                <div>
+                                                    <Label className="font-semibold text-indigo-700">Comitês de Interesse:</Label>
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {selectedRegistration.participacaoComites.map((comite, idx) => (
+                                                            <Badge key={idx} variant="outline" className="text-xs">
+                                                                {comite}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {selectedRegistration.interesseVoluntariado !== undefined && (
+                                                <div>
+                                                    <Label className="font-semibold text-indigo-700">Interesse em Voluntariado:</Label>
+                                                    <Badge variant={selectedRegistration.interesseVoluntariado ? "default" : "outline"} className="ml-2">
+                                                        {selectedRegistration.interesseVoluntariado ? "Sim" : "Não"}
+                                                    </Badge>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Payment Information */}
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg flex items-center space-x-2">
+                                                <CreditCard className="w-4 h-4" />
+                                                <span>Informações de Pagamento</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label className="font-semibold text-orange-700">Status de Pagamento:</Label>
+                                                    <div className="flex items-center space-x-2 mt-1">
+                                                        {selectedRegistration.isPaymentExempt ? (
+                                                            <Badge className="bg-green-100 text-green-800">Isento de Pagamento</Badge>
+                                                        ) : (
+                                                            <Badge variant="outline">Pagamento Necessário</Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {selectedRegistration.isPaymentExempt && selectedRegistration.paymentExemptReason && (
+                                                    <div>
+                                                        <Label className="font-semibold text-orange-700">Motivo da Isenção:</Label>
+                                                        <p className="text-sm p-2 bg-green-50 rounded">{selectedRegistration.paymentExemptReason}</p>
+                                                    </div>
+                                                )}
+                                                {selectedRegistration.receiptStorageId && (
+                                                    <div className="col-span-2">
+                                                        <Label className="font-semibold text-orange-700">Comprovante de Pagamento:</Label>
+                                                        <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                                                            <div className="flex items-center justify-between">
+                                                                <div>
+                                                                    <p className="text-sm font-medium">{selectedRegistration.receiptFileName}</p>
+                                                                    <p className="text-xs text-gray-500">
+                                                                        Enviado em {selectedRegistration.receiptUploadedAt ? 
+                                                                            new Date(selectedRegistration.receiptUploadedAt).toLocaleString('pt-BR') : 
+                                                                            "N/A"
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                                <PaymentReceiptViewer storageId={selectedRegistration.receiptStorageId} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Additional Information */}
+                                    {(selectedRegistration.outrasObservacoes || selectedRegistration.autorizacaoCompartilhamento !== undefined) && (
+                                        <Card>
+                                            <CardHeader className="pb-3">
+                                                <CardTitle className="text-lg flex items-center space-x-2">
+                                                    <FileText className="w-4 h-4" />
+                                                    <span>Informações Adicionais</span>
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="space-y-3">
+                                                {selectedRegistration.outrasObservacoes && (
+                                                    <div>
+                                                        <Label className="font-semibold text-gray-700">Outras Observações:</Label>
+                                                        <p className="text-sm p-2 bg-gray-50 rounded">{selectedRegistration.outrasObservacoes}</p>
+                                                    </div>
+                                                )}
+                                                {selectedRegistration.autorizacaoCompartilhamento !== undefined && (
+                                                    <div>
+                                                        <Label className="font-semibold text-gray-700">Autorização de Compartilhamento de Dados:</Label>
+                                                        <Badge variant={selectedRegistration.autorizacaoCompartilhamento ? "default" : "destructive"} className="ml-2">
+                                                            {selectedRegistration.autorizacaoCompartilhamento ? "Autorizado" : "Não Autorizado"}
+                                                        </Badge>
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
                                     )}
+
+                                    {/* Registration Metadata */}
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg flex items-center space-x-2">
+                                                <Clock className="w-4 h-4" />
+                                                <span>Informações da Inscrição</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label className="font-semibold text-gray-700">Data da Inscrição:</Label>
+                                                    <p className="text-sm">{new Date(selectedRegistration.registeredAt).toLocaleString('pt-BR')}</p>
+                                                </div>
+                                                <div>
+                                                    <Label className="font-semibold text-gray-700">Status Atual:</Label>
+                                                    <Badge className={getStatusColor(selectedRegistration.status)}>
+                                                        {getStatusIcon(selectedRegistration.status)}
+                                                        <span className="ml-1">{selectedRegistration.status}</span>
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
                                     
-                                    <div>
-                                        <Label htmlFor="reviewNotes">Notas da Revisão (opcional):</Label>
-                                        <Textarea
-                                            id="reviewNotes"
-                                            value={reviewNotes}
-                                            onChange={(e) => setReviewNotes(e.target.value)}
-                                            placeholder="Adicione notas sobre a revisão..."
-                                            rows={3}
-                                        />
-                                    </div>
+                                    {/* Review Notes */}
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg flex items-center space-x-2">
+                                                <FileText className="w-4 h-4" />
+                                                <span>Notas da Revisão</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <Textarea
+                                                value={reviewNotes}
+                                                onChange={(e) => setReviewNotes(e.target.value)}
+                                                placeholder="Adicione notas sobre a revisão..."
+                                                rows={3}
+                                                className="w-full"
+                                            />
+                                        </CardContent>
+                                    </Card>
                                 </div>
                             )}
                             
-                            <DialogFooter>
+                            <DialogFooter className="flex space-x-2">
                                 <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>
-                                    Cancelar
+                                    Fechar
                                 </Button>
                                 <Button
                                     variant="destructive"

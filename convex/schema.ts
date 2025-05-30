@@ -82,6 +82,37 @@ export default defineSchema({
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
     specialNeeds: v.optional(v.string()),
+    
+    // Detailed personal information from registration form
+    emailSolar: v.optional(v.string()),
+    dataNascimento: v.optional(v.string()),
+    cpf: v.optional(v.string()),
+    nomeCracha: v.optional(v.string()),
+    celular: v.optional(v.string()),
+    comiteLocal: v.optional(v.string()),
+    comiteAspirante: v.optional(v.string()),
+    autorizacaoCompartilhamento: v.optional(v.boolean()),
+    
+    // Additional information from registration form
+    experienciaAnterior: v.optional(v.string()),
+    motivacao: v.optional(v.string()),
+    expectativas: v.optional(v.string()),
+    dietaRestricoes: v.optional(v.string()),
+    alergias: v.optional(v.string()),
+    medicamentos: v.optional(v.string()),
+    necessidadesEspeciais: v.optional(v.string()),
+    restricaoQuarto: v.optional(v.string()),
+    pronomes: v.optional(v.string()),
+    contatoEmergenciaNome: v.optional(v.string()),
+    contatoEmergenciaTelefone: v.optional(v.string()),
+    outrasObservacoes: v.optional(v.string()),
+    participacaoComites: v.optional(v.array(v.string())),
+    interesseVoluntariado: v.optional(v.boolean()),
+    
+    // Payment information
+    isPaymentExempt: v.optional(v.boolean()), // Payment exemption status
+    paymentExemptReason: v.optional(v.string()), // Reason for exemption
+    
     // Admin review fields
     reviewedAt: v.optional(v.number()),
     reviewedBy: v.optional(v.string()),

@@ -458,6 +458,10 @@ export const createFromForm = mutation({
       participacaoComites: v.array(v.string()),
       interesseVoluntariado: v.boolean(),
     }),
+    paymentInfo: v.optional(v.object({
+      isPaymentExempt: v.boolean(),
+      paymentExemptReason: v.optional(v.string()),
+    })),
     status: v.string(),
   },
   handler: async (ctx, args) => {
@@ -509,7 +513,7 @@ export const createFromForm = mutation({
       }
     }
 
-    // Create registration
+    // Create registration with all detailed information
     return await ctx.db.insert("agRegistrations", {
       assemblyId: args.assemblyId,
       participantType: args.personalInfo.role,
@@ -519,12 +523,44 @@ export const createFromForm = mutation({
       registeredAt: Date.now(),
       registeredBy: args.userId,
       status: args.status,
+      
+      // Basic contact info (legacy fields)
       escola: args.personalInfo.comiteLocal || args.personalInfo.comiteAspirante,
       cidade: args.personalInfo.cidade,
       uf: args.personalInfo.uf,
       email: args.personalInfo.email,
       phone: args.personalInfo.celular,
       specialNeeds: args.additionalInfo.necessidadesEspeciais,
+      
+      // Detailed personal information
+      emailSolar: args.personalInfo.emailSolar,
+      dataNascimento: args.personalInfo.dataNascimento,
+      cpf: args.personalInfo.cpf,
+      nomeCracha: args.personalInfo.nomeCracha,
+      celular: args.personalInfo.celular,
+      comiteLocal: args.personalInfo.comiteLocal,
+      comiteAspirante: args.personalInfo.comiteAspirante,
+      autorizacaoCompartilhamento: args.personalInfo.autorizacaoCompartilhamento,
+      
+      // Additional information
+      experienciaAnterior: args.additionalInfo.experienciaAnterior,
+      motivacao: args.additionalInfo.motivacao,
+      expectativas: args.additionalInfo.expectativas,
+      dietaRestricoes: args.additionalInfo.dietaRestricoes,
+      alergias: args.additionalInfo.alergias,
+      medicamentos: args.additionalInfo.medicamentos,
+      necessidadesEspeciais: args.additionalInfo.necessidadesEspeciais,
+      restricaoQuarto: args.additionalInfo.restricaoQuarto,
+      pronomes: args.additionalInfo.pronomes,
+      contatoEmergenciaNome: args.additionalInfo.contatoEmergenciaNome,
+      contatoEmergenciaTelefone: args.additionalInfo.contatoEmergenciaTelefone,
+      outrasObservacoes: args.additionalInfo.outrasObservacoes,
+      participacaoComites: args.additionalInfo.participacaoComites,
+      interesseVoluntariado: args.additionalInfo.interesseVoluntariado,
+      
+      // Payment information
+      isPaymentExempt: args.paymentInfo?.isPaymentExempt,
+      paymentExemptReason: args.paymentInfo?.paymentExemptReason,
     });
   },
 });
@@ -591,5 +627,31 @@ export const getUserRegistrationStatus = query({
       registeredAt: registration.registeredAt,
       hasReceipt: !!registration.receiptStorageId,
     };
+  },
+});
+
+// Update registration with payment exemption status
+export const updatePaymentExemption = mutation({
+  args: {
+    registrationId: v.id("agRegistrations"),
+    isPaymentExempt: v.boolean(),
+    paymentExemptReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const registration = await ctx.db.get(args.registrationId);
+    if (!registration) {
+      throw new Error("Registration not found");
+    }
+
+    if (registration.status === "cancelled") {
+      throw new Error("Cannot update a cancelled registration");
+    }
+
+    await ctx.db.patch(args.registrationId, {
+      isPaymentExempt: args.isPaymentExempt,
+      paymentExemptReason: args.paymentExemptReason,
+    });
+
+    return args.registrationId;
   },
 }); 
