@@ -132,8 +132,10 @@ export default function AGRegistrationPage() {
     }), [session?.user?.email]);
 
     const [formData, setFormData] = useState<RegistrationFormData>(initialFormData);
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [existingRegistration, setExistingRegistration] = useState<any>(null);
     const [comiteLocalOpen, setComiteLocalOpen] = useState(false);
+    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean>(false);
     
     // Convex mutations
     const createRegistration = useMutation(convexApi.agRegistrations?.createFromForm);
@@ -176,7 +178,7 @@ export default function AGRegistrationPage() {
             ];
         }
     }, [isIfmsaEmail]);
-
+    
     // Validate form
     const validateForm = useCallback(() => {
         const requiredFields = [
@@ -354,14 +356,9 @@ export default function AGRegistrationPage() {
 
     // Check email domain
     useEffect(() => {
-        const checkEmail = async () => {
-            if (session?.user?.email) {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
-            }
-        };
-        void checkEmail();
-    }, [session?.user?.email]);
+        // Set isIfmsaEmail state for general participants (always false since we removed the auth check)
+        // Remove the auth check - general participants should be able to start registration
+    }, [session]);
 
     // Redirect if already registered
     useEffect(() => {
@@ -690,7 +687,7 @@ export default function AGRegistrationPage() {
                                                 </PopoverTrigger>
                                                 <PopoverContent className="w-full p-0">
                                                     <Command>
-                                                        <CommandInput placeholder="Buscar por ID do participante..." />
+                                                        <CommandInput placeholder="Buscar por nome do comitê..." />
                                                         <CommandEmpty>
                                                             {comitesLocais?.length === 0 
                                                                 ? "Nenhum comitê encontrado no sistema."

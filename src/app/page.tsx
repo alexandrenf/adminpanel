@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { Shield, Users, Settings, LogIn, LogOut } from "lucide-react";
+import { Shield, Users, Settings, LogIn, LogOut, Calendar, ArrowRight } from "lucide-react";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import { useEffect, useState } from "react";
 
@@ -87,9 +87,9 @@ export default function Home() {
                           </div>
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 mb-2">Acesso Restrito</h3>
+                          <h3 className="font-semibold text-gray-900 mb-2">Acesso Parcialmente Restrito</h3>
                           <p className="text-gray-700 text-sm leading-relaxed">
-                            Você só pode fazer login com uma conta Google{" "}
+                            Para ter acesso a funções administrativas, faça login com uma conta Google{" "}
                             <span className="font-semibold text-blue-700">@ifmsabrazil.org</span>
                           </p>
                         </div>
@@ -108,6 +108,47 @@ export default function Home() {
                           <p className="text-sm text-green-700 font-medium">Logado como</p>
                           <p className="text-lg font-semibold text-green-900">{session.user?.name}</p>
                           <p className="text-sm text-green-600">{session.user?.email}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AG Information Display */}
+                  {session && (
+                    <div className="mb-8">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-6 text-center">
+                        Próxima Assembleia Geral
+                      </h3>
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+                        <div className="flex items-start space-x-4">
+                          <div className="flex-shrink-0">
+                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                              <Calendar className="w-6 h-6 text-blue-600" />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-900 mb-2">AG 2024.2</h4>
+                            <div className="space-y-2">
+                              <p className="text-sm text-gray-700">
+                                <span className="font-medium">Data:</span> 15-20 de Julho, 2024
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                <span className="font-medium">Local:</span> São Paulo, SP
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                <span className="font-medium">Status:</span>{" "}
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  Inscrições Abertas
+                                </span>
+                              </p>
+                            </div>
+                            <div className="mt-4">
+                              <Link href="/ag" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+                                Inscrever-se agora
+                                <ArrowRight className="w-4 h-4 ml-1" />
+                              </Link>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

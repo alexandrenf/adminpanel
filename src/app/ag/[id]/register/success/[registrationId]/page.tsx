@@ -18,11 +18,11 @@ import {
     Download,
     Package,
     Clock,
-    AlertTriangle
+    AlertTriangle,
+    Printer
 } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api as convexApi } from "../../../../../../../convex/_generated/api";
-import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
 // Utility function to format dates without timezone conversion
@@ -58,18 +58,6 @@ export default function RegistrationSuccessPage() {
     );
     const agConfig = useQuery(convexApi.agConfig?.get);
 
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
-
-    useEffect(() => {
-        if (session?.user?.email) {
-            const checkEmail = async () => {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
-            };
-            void checkEmail();
-        }
-    }, [session]);
-
     // Show error if IDs are missing
     if (!assemblyId || !registrationId) {
         return (
@@ -80,23 +68,6 @@ export default function RegistrationSuccessPage() {
                 </div>
             </div>
         );
-    }
-
-    // Loading state
-    if (isIfmsaEmail === null) {
-        return (
-            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Verificando autenticação...</p>
-                </div>
-            </main>
-        );
-    }
-
-    // Auth check
-    if (!isIfmsaEmail) {
-        return <PrecisaLogin />;
     }
 
     // Loading registration data
@@ -389,7 +360,7 @@ export default function RegistrationSuccessPage() {
                     <Card className="shadow-lg border-0">
                         <CardHeader>
                             <CardTitle className="flex items-center space-x-2">
-                                <ArrowRight className="w-5 h-5 text-green-600" />
+                                <Download className="w-5 h-5 text-green-600" />
                                 <span>Próximos Passos</span>
                             </CardTitle>
                         </CardHeader>
@@ -466,7 +437,7 @@ export default function RegistrationSuccessPage() {
                             onClick={() => router.push("/ag")}
                             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                         >
-                            <ArrowRight className="w-4 h-4 mr-2" />
+                            <Download className="w-4 h-4 mr-2" />
                             Voltar às Assembleias
                         </Button>
                     </div>

@@ -25,7 +25,6 @@ import {
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../../../convex/_generated/api";
-import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
 // Utility function to format dates without timezone conversion
@@ -48,7 +47,6 @@ export default function PaymentInfoPage() {
     const registrationId = params?.registrationId;
     
     // State - all hooks at the top
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [exemptionReason, setExemptionReason] = useState("");
@@ -199,11 +197,7 @@ export default function PaymentInfoPage() {
     // Effects at the top
     useEffect(() => {
         if (session?.user?.email) {
-            const checkEmail = async () => {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
-            };
-            void checkEmail();
+            // Remove the auth check - general participants should be able to access payment info
         }
     }, [session]);
 
@@ -217,23 +211,6 @@ export default function PaymentInfoPage() {
                 </div>
             </div>
         );
-    }
-
-    // Loading state
-    if (isIfmsaEmail === null) {
-        return (
-            <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Verificando autenticação...</p>
-                </div>
-            </main>
-        );
-    }
-
-    // Auth check
-    if (!isIfmsaEmail) {
-        return <PrecisaLogin />;
     }
 
     // Loading registration data

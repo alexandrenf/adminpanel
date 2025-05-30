@@ -90,7 +90,6 @@ export default function AGRegistrationStep3Page() {
     const [step1Data, setStep1Data] = useState<Step1FormData | null>(null);
     const [step2Data, setStep2Data] = useState<Step2FormData | null>(null);
     const [formData, setFormData] = useState<Step3FormData>(initialStep3FormData);
-    const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
@@ -153,19 +152,6 @@ export default function AGRegistrationStep3Page() {
         router.push(`/ag/${assemblyId}/register/step4`);
         
     }, [validateForm, step1Data, step2Data, formData, assemblyId, router]);
-
-    // Check if user has IFMSA email
-    useEffect(() => {
-        const checkEmail = async () => {
-            if (session) {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
-            } else {
-                setIsIfmsaEmail(false);
-            }
-        };
-        checkEmail();
-    }, [session]);
 
     // Load previous steps data from session storage
     useEffect(() => {
