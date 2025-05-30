@@ -77,6 +77,15 @@ const initialStep2FormData: Step2FormData = {
     aceitaTermos: false,
 };
 
+// Utility function to format dates without timezone conversion
+const formatDateWithoutTimezone = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+};
+
 export default function AGRegistrationStep2Page() {
     const { data: session } = useSession();
     const router = useRouter();
@@ -303,8 +312,8 @@ export default function AGRegistrationStep2Page() {
                                     <div className="flex items-center space-x-2">
                                         <Calendar className="w-4 h-4 text-blue-600" />
                                         <span>
-                                            {new Date(assembly.startDate).toLocaleDateString('pt-BR')} - {" "}
-                                            {new Date(assembly.endDate).toLocaleDateString('pt-BR')}
+                                            {formatDateWithoutTimezone(assembly.startDate)} - {" "}
+                                            {formatDateWithoutTimezone(assembly.endDate)}
                                         </span>
                                     </div>
                                     <div className="flex items-center space-x-2">

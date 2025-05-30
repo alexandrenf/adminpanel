@@ -537,6 +537,15 @@ const CreationProgressDialog = React.memo(({
 
 CreationProgressDialog.displayName = 'CreationProgressDialog';
 
+// Utility function to format dates without timezone conversion
+const formatDateWithoutTimezone = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+};
+
 export default function AGPage() {
     const { data: session } = useSession();
     const router = useRouter();
@@ -925,8 +934,8 @@ export default function AGPage() {
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
                             <Clock className="w-4 h-4" />
                             <span>
-                                {new Date(assembly.startDate).toLocaleDateString('pt-BR')} - {" "}
-                                {new Date(assembly.endDate).toLocaleDateString('pt-BR')}
+                                {formatDateWithoutTimezone(assembly.startDate)} - {" "}
+                                {formatDateWithoutTimezone(assembly.endDate)}
                             </span>
                         </div>
                         {assembly.description && (
@@ -936,7 +945,7 @@ export default function AGPage() {
                         )}
                         <div className="flex items-center justify-between pt-2 border-t">
                             <div className="text-xs text-gray-500">
-                                Criada em {new Date(assembly.createdAt).toLocaleDateString('pt-BR')}
+                                Criada em {formatDateWithoutTimezone(assembly.createdAt)}
                             </div>
                             <Button 
                                 size="sm" 
@@ -1152,8 +1161,8 @@ export default function AGPage() {
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
                             <Clock className="w-4 h-4" />
                             <span>
-                                {new Date(assembly.startDate).toLocaleDateString('pt-BR')} - {" "}
-                                {new Date(assembly.endDate).toLocaleDateString('pt-BR')}
+                                {formatDateWithoutTimezone(assembly.startDate)} - {" "}
+                                {formatDateWithoutTimezone(assembly.endDate)}
                             </span>
                         </div>
                         {assembly.description && (
