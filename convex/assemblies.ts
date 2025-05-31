@@ -491,9 +491,87 @@ export const getComitesLocais = query({
       }
     });
 
-    // Convert map to array, filter out invalid entries, and sort by participantId
+    // Convert map to array, filter out valid entries, and sort by participantId
     return Array.from(comiteMap.values())
       .filter(comite => comite.participantId && comite.participantId.length > 0)
       .sort((a, b) => a.participantId.localeCompare(b.participantId, 'pt-BR', { sensitivity: 'base' }));
+  },
+});
+
+// Get unique EBs from all agParticipants for registration dropdown
+export const getEBs = query({
+  args: {},
+  handler: async (ctx) => {
+    const participants = await ctx.db
+      .query("agParticipants")
+      .filter((q) => q.eq(q.field("type"), "eb"))
+      .collect();
+
+    // Create a map to deduplicate EBs by participantId
+    const ebMap = new Map();
+    
+    participants.forEach(participant => {
+      if (participant.participantId && participant.participantId.trim()) {
+        const key = participant.participantId.trim();
+        if (!ebMap.has(key)) {
+          // Format as [Role] - [Name]
+          const displayName = participant.role && participant.role.trim() 
+            ? `${participant.role.trim()} - ${participant.name.trim()}`
+            : participant.name.trim();
+          
+          ebMap.set(key, {
+            id: participant.participantId.trim(),
+            name: displayName,
+            participantId: participant.participantId.trim(),
+            participantName: participant.name?.trim() || '',
+            role: participant.role?.trim() || '',
+          });
+        }
+      }
+    });
+
+    // Convert map to array, filter out invalid entries, and sort by role
+    return Array.from(ebMap.values())
+      .filter(eb => eb.participantId && eb.participantId.length > 0)
+      .sort((a, b) => a.role.localeCompare(b.role, 'pt-BR', { sensitivity: 'base' }));
+  },
+});
+
+// Get unique CRs from all agParticipants for registration dropdown
+export const getCRs = query({
+  args: {},
+  handler: async (ctx) => {
+    const participants = await ctx.db
+      .query("agParticipants")
+      .filter((q) => q.eq(q.field("type"), "cr"))
+      .collect();
+
+    // Create a map to deduplicate CRs by participantId
+    const crMap = new Map();
+    
+    participants.forEach(participant => {
+      if (participant.participantId && participant.participantId.trim()) {
+        const key = participant.participantId.trim();
+        if (!crMap.has(key)) {
+          // Format as [Role] - [Name]
+          const displayName = participant.role && participant.role.trim() 
+            ? `${participant.role.trim()} - ${participant.name.trim()}`
+            : participant.name.trim();
+          
+          crMap.set(key, {
+            id: participant.participantId.trim(),
+            name: displayName,
+            participantId: participant.participantId.trim(),
+            participantName: participant.name?.trim() || '',
+            role: participant.role?.trim() || '',
+          });
+        }
+      }
+    });
+
+    // Convert map to array, filter out invalid entries, and sort by role
+    return Array.from(crMap.values())
+      .filter(cr => cr.participantId && cr.participantId.length > 0)
+      .sort((a, b) => a.role.localeCompare(b.role, 'pt-BR', { sensitivity: 'base' }));
   },
 }); 

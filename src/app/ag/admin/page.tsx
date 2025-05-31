@@ -71,6 +71,20 @@ const getParticipantTypeLabel = (type: string) => {
     }
 };
 
+// Enhanced function that includes role information for EB and CR
+const getDetailedParticipantTypeLabel = (registration: Registration) => {
+    const baseType = getParticipantTypeLabel(registration.participantType);
+    
+    // For EB and CR, try to show the specific role if available
+    if (registration.participantType?.toLowerCase() === "eb" && registration.participantRole) {
+        return `${baseType} - ${registration.participantRole}`;
+    } else if (registration.participantType?.toLowerCase() === "cr" && registration.participantRole) {
+        return `${baseType} - ${registration.participantRole}`;
+    }
+    
+    return baseType;
+};
+
 const getRoomRestrictionLabel = (restriction: string) => {
     switch (restriction?.toLowerCase()) {
         case "nao": return "Sem restrições";
@@ -1294,7 +1308,7 @@ export default function AGAdminPage() {
                                                             </TableCell>
                                                             <TableCell>
                                                                 <Badge variant="outline">
-                                                                    {getParticipantTypeLabel(registration.participantType)}
+                                                                    {getDetailedParticipantTypeLabel(registration)}
                                                                 </Badge>
                                                             </TableCell>
                                                             <TableCell>{registration.email}</TableCell>
@@ -1458,7 +1472,7 @@ export default function AGAdminPage() {
                                                             </TableCell>
                                                             <TableCell>
                                                                 <Badge variant="outline">
-                                                                    {getParticipantTypeLabel(registration.participantType)}
+                                                                    {getDetailedParticipantTypeLabel(registration)}
                                                                 </Badge>
                                                             </TableCell>
                                                             <TableCell>{registration.email}</TableCell>
@@ -1566,7 +1580,7 @@ export default function AGAdminPage() {
                                                 <div>
                                                     <Label className="font-semibold text-blue-700">Tipo de Participante:</Label>
                                                     <Badge variant="outline" className="text-xs">
-                                                        {getParticipantTypeLabel(selectedRegistration.participantType)}
+                                                        {getDetailedParticipantTypeLabel(selectedRegistration)}
                                                     </Badge>
                                                 </div>
                                                 <div>

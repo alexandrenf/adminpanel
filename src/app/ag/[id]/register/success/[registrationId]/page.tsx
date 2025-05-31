@@ -83,7 +83,7 @@ export default function RegistrationSuccessPage() {
     }
 
     // Check if user owns this registration
-    if (registration.participantId !== session?.user?.id) {
+    if (registration.registeredBy !== session?.user?.id) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
                 <div className="text-center">

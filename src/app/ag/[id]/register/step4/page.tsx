@@ -33,7 +33,7 @@ import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../../convex/_generated/api";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
-import { handleNewRegistration } from "~/app/actions/emailExamples";
+import { handleNewRegistration, handleRegistrationApproval } from "~/app/actions/emailExamples";
 
 // Registration form data types (from previous steps)
 type Step1FormData = {
@@ -337,33 +337,64 @@ export default function AGRegistrationStep4Page() {
                 status: "pending" as const,
             };
 
-            const registrationId = await createRegistration(registrationData);
+            const result = await createRegistration(registrationData);
+            
+            // Handle the new response format
+            const actualRegistrationId = typeof result === 'string' ? result : result.registrationId;
+            setResubmitRegistrationId(actualRegistrationId as string);
 
-            // Send confirmation email
+            // Send appropriate email based on whether it was auto-approved
             try {
                 // Add null checks for safety
                 if (!assembly || !selectedModalityData) {
-                    console.warn('⚠️ Cannot send confirmation email: missing assembly or modality data');
+                    console.warn('⚠️ Cannot send email: missing assembly or modality data');
                     return;
                 }
 
-                await handleNewRegistration({
-                    registrationId: registrationId as string,
-                    participantName: step1Data!.nome,
-                    participantEmail: step1Data!.email,
-                    assemblyName: assembly.name,
-                    assemblyLocation: assembly.location,
-                    assemblyStartDate: new Date(assembly.startDate),
-                    assemblyEndDate: new Date(assembly.endDate),
-                    modalityName: selectedModalityData.name,
-                    paymentRequired: selectedModalityData.price > 0,
-                    paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
-                    isPaymentExempt: isPaymentExempt,
-                    paymentExemptReason: exemptionReason
-                });
-                console.log('✅ Confirmation email sent successfully');
+                // Check if registration was auto-approved
+                const isAutoApproved = typeof result === 'object' && result.isAutoApproved;
+                
+                if (isAutoApproved) {
+                    // Send approval email for auto-approved registrations
+                    await handleRegistrationApproval({
+                        registrationId: actualRegistrationId as string,
+                        participantName: step1Data!.nome,
+                        participantEmail: step1Data!.email,
+                        assemblyName: assembly.name,
+                        assemblyLocation: assembly.location,
+                        assemblyStartDate: new Date(assembly.startDate),
+                        assemblyEndDate: new Date(assembly.endDate),
+                        modalityName: selectedModalityData.name,
+                        additionalInstructions: "Sua inscrição foi aprovada automaticamente. Bem-vindo(a)!",
+                        paymentAmount: selectedModalityData.price > 0 ? 
+                            new Intl.NumberFormat('pt-BR', {
+                                style: 'currency',
+                                currency: 'BRL'
+                            }).format(selectedModalityData.price / 100) : undefined,
+                        isPaymentExempt: isPaymentExempt || selectedModalityData.price === 0,
+                        paymentExemptReason: exemptionReason
+                    });
+                    console.log('✅ Auto-approval email sent successfully');
+                } else {
+                    // Send confirmation email for regular registrations
+                    await handleNewRegistration({
+                        registrationId: actualRegistrationId as string,
+                        participantName: step1Data!.nome,
+                        participantEmail: step1Data!.email,
+                        assemblyName: assembly.name,
+                        assemblyLocation: assembly.location,
+                        assemblyStartDate: new Date(assembly.startDate),
+                        assemblyEndDate: new Date(assembly.endDate),
+                        modalityName: selectedModalityData.name,
+                        paymentRequired: selectedModalityData.price > 0,
+                        paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
+                        isPaymentExempt: isPaymentExempt,
+                        paymentExemptReason: exemptionReason
+                    });
+                    console.log('✅ Confirmation email sent successfully');
+                }
             } catch (emailError) {
-                console.error('⚠️ Failed to send confirmation email:', emailError);
+                console.error('⚠️ Failed to send email:', emailError);
                 // Don't fail the registration if email fails
             }
 
@@ -389,12 +420,12 @@ export default function AGRegistrationStep4Page() {
                 
                 // Update registration with receipt
                 await updateRegistrationReceipt({
-                    registrationId: registrationId as any,
+                    registrationId: actualRegistrationId as any,
                     receiptStorageId: storageId,
                     receiptFileName: selectedFile.name,
                     receiptFileType: selectedFile.type,
                     receiptFileSize: selectedFile.size,
-                    uploadedBy: session.user.id,
+                    uploadedBy: session!.user!.id,
                 });
             }
             
@@ -409,7 +440,7 @@ export default function AGRegistrationStep4Page() {
             sessionStorage.removeItem('agRegistrationStep3');
             
             // Navigate to success page
-            router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
+            router.push(`/ag/${assemblyId}/register/success/${actualRegistrationId}`);
             
         } catch (error) {
             console.error("Error creating registration:", error);

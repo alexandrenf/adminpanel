@@ -463,6 +463,8 @@ export const createFromForm = mutation({
       role: v.string(),
       comiteLocal: v.optional(v.string()),
       comiteAspirante: v.optional(v.string()),
+      selectedEBId: v.optional(v.string()),
+      selectedCRId: v.optional(v.string()),
       autorizacaoCompartilhamento: v.boolean(),
     }),
     additionalInfo: v.object({
@@ -549,7 +551,7 @@ export const createFromForm = mutation({
       .filter((q) => 
         q.and(
           q.eq(q.field("assemblyId"), args.assemblyId),
-          q.eq(q.field("participantId"), args.userId)
+          q.eq(q.field("registeredBy"), args.userId)
         )
       )
       .first();
@@ -577,13 +579,52 @@ export const createFromForm = mutation({
       }
     }
 
+    // Determine the participantId based on the role for eligibility check
+    let participantIdToCheck = args.userId; // Default to user ID
+    
+    if (args.personalInfo.role === 'eb' && args.personalInfo.selectedEBId) {
+      participantIdToCheck = args.personalInfo.selectedEBId;
+    } else if (args.personalInfo.role === 'cr' && args.personalInfo.selectedCRId) {
+      participantIdToCheck = args.personalInfo.selectedCRId;
+    } else if (args.personalInfo.role === 'comite_local' && args.personalInfo.comiteLocal) {
+      participantIdToCheck = args.personalInfo.comiteLocal;
+    }
+
+    // Check if participant exists in the assembly's participant list
+    const participant = await ctx.db
+      .query("agParticipants")
+      .withIndex("by_assembly")
+      .filter((q) => 
+        q.and(
+          q.eq(q.field("assemblyId"), args.assemblyId),
+          q.eq(q.field("participantId"), participantIdToCheck)
+        )
+      )
+      .first();
+
+    if (!participant) {
+      throw new Error("Participant is not eligible for this assembly");
+    }
+
+    // Determine the participantId based on the role
+    let participantId = args.userId; // Default to user ID
+    let participantName = args.personalInfo.nome; // Default to provided name
+    
+    if (args.personalInfo.role === 'eb' && args.personalInfo.selectedEBId) {
+      participantId = args.personalInfo.selectedEBId;
+    } else if (args.personalInfo.role === 'cr' && args.personalInfo.selectedCRId) {
+      participantId = args.personalInfo.selectedCRId;
+    } else if (args.personalInfo.role === 'comite_local' && args.personalInfo.comiteLocal) {
+      participantId = args.personalInfo.comiteLocal;
+    }
+
     // Create registration with all detailed information
-    return await ctx.db.insert("agRegistrations", {
+    const registrationId = await ctx.db.insert("agRegistrations", {
       assemblyId: args.assemblyId,
       modalityId: args.modalityId,
       participantType: args.personalInfo.role,
-      participantId: args.userId,
-      participantName: args.personalInfo.nome,
+      participantId: participantId,
+      participantName: participantName,
       participantRole: args.personalInfo.role,
       registeredAt: Date.now(),
       registeredBy: args.userId,
@@ -634,6 +675,25 @@ export const createFromForm = mutation({
       isPaymentExempt: args.paymentInfo?.isPaymentExempt,
       paymentExemptReason: args.paymentInfo?.paymentExemptReason,
     });
+
+    // Return registration ID and additional info for auto-approved registrations
+    return {
+      registrationId,
+      isAutoApproved: !!agConfig?.autoApproval,
+      assemblyData: agConfig?.autoApproval ? {
+        name: assembly.name,
+        location: assembly.location,
+        startDate: assembly.startDate,
+        endDate: assembly.endDate,
+        type: assembly.type,
+      } : undefined,
+      modalityData: agConfig?.autoApproval && args.modalityId ? 
+        await ctx.db.get(args.modalityId) : undefined,
+      participantData: agConfig?.autoApproval ? {
+        name: args.personalInfo.nome,
+        email: args.personalInfo.email,
+      } : undefined,
+    };
   },
 });
 
@@ -684,7 +744,7 @@ export const getUserRegistrationStatus = query({
       .filter((q) => 
         q.and(
           q.eq(q.field("assemblyId"), args.assemblyId),
-          q.eq(q.field("participantId"), args.userId)
+          q.eq(q.field("registeredBy"), args.userId)
         )
       )
       .first();
@@ -810,6 +870,8 @@ export const resubmit = mutation({
       role: v.string(),
       comiteLocal: v.optional(v.string()),
       comiteAspirante: v.optional(v.string()),
+      selectedEBId: v.optional(v.string()),
+      selectedCRId: v.optional(v.string()),
       autorizacaoCompartilhamento: v.boolean(),
     }),
     updatedAdditionalInfo: v.object({
@@ -910,7 +972,24 @@ export const resubmit = mutation({
       reviewNotes: agConfig?.autoApproval ? "Auto-approved on resubmission" : undefined,
     });
 
-    return args.registrationId;
+    // Return registration ID and additional info for auto-approved resubmissions
+    return {
+      registrationId: args.registrationId,
+      isAutoApproved: !!agConfig?.autoApproval,
+      assemblyData: agConfig?.autoApproval ? {
+        name: assembly.name,
+        location: assembly.location,
+        startDate: assembly.startDate,
+        endDate: assembly.endDate,
+        type: assembly.type,
+      } : undefined,
+      modalityData: agConfig?.autoApproval && registration.modalityId ? 
+        await ctx.db.get(registration.modalityId) : undefined,
+      participantData: agConfig?.autoApproval ? {
+        name: args.updatedPersonalInfo.nome,
+        email: args.updatedPersonalInfo.email,
+      } : undefined,
+    };
   },
 });
 
