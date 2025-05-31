@@ -61,7 +61,7 @@ import { handleRegistrationApproval, handleRegistrationRejection } from "~/app/a
 const getParticipantTypeLabel = (type: string) => {
     switch (type?.toLowerCase()) {
         case "eb": return "Executive Board";
-        case "cr": return "Country Representative";
+        case "cr": return "Coordenador Regional";
         case "comite_local": return "Comitê Local";
         case "comite_aspirante": return "Comitê Aspirante";
         case "supco": return "Conselho Supervisor";
@@ -224,7 +224,7 @@ function ModalityRegistrationsView({ modality, onReviewRegistration }: {
     const getParticipantTypeLabel = (type: string) => {
         switch (type?.toLowerCase()) {
             case "eb": return "Executive Board";
-            case "cr": return "Country Representative";
+            case "cr": return "Coordenador Regional";
             case "comite_local": return "Comitê Local";
             case "comite_aspirante": return "Comitê Aspirante";
             case "supco": return "Conselho Supervisor";
