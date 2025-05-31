@@ -49,6 +49,8 @@ type Step1FormData = {
     role: string;
     comiteLocal?: string;
     comiteAspirante?: string;
+    selectedEBId?: string;
+    selectedCRId?: string;
     autorizacaoCompartilhamento: boolean;
     selectedModalityId?: string;
     isResubmission?: boolean;
@@ -312,6 +314,8 @@ export default function AGRegistrationStep4Page() {
                     role: step1Data!.role,
                     comiteLocal: step1Data!.comiteLocal,
                     comiteAspirante: step1Data!.comiteAspirante,
+                    selectedEBId: step1Data!.selectedEBId,
+                    selectedCRId: step1Data!.selectedCRId,
                     autorizacaoCompartilhamento: step1Data!.autorizacaoCompartilhamento,
                 },
                 additionalInfo: {
