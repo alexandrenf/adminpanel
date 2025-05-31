@@ -23,8 +23,8 @@ export default function QRCodePage() {
     const searchParams = useSearchParams();
     const { toast } = useToast();
     
-    const urlId = params?.id as string;
-    const registrationIdFromQuery = searchParams?.get('registration');
+    const assemblyId = params?.id as string;
+    const registrationId = searchParams?.get('registration');
     
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
     const [attendanceMarked, setAttendanceMarked] = useState(false);
@@ -66,16 +66,6 @@ export default function QRCodePage() {
         }
     };
 
-    // Try to fetch registration using the URL ID first (in case it's a registration ID)
-    const potentialRegistration = useQuery(
-        convexApi.agRegistrations?.getById,
-        urlId ? { id: urlId as any } : "skip"
-    );
-
-    // Determine the actual registration ID and assembly ID
-    const registrationId = registrationIdFromQuery || (potentialRegistration ? urlId : null);
-    const assemblyId = potentialRegistration?.assemblyId || (registrationIdFromQuery ? urlId : null);
-    
     // Fetch registration and assembly data
     const registration = useQuery(
         convexApi.agRegistrations?.getById,
@@ -262,13 +252,13 @@ export default function QRCodePage() {
 
     // Share badge
     const shareBadge = async () => {
-        if (navigator.share && registration && finalAssembly) {
+        if (registration && finalAssembly) {
             try {
                 const shareUrl = `${window.location.origin}/ag/${finalAssembly._id}/qr-code?registration=${registration._id}`;
-                await navigator.share({
-                    title: `Crachá - ${registration?.participantName}`,
-                    text: `Crachá para ${finalAssembly?.name}`,
-                    url: shareUrl
+                navigator.clipboard.writeText(shareUrl);
+                toast({
+                    title: "🔗 Link copiado",
+                    description: "Link do crachá copiado para a área de transferência.",
                 });
             } catch (error) {
                 // Fallback to copying URL
@@ -279,17 +269,7 @@ export default function QRCodePage() {
                     description: "Link do crachá copiado para a área de transferência.",
                 });
             }
-        } else {
-            // Fallback to copying URL
-            const shareUrl = registration && finalAssembly ? 
-                `${window.location.origin}/ag/${finalAssembly._id}/qr-code?registration=${registration._id}` :
-                window.location.href;
-            navigator.clipboard.writeText(shareUrl);
-            toast({
-                title: "🔗 Link copiado",
-                description: "Link do crachá copiado para a área de transferência.",
-            });
-        }
+        } 
     };
 
     if (!registrationId) {
@@ -387,7 +367,6 @@ export default function QRCodePage() {
                             {qrCodeDataUrl && (
                                 <div className="bg-gray-50 p-6 rounded-lg">
                                     <div className="flex flex-col items-center space-y-4">
-                                        <QrCode className="w-8 h-8 text-blue-600" />
                                         <img 
                                             src={qrCodeDataUrl} 
                                             alt="QR Code para marcar presença"
@@ -400,36 +379,7 @@ export default function QRCodePage() {
                                 </div>
                             )}
 
-                            {/* Attendance Tracking */}
-                            {registration.status === 'approved' && (
-                                <div className="bg-green-50 p-6 rounded-lg">
-                                    <div className="flex flex-col items-center space-y-4">
-                                        {attendanceMarked ? (
-                                            <>
-                                                <CheckCircle className="w-12 h-12 text-green-600" />
-                                                <p className="text-green-700 font-semibold">Presença Confirmada!</p>
-                                                <p className="text-sm text-green-600">
-                                                    Sua presença foi registrada com sucesso.
-                                                </p>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <UserCheck className="w-12 h-12 text-blue-600" />
-                                                <Button
-                                                    onClick={handleMarkAttendance}
-                                                    className="bg-green-600 hover:bg-green-700"
-                                                >
-                                                    <Clock className="w-4 h-4 mr-2" />
-                                                    Marcar Presença
-                                                </Button>
-                                                <p className="text-sm text-gray-600">
-                                                    Clique para registrar sua presença no evento.
-                                                </p>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+                            
 
                             {/* Action Buttons */}
                             <div className="flex flex-wrap justify-center gap-4 print:hidden">

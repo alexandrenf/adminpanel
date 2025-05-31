@@ -29,7 +29,8 @@ import {
     CreditCard,
     Package,
     FileText,
-    UserCheck
+    UserCheck,
+    QrCode
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -1079,9 +1080,17 @@ export default function AGPage() {
                                 <CheckCircle className="w-4 h-4 mr-2" />
                                 Ver Comprovante
                             </Button>
+                            <Button 
+                                className="w-full bg-blue-500 hover:bg-blue-600"
+                                onClick={() => router.push(`/ag/${assembly._id}/qr-code?registration=${registrationStatus.registrationId}`)}
+                                variant="outline"
+                            >
+                                <QrCode className="w-4 h-4 mr-2" />
+                                Ver Crachá Digital
+                            </Button>
                             {userRegistration?.receiptStorageId && receiptFileUrl && (
                                 <Button 
-                                    className="w-full bg-blue-500 hover:bg-blue-600"
+                                    className="w-full bg-gray-500 hover:bg-gray-600"
                                     onClick={() => window.open(receiptFileUrl, '_blank')}
                                     variant="outline"
                                 >
