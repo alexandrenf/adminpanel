@@ -10,6 +10,7 @@ import { Label } from "../../../../../components/ui/label";
 import { Badge } from "../../../../../components/ui/badge";
 import { Textarea } from "../../../../../components/ui/textarea";
 import { Checkbox } from "../../../../../components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "../../../../../components/ui/alert";
 import { 
     CreditCard, 
     Upload, 
@@ -24,7 +25,8 @@ import {
     Loader2,
     ArrowLeft,
     Copy,
-    Package
+    Package,
+    RefreshCw
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -49,6 +51,8 @@ type Step1FormData = {
     comiteAspirante?: string;
     autorizacaoCompartilhamento: boolean;
     selectedModalityId?: string;
+    isResubmission?: boolean;
+    resubmitRegistrationId?: string;
 };
 
 type Step2FormData = {
@@ -101,6 +105,17 @@ export default function AGRegistrationStep4Page() {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [dragActive, setDragActive] = useState(false);
     
+    // Resubmission states
+    const [isResubmitting, setIsResubmitting] = useState(false);
+    const [resubmissionReason, setResubmissionReason] = useState("");
+    const [resubmitRegistrationId, setResubmitRegistrationId] = useState<string | null>(null);
+    
+    // Fetch existing registration data for resubmission
+    const existingRegistrationData = useQuery(
+        convexApi.agRegistrations?.getById,
+        resubmitRegistrationId ? { id: resubmitRegistrationId as any } : "skip"
+    );
+    
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
     
@@ -118,6 +133,7 @@ export default function AGRegistrationStep4Page() {
     
     // Registration mutations
     const createRegistration = useMutation(convexApi.agRegistrations?.createFromForm);
+    const resubmitRegistration = useMutation(convexApi.agRegistrations?.resubmit);
     const updateRegistrationReceipt = useMutation(convexApi.agRegistrations?.updatePaymentReceipt);
 
     // Copy to clipboard function
@@ -422,6 +438,12 @@ export default function AGRegistrationStep4Page() {
                 setStep1Data(parsedStep1Data);
                 setStep2Data(parsedStep2Data);
                 setStep3Data(parsedStep3Data);
+                
+                // Check if this is a resubmission
+                if (parsedStep1Data.isResubmission && parsedStep1Data.resubmitRegistrationId) {
+                    setIsResubmitting(true);
+                    setResubmitRegistrationId(parsedStep1Data.resubmitRegistrationId);
+                }
             } catch (error) {
                 console.error("Error parsing saved data:", error);
                 toast({
@@ -440,6 +462,19 @@ export default function AGRegistrationStep4Page() {
             router.push(`/ag/${assemblyId}/register`);
         }
     }, [assemblyId, router, toast]);
+
+    // Load existing registration data for resubmission
+    useEffect(() => {
+        if (isResubmitting && existingRegistrationData) {
+            setResubmissionReason(existingRegistrationData.reviewNotes || "Não especificado");
+            
+            // Pre-populate payment exemption if it was previously set
+            if (existingRegistrationData.isPaymentExempt) {
+                setIsPaymentExempt(true);
+                setExemptionReason(existingRegistrationData.paymentExemptReason || "");
+            }
+        }
+    }, [isResubmitting, existingRegistrationData]);
 
     if (!session) {
         return (

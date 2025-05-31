@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../../../compone
 import { Input } from "../../../../../components/ui/input";
 import { Label } from "../../../../../components/ui/label";
 import { Checkbox } from "../../../../../components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "../../../../../components/ui/alert";
 import { 
     FileText, 
     ArrowLeft, 
@@ -17,7 +18,9 @@ import {
     MapPin,
     AlertTriangle,
     Download,
-    PenTool
+    PenTool,
+    ArrowRight,
+    RefreshCw
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -25,7 +28,7 @@ import { api as convexApi } from "../../../../../../convex/_generated/api";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 
-// Registration form data types (from previous steps)
+// Registration form data type (from step 1)
 type Step1FormData = {
     nome: string;
     email: string;
@@ -40,6 +43,8 @@ type Step1FormData = {
     comiteLocal?: string;
     comiteAspirante?: string;
     autorizacaoCompartilhamento: boolean;
+    isResubmission?: boolean;
+    resubmitRegistrationId?: string;
 };
 
 type Step2FormData = {
@@ -91,8 +96,19 @@ export default function AGRegistrationStep3Page() {
     const [step2Data, setStep2Data] = useState<Step2FormData | null>(null);
     const [formData, setFormData] = useState<Step3FormData>(initialStep3FormData);
     
+    // Check if this is a resubmission
+    const [isResubmission, setIsResubmission] = useState(false);
+    const [resubmitRegistrationId, setResubmitRegistrationId] = useState<string | null>(null);
+    const [rejectionReason, setRejectionReason] = useState<string>("");
+    
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
+
+    // Fetch existing registration data for resubmission
+    const existingRegistrationData = useQuery(
+        convexApi.agRegistrations?.getById,
+        resubmitRegistrationId ? { id: resubmitRegistrationId as any } : "skip"
+    );
 
     // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
@@ -165,6 +181,12 @@ export default function AGRegistrationStep3Page() {
                 setStep1Data(parsedStep1Data);
                 setStep2Data(parsedStep2Data);
                 
+                // Check if this is a resubmission
+                if (parsedStep1Data.isResubmission && parsedStep1Data.resubmitRegistrationId) {
+                    setIsResubmission(true);
+                    setResubmitRegistrationId(parsedStep1Data.resubmitRegistrationId);
+                }
+                
                 // Pre-populate form with user data
                 setFormData(prev => ({
                     ...prev,
@@ -189,6 +211,25 @@ export default function AGRegistrationStep3Page() {
             router.push(`/ag/${assemblyId}/register`);
         }
     }, [assemblyId, router, toast]);
+
+    // Load existing registration data for resubmission
+    useEffect(() => {
+        if (isResubmission && existingRegistrationData) {
+            setRejectionReason(existingRegistrationData.reviewNotes || "Não especificado");
+            
+            // Get today's date as string
+            const today = new Date().toISOString().split('T')[0] || '';
+            
+            // Pre-populate form with existing data
+            setFormData(prev => ({
+                ...prev,
+                nomeCompleto: existingRegistrationData.participantName || prev.nomeCompleto,
+                cidade: existingRegistrationData.cidade || prev.cidade,
+                dataAssinatura: today,
+                aceitoCodigo: false, // Always require re-acceptance
+            }));
+        }
+    }, [isResubmission, existingRegistrationData]);
 
     // Show error if assemblyId is missing
     if (!assemblyId) {
@@ -307,6 +348,24 @@ export default function AGRegistrationStep3Page() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {/* Resubmission Alert */}
+                    {isResubmission && (
+                        <Alert className="border-orange-200 bg-orange-50">
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <AlertTitle className="text-orange-800">Reenvio de Inscrição</AlertTitle>
+                            <AlertDescription className="text-orange-700">
+                                <div className="space-y-2">
+                                    <p><strong>Motivo da rejeição:</strong> {rejectionReason}</p>
+                                    <p>Você pode alterar qualquer informação abaixo antes de reenviar sua inscrição.</p>
+                                    <div className="flex items-center gap-2 text-sm mt-2">
+                                        <RefreshCw className="h-3 w-3" />
+                                        <span>Reenvio da Inscrição #{resubmitRegistrationId?.slice(-8)}</span>
+                                    </div>
+                                </div>
+                            </AlertDescription>
+                        </Alert>
+                    )}
 
                     {/* Code of Conduct */}
                     <Card className="shadow-lg border-0">
