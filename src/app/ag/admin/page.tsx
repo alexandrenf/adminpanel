@@ -71,20 +71,6 @@ const getParticipantTypeLabel = (type: string) => {
     }
 };
 
-// Enhanced function that includes role information for EB and CR
-const getDetailedParticipantTypeLabel = (registration: Registration) => {
-    const baseType = getParticipantTypeLabel(registration.participantType);
-    
-    // For EB and CR, try to show the specific role if available
-    if (registration.participantType?.toLowerCase() === "eb" && registration.participantRole) {
-        return `${baseType} - ${registration.participantRole}`;
-    } else if (registration.participantType?.toLowerCase() === "cr" && registration.participantRole) {
-        return `${baseType} - ${registration.participantRole}`;
-    }
-    
-    return baseType;
-};
-
 const getRoomRestrictionLabel = (restriction: string) => {
     switch (restriction?.toLowerCase()) {
         case "nao": return "Sem restrições";
@@ -449,6 +435,10 @@ export default function AGAdminPage() {
         convexApi.registrationModalities?.getByAssembly,
         selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
     );
+
+    // Add queries for EB and CR data to lookup specific roles
+    const ebs = useQuery(convexApi.assemblies?.getEBs) || [];
+    const crs = useQuery(convexApi.assemblies?.getCRs) || [];
 
     // Get modality stats for each modality
     const modalityStats = useQuery(
@@ -884,6 +874,28 @@ export default function AGAdminPage() {
             case "cancelled": return "Cancelado";
             default: return status;
         }
+    };
+
+    // Enhanced function that includes role information for EB and CR
+    const getDetailedParticipantTypeLabel = (registration: Registration) => {
+        const baseType = getParticipantTypeLabel(registration.participantType);
+        
+        // For EB, look up the specific role from the EBs data
+        if (registration.participantType?.toLowerCase() === "eb" && registration.participantId) {
+            const ebData = ebs.find((eb: any) => eb.participantId === registration.participantId);
+            if (ebData) {
+                return `${baseType} - ${ebData.name}`;
+            }
+        } 
+        // For CR, look up the specific role from the CRs data
+        else if (registration.participantType?.toLowerCase() === "cr" && registration.participantId) {
+            const crData = crs.find((cr: any) => cr.participantId === registration.participantId);
+            if (crData) {
+                return `${baseType} - ${crData.name}`;
+            }
+        }
+        
+        return baseType;
     };
 
     if (!session) {
