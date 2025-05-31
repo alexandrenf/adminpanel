@@ -120,6 +120,15 @@ export default function AGRegistrationPage() {
     const ebs = useQuery(convexApi.assemblies?.getEBs) || [];
     const crs = useQuery(convexApi.assemblies?.getCRs) || [];
     
+    // Debug EB data loading
+    useEffect(() => {
+        console.log('🔍 Frontend: EBs data loaded:', ebs);
+        console.log('🔍 Frontend: EBs length:', ebs?.length);
+        if (ebs?.length > 0) {
+            console.log('🔍 Frontend: First EB example:', ebs[0]);
+        }
+    }, [ebs]);
+    
     // Fetch existing registration data for resubmission
     const existingRegistrationData = useQuery(
         convexApi.agRegistrations?.getById,
@@ -183,30 +192,35 @@ export default function AGRegistrationPage() {
 
     // Handle input changes
     const handleInputChange = useCallback((field: keyof RegistrationFormData, value: string | boolean) => {
-        // Debug EB selection specifically
-        if (field === 'selectedEBId') {
-            console.log('🔍 Frontend: Setting selectedEBId to:', value, 'type:', typeof value);
+        // Debug all field changes that matter for EB selection
+        if (['role', 'selectedEBId', 'selectedCRId', 'comiteLocal'].includes(field)) {
+            console.log(`🔍 Frontend: Changing ${field} to:`, value, 'type:', typeof value);
         }
         
         // Clear related fields when role changes
         if (field === 'role') {
-            setFormData(prev => ({
-                ...prev,
-                role: value as string,
-                comiteLocal: undefined,
-                comiteAspirante: undefined,
-                selectedEBId: undefined,
-                selectedCRId: undefined,
-            }));
+            console.log('🔍 Frontend: Role changing to:', value, '- clearing related fields');
+            setFormData(prev => {
+                const newData = {
+                    ...prev,
+                    role: value as string,
+                    comiteLocal: undefined,
+                    comiteAspirante: undefined,
+                    selectedEBId: undefined,
+                    selectedCRId: undefined,
+                };
+                console.log('🔍 Frontend: Form data after role change:', newData);
+                return newData;
+            });
             return;
         }
         
         setFormData(prev => {
             const newData = { ...prev, [field]: value };
             
-            // Debug the complete form data when EB is selected
-            if (field === 'selectedEBId') {
-                console.log('🔍 Frontend: Complete form data after EB selection:', newData);
+            // Debug the complete form data when important fields change
+            if (['selectedEBId', 'selectedCRId', 'comiteLocal'].includes(field)) {
+                console.log(`🔍 Frontend: Complete form data after ${field} change:`, newData);
             }
             
             return newData;
@@ -284,6 +298,8 @@ export default function AGRegistrationPage() {
         }
 
         if (formData.role === 'eb' && !formData.selectedEBId) {
+            console.log('🔍 Frontend: EB validation failed! selectedEBId:', formData.selectedEBId, 'type:', typeof formData.selectedEBId);
+            console.log('🔍 Frontend: Complete formData during validation:', formData);
             toast({
                 title: "❌ Erro",
                 description: "Selecione sua posição no Executive Board.",
@@ -328,6 +344,35 @@ export default function AGRegistrationPage() {
         e.preventDefault();
         
         if (!validateForm()) return;
+        
+        // Comprehensive debugging of form state before submission
+        console.log('🔍 Frontend: Full form submission debug:');
+        console.log('🔍 Frontend: formData.role:', formData.role);
+        console.log('🔍 Frontend: formData.selectedEBId:', formData.selectedEBId, 'type:', typeof formData.selectedEBId);
+        console.log('🔍 Frontend: formData.selectedCRId:', formData.selectedCRId, 'type:', typeof formData.selectedCRId);
+        console.log('🔍 Frontend: formData.comiteLocal:', formData.comiteLocal, 'type:', typeof formData.comiteLocal);
+        console.log('🔍 Frontend: Complete formData object:', JSON.stringify(formData, null, 2));
+        console.log('🔍 Frontend: EBs data available:', ebs?.length, 'items');
+        if (ebs?.length > 0) {
+            console.log('🔍 Frontend: First EB example:', ebs[0]);
+        }
+        
+        // Check if EB role but no selectedEBId
+        if (formData.role === 'eb' && !formData.selectedEBId) {
+            console.error('🚨 Frontend: EB role selected but selectedEBId is missing!');
+            console.log('🔍 Frontend: Available EBs:', ebs);
+            toast({
+                title: "❌ Erro de Depuração",
+                description: "EB selecionado mas selectedEBId está indefinido. Verifique o console.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        // Debug the complete form data before submission
+        console.log('🔍 Frontend: Form data before submission:', formData);
+        console.log('🔍 Frontend: selectedEBId value:', formData.selectedEBId, 'type:', typeof formData.selectedEBId);
+        console.log('🔍 Frontend: role value:', formData.role);
         
         // Check if this is an AGE (online assembly) - skip steps 2 and 3
         if (assembly?.type === "AGE") {
@@ -575,10 +620,23 @@ export default function AGRegistrationPage() {
         checkIfmsaEmail();
     }, [session]);
 
+    // Track formData changes for debugging
+    useEffect(() => {
+        console.log('🔍 Frontend: FormData changed:');
+        console.log('🔍 Frontend: role:', formData.role);
+        console.log('🔍 Frontend: selectedEBId:', formData.selectedEBId, 'type:', typeof formData.selectedEBId);
+        console.log('🔍 Frontend: selectedCRId:', formData.selectedCRId, 'type:', typeof formData.selectedCRId);
+        console.log('🔍 Frontend: comiteLocal:', formData.comiteLocal, 'type:', typeof formData.comiteLocal);
+    }, [formData.role, formData.selectedEBId, formData.selectedCRId, formData.comiteLocal]);
+
     // Update form data when existing registration data loads
     useEffect(() => {
         if (isResubmission && existingRegistrationData) {
-            setFormData({
+            console.log('🔍 Frontend: useEffect updating form data for resubmission');
+            console.log('🔍 Frontend: existingRegistrationData.participantType:', existingRegistrationData.participantType);
+            console.log('🔍 Frontend: existingRegistrationData.participantId:', existingRegistrationData.participantId);
+            
+            const newFormData = {
                 nome: existingRegistrationData.participantName || "",
                 email: existingRegistrationData.email || session?.user?.email || "",
                 emailSolar: existingRegistrationData.emailSolar || "",
@@ -591,9 +649,14 @@ export default function AGRegistrationPage() {
                 role: existingRegistrationData.participantRole || "",
                 comiteLocal: existingRegistrationData.comiteLocal || "",
                 comiteAspirante: existingRegistrationData.comiteAspirante || "",
+                selectedEBId: existingRegistrationData.participantType === "eb" ? existingRegistrationData.participantId : "",
+                selectedCRId: existingRegistrationData.participantType === "cr" ? existingRegistrationData.participantId : "",
                 autorizacaoCompartilhamento: existingRegistrationData.autorizacaoCompartilhamento || false,
                 selectedModalityId: existingRegistrationData.modalityId || "",
-            });
+            };
+            
+            console.log('🔍 Frontend: Setting form data from resubmission:', newFormData);
+            setFormData(newFormData);
         }
     }, [isResubmission, existingRegistrationData, session?.user?.email]);
 
@@ -980,6 +1043,8 @@ export default function AGRegistrationPage() {
                                                                     key={eb.id}
                                                                     value={eb.participantId}
                                                                     onSelect={() => {
+                                                                        console.log('🔍 Frontend: EB selected!', eb);
+                                                                        console.log('🔍 Frontend: EB participantId:', eb.participantId, 'type:', typeof eb.participantId);
                                                                         handleInputChange('selectedEBId', eb.participantId);
                                                                         setEbOpen(false);
                                                                     }}
