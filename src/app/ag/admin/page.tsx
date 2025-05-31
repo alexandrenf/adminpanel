@@ -48,7 +48,8 @@ import {
     Plus,
     Edit,
     Trash2,
-    Package
+    Package,
+    ClipboardCheck
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -381,7 +382,7 @@ function ModalityDisplayInfo({ modalityId }: { modalityId: string }) {
 }
 
 export default function AGAdminPage() {
-    const { data: session } = useSession();
+    const { data: userSession } = useSession();
     const { toast } = useToast();
     
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
@@ -436,6 +437,12 @@ export default function AGAdminPage() {
         selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
     );
 
+    // Session-related queries
+    const allSessions = useQuery(
+        convexApi.agSessions?.getAllSessions,
+        selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
+    );
+
     // Add queries for EB and CR data to lookup specific roles
     const ebs = useQuery(convexApi.assemblies?.getEBs) || [];
     const crs = useQuery(convexApi.assemblies?.getCRs) || [];
@@ -457,18 +464,23 @@ export default function AGAdminPage() {
     const deleteRegistration = useMutation(convexApi.agRegistrations?.deleteRegistration);
     const bulkDeleteRegistrations = useMutation(convexApi.agRegistrations?.bulkDelete);
 
+    // Session mutations
+    const deleteSession = useMutation(convexApi.agSessions?.deleteSession);
+    const reopenSession = useMutation(convexApi.agSessions?.reopenSession);
+    const archiveSession = useMutation(convexApi.agSessions?.archiveSession);
+
     // Check IFMSA email on session change
     useEffect(() => {
         const checkEmail = async () => {
-            if (session) {
-                const result = await isIfmsaEmailSession(session);
+            if (userSession) {
+                const result = await isIfmsaEmailSession(userSession);
                 setIsIfmsaEmail(result);
             } else {
                 setIsIfmsaEmail(false);
             }
         };
         checkEmail();
-    }, [session]);
+    }, [userSession]);
 
     // Load config data when available
     useEffect(() => {
@@ -497,13 +509,13 @@ export default function AGAdminPage() {
     }, []);
 
     const handleSaveConfig = useCallback(async () => {
-        if (!session?.user?.id) return;
+        if (!userSession?.user?.id) return;
 
         setIsSaving(true);
         try {
             await upsertConfig({
                 ...configData,
-                updatedBy: session.user.id,
+                updatedBy: userSession.user.id,
             });
             
             toast({
@@ -520,15 +532,15 @@ export default function AGAdminPage() {
         } finally {
             setIsSaving(false);
         }
-    }, [configData, session?.user?.id, upsertConfig, toast]);
+    }, [configData, userSession?.user?.id, upsertConfig, toast]);
 
     const handleApproveRegistration = useCallback(async (registrationId: string, notes?: string) => {
-        if (!session?.user?.id) return;
+        if (!userSession?.user?.id) return;
 
         try {
             await approveRegistration({
                 registrationId: registrationId as any,
-                approvedBy: session.user.id,
+                approvedBy: userSession.user.id,
                 notes,
             });
             
@@ -589,10 +601,10 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, approveRegistration, toast, selectedRegistration, assemblies, modalities]);
+    }, [userSession?.user?.id, approveRegistration, toast, selectedRegistration, assemblies, modalities]);
 
     const handleRejectRegistration = useCallback(async (registrationId: string, notes?: string) => {
-        if (!session?.user?.id) return;
+        if (!userSession?.user?.id) return;
 
         // Require notes for rejection
         if (!notes || notes.trim() === "") {
@@ -607,7 +619,7 @@ export default function AGAdminPage() {
         try {
             await rejectRegistration({
                 registrationId: registrationId as any,
-                rejectedBy: session.user.id,
+                rejectedBy: userSession.user.id,
                 notes,
             });
             
@@ -648,15 +660,15 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, rejectRegistration, toast, selectedRegistration, assemblies]);
+    }, [userSession?.user?.id, rejectRegistration, toast, selectedRegistration, assemblies]);
 
     const handleBulkApprove = useCallback(async () => {
-        if (!session?.user?.id || selectedRegistrations.length === 0) return;
+        if (!userSession?.user?.id || selectedRegistrations.length === 0) return;
 
         try {
             await bulkApprove({
                 registrationIds: selectedRegistrations as any,
-                approvedBy: session.user.id,
+                approvedBy: userSession.user.id,
                 notes: "Aprovação em lote",
             });
             
@@ -673,15 +685,15 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, selectedRegistrations, bulkApprove, toast]);
+    }, [userSession?.user?.id, selectedRegistrations, bulkApprove, toast]);
 
     const handleBulkReject = useCallback(async () => {
-        if (!session?.user?.id || selectedRegistrations.length === 0) return;
+        if (!userSession?.user?.id || selectedRegistrations.length === 0) return;
 
         try {
             await bulkReject({
                 registrationIds: selectedRegistrations as any,
-                rejectedBy: session.user.id,
+                rejectedBy: userSession.user.id,
                 notes: "Rejeição em lote",
             });
             
@@ -698,16 +710,16 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, selectedRegistrations, bulkReject, toast]);
+    }, [userSession?.user?.id, selectedRegistrations, bulkReject, toast]);
 
     // Handle single registration deletion
     const handleDeleteRegistration = useCallback(async (registrationId: string) => {
-        if (!session?.user?.id) return;
+        if (!userSession?.user?.id) return;
 
         try {
             const result = await deleteRegistration({
                 registrationId: registrationId as any,
-                deletedBy: session.user.id,
+                deletedBy: userSession.user.id,
             });
             
             toast({
@@ -724,16 +736,16 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, deleteRegistration, toast]);
+    }, [userSession?.user?.id, deleteRegistration, toast]);
 
     // Handle bulk deletion
     const handleBulkDelete = useCallback(async () => {
-        if (!session?.user?.id || selectedRegistrations.length === 0) return;
+        if (!userSession?.user?.id || selectedRegistrations.length === 0) return;
 
         try {
             const result = await bulkDeleteRegistrations({
                 registrationIds: selectedRegistrations as any,
-                deletedBy: session.user.id,
+                deletedBy: userSession.user.id,
             });
             
             toast({
@@ -750,11 +762,11 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, selectedRegistrations, bulkDeleteRegistrations, toast]);
+    }, [userSession?.user?.id, selectedRegistrations, bulkDeleteRegistrations, toast]);
 
     // Modality management handlers
     const handleCreateModality = useCallback(async () => {
-        if (!session?.user?.id || !selectedAssemblyId) return;
+        if (!userSession?.user?.id || !selectedAssemblyId) return;
 
         try {
             await createModality({
@@ -763,7 +775,7 @@ export default function AGAdminPage() {
                 description: modalityFormData.description || undefined,
                 price: Math.round(parseFloat(modalityFormData.price) * 100), // Convert to cents
                 maxParticipants: modalityFormData.maxParticipants ? parseInt(modalityFormData.maxParticipants) : undefined,
-                createdBy: session.user.id,
+                createdBy: userSession.user.id,
             });
             
             toast({
@@ -780,7 +792,7 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [session?.user?.id, selectedAssemblyId, modalityFormData, createModality, toast]);
+    }, [userSession?.user?.id, selectedAssemblyId, modalityFormData, createModality, toast]);
 
     const handleUpdateModality = useCallback(async () => {
         if (!editModalityId) return;
@@ -899,7 +911,7 @@ export default function AGAdminPage() {
         return baseType;
     };
 
-    if (!session) {
+    if (!userSession) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
                 <div className="absolute inset-0 opacity-20">
@@ -962,6 +974,10 @@ export default function AGAdminPage() {
                             <TabsTrigger value="modalities" className="flex items-center space-x-2">
                                 <Package className="w-4 h-4" />
                                 <span>Modalidades</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="sessions" className="flex items-center space-x-2">
+                                <ClipboardCheck className="w-4 h-4" />
+                                <span>Sessões</span>
                             </TabsTrigger>
                             <TabsTrigger value="by-modality" className="flex items-center space-x-2">
                                 <Users className="w-4 h-4" />
@@ -1206,6 +1222,123 @@ export default function AGAdminPage() {
                                     </CardContent>
                                 </Card>
                             </div>
+                        </TabsContent>
+
+                        {/* Sessions Tab */}
+                        <TabsContent value="sessions">
+                            <Card className="shadow-lg border-0">
+                                <CardHeader>
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="flex items-center space-x-2">
+                                            <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                                            <span>Sessões e Plenárias</span>
+                                        </CardTitle>
+                                        <div className="flex items-center space-x-4">
+                                            <Label htmlFor="sessions-assembly-select">Assembleia:</Label>
+                                            <select
+                                                id="sessions-assembly-select"
+                                                value={selectedAssemblyId}
+                                                onChange={(e) => setSelectedAssemblyId(e.target.value)}
+                                                className="px-3 py-2 border border-gray-300 rounded-md"
+                                            >
+                                                {assemblies?.map((assembly) => (
+                                                    <option key={assembly._id} value={assembly._id}>
+                                                        {assembly.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    {selectedAssemblyId && allSessions && allSessions.length > 0 ? (
+                                        <div className="space-y-4">
+                                            {allSessions.map((session) => (
+                                                <SessionCard 
+                                                    key={session._id} 
+                                                    session={session}
+                                                    onDelete={async (sessionId: string) => {
+                                                        if (window.confirm("Tem certeza que deseja deletar esta sessão? Esta ação não pode ser desfeita.")) {
+                                                            try {
+                                                                await deleteSession({
+                                                                    sessionId: sessionId as any,
+                                                                    deletedBy: userSession?.user?.id || "admin",
+                                                                });
+                                                                toast({
+                                                                    title: "✅ Sessão deletada",
+                                                                    description: "A sessão foi deletada com sucesso.",
+                                                                });
+                                                            } catch (error) {
+                                                                toast({
+                                                                    title: "❌ Erro",
+                                                                    description: "Erro ao deletar sessão.",
+                                                                    variant: "destructive",
+                                                                });
+                                                            }
+                                                        }
+                                                    }}
+                                                    onReopen={async (sessionId: string) => {
+                                                        try {
+                                                            await reopenSession({
+                                                                sessionId: sessionId as any,
+                                                                reopenedBy: userSession?.user?.id || "admin",
+                                                            });
+                                                            toast({
+                                                                title: "✅ Sessão reaberta",
+                                                                description: "A sessão foi reaberta com sucesso.",
+                                                            });
+                                                        } catch (error) {
+                                                            toast({
+                                                                title: "❌ Erro",
+                                                                description: "Erro ao reabrir sessão.",
+                                                                variant: "destructive",
+                                                            });
+                                                        }
+                                                    }}
+                                                    onArchive={async (sessionId: string) => {
+                                                        try {
+                                                            await archiveSession({
+                                                                sessionId: sessionId as any,
+                                                                archivedBy: userSession?.user?.id || "admin",
+                                                            });
+                                                            toast({
+                                                                title: "✅ Sessão arquivada",
+                                                                description: "A sessão foi arquivada com sucesso.",
+                                                            });
+                                                        } catch (error) {
+                                                            toast({
+                                                                title: "❌ Erro",
+                                                                description: "Erro ao arquivar sessão.",
+                                                                variant: "destructive",
+                                                            });
+                                                        }
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    ) : selectedAssemblyId ? (
+                                        <div className="text-center py-12">
+                                            <ClipboardCheck className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                                Nenhuma sessão encontrada
+                                            </h3>
+                                            <p className="text-gray-600">
+                                                As sessões criadas na Chamada AG aparecerão aqui.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-12">
+                                            <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+                                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                                Selecione uma assembleia
+                                            </h3>
+                                            <p className="text-gray-600">
+                                                Escolha uma assembleia para ver suas sessões.
+                                            </p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </TabsContent>
 
                         {/* By Modality Tab */}
@@ -2155,6 +2288,109 @@ function ModalityCard({ modality, onEdit, onDelete }: {
                             variant="outline"
                             onClick={onDelete}
                             className="hover:bg-red-50 text-red-600"
+                        >
+                            <Trash2 className="w-3 h-3" />
+                        </Button>
+                    </div>
+                </div>
+            </CardContent>
+        </Card> 
+    );
+} 
+
+// SessionCard Component
+function SessionCard({ session, onDelete, onReopen, onArchive }: { 
+    session: any; 
+    onDelete: (sessionId: string) => void; 
+    onReopen: (sessionId: string) => void; 
+    onArchive: (sessionId: string) => void; 
+}) {
+    const getSessionTypeIcon = (type: string) => {
+        switch (type) {
+            case "plenaria": return <Users className="w-4 h-4 text-purple-600" />;
+            case "sessao": return <ClipboardCheck className="w-4 h-4 text-blue-600" />;
+            case "avulsa": return <Clock className="w-4 h-4 text-gray-600" />;
+            default: return <ClipboardCheck className="w-4 h-4 text-gray-600" />;
+        }
+    };
+
+    const getSessionTypeLabel = (type: string) => {
+        switch (type) {
+            case "plenaria": return "Plenária";
+            case "sessao": return "Sessão";
+            case "avulsa": return "Avulsa";
+            default: return type;
+        }
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case "active": return "bg-green-100 text-green-800 border-green-200";
+            case "archived": return "bg-gray-100 text-gray-800 border-gray-200";
+            default: return "bg-gray-100 text-gray-800 border-gray-200";
+        }
+    };
+
+    return (
+        <Card className={`border-l-4 ${session.status === "active" ? "border-l-green-500" : "border-l-gray-500"}`}>
+            <CardContent className="pt-6">
+                <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                            {getSessionTypeIcon(session.type)}
+                            <h3 className="text-lg font-semibold">{session.name}</h3>
+                            <Badge className={getStatusColor(session.status)}>
+                                {session.status === "active" ? "Ativa" : "Arquivada"}
+                            </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                                <Label className="text-gray-700">Tipo</Label>
+                                <p className="font-medium">{getSessionTypeLabel(session.type)}</p>
+                            </div>
+                            
+                            <div>
+                                <Label className="text-gray-700">Criada em</Label>
+                                <p className="font-medium">{new Date(session.createdAt).toLocaleString('pt-BR')}</p>
+                            </div>
+                            
+                            {session.archivedAt && (
+                                <div>
+                                    <Label className="text-gray-700">Arquivada em</Label>
+                                    <p className="font-medium">{new Date(session.archivedAt).toLocaleString('pt-BR')}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <div className="flex space-x-2 ml-4">
+                        {session.status === "active" ? (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onArchive(session._id)}
+                                className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                            >
+                                <Package className="w-3 h-3 mr-1" />
+                                Arquivar
+                            </Button>
+                        ) : (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onReopen(session._id)}
+                                className="text-green-600 border-green-200 hover:bg-green-50"
+                            >
+                                <Eye className="w-3 h-3 mr-1" />
+                                Reabrir
+                            </Button>
+                        )}
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onDelete(session._id)}
+                            className="text-red-600 border-red-200 hover:bg-red-50"
                         >
                             <Trash2 className="w-3 h-3" />
                         </Button>

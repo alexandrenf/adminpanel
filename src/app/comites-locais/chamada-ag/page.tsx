@@ -7,25 +7,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { Badge } from "../../../components/ui/badge";
 import { 
     ClipboardCheck, 
-    ArrowLeft, 
     Users, 
-    UserCheck, 
-    Building, 
-    Building2,
-    CheckCircle,
-    XCircle,
-    Minus,
-    Download,
-    RotateCcw,
+    CheckCircle, 
+    XCircle, 
+    Minus, 
+    ArrowLeft, 
+    UserCheck,
+    UserX,
+    Eye,
+    EyeOff,
     Search,
-    BarChart3,
+    Download,
     QrCode,
-    Smartphone,
+    ExternalLink,
+    Settings,
     Plus,
     Trash2,
     Copy,
-    ExternalLink,
-    ChevronDown
+    AlertTriangle,
+    Building,
+    Building2,
+    ChevronDown,
+    Smartphone,
+    RotateCcw,
+    BarChart3
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useQuery, useMutation } from "convex/react";
@@ -53,6 +58,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 
 type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
@@ -154,6 +160,13 @@ export default function ChamadaAGPage() {
     // Chamada type state
     const [chamadaType, setChamadaType] = useState<"avulsa" | "plenaria" | "sessao">("avulsa");
 
+    // Session management state
+    const [selectedAssemblyId, setSelectedAssemblyId] = useState<string>("");
+    const [sessionName, setSessionName] = useState("");
+    const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
+    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+    const [currentSessionType, setCurrentSessionType] = useState<"avulsa" | "plenaria" | "sessao">("avulsa");
+
     // Convex queries - handle cases where table might be empty or queries fail
     const ebsAttendance = useQuery(convexApi.attendance.getByType, { type: "eb" });
     const crsAttendance = useQuery(convexApi.attendance.getByType, { type: "cr" });
@@ -172,8 +185,15 @@ export default function ChamadaAGPage() {
 
     // QR Readers mutations
     const createQrReader = useMutation(convexApi.qrReaders.create);
+    const createSessionQrReader = useMutation(convexApi.qrReaders.createForSession);
     const removeQrReader = useMutation(convexApi.qrReaders.remove);
     const clearQrReaders = useMutation(convexApi.qrReaders.clearAll);
+
+    // Get session-specific QR readers
+    const sessionQrReaders = useQuery(
+        convexApi.qrReaders?.getBySession,
+        currentSessionId ? { sessionId: currentSessionId as any } : "skip"
+    );
 
     // Fetch data
     const { data: registrosData, isLoading: registrosLoading } = api.registros.get.useQuery();
@@ -182,6 +202,27 @@ export default function ChamadaAGPage() {
 
     // State for tracking if data is loaded
     const [isLoadingNovaAG, setIsLoadingNovaAG] = useState(false);
+
+    // Convex queries and mutations
+    const assemblies = useQuery(convexApi.assemblies?.getAll);
+    const activeSessions = useQuery(
+        convexApi.agSessions?.getActiveSessions,
+        selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
+    );
+    const currentSessionData = useQuery(
+        convexApi.agSessions?.getSessionWithStats,
+        currentSessionId ? { sessionId: currentSessionId as any } : "skip"
+    );
+    const sessionAttendance = useQuery(
+        convexApi.agSessions?.getSessionAttendance,
+        currentSessionId ? { sessionId: currentSessionId as any } : "skip"
+    );
+    
+    // Session mutations
+    const createSession = useMutation(convexApi.agSessions?.createSession);
+    const markSessionAttendance = useMutation(convexApi.agSessions?.markAttendance);
+    const archiveSession = useMutation(convexApi.agSessions?.archiveSession);
+    const reopenSession = useMutation(convexApi.agSessions?.reopenSession);
 
     useEffect(() => {
         if (ebData) {
@@ -432,17 +473,31 @@ export default function ChamadaAGPage() {
     };
 
     const handleNovaChamadaPlenaria = async () => {
-        toast({
-            title: "🚧 Em desenvolvimento",
-            description: "Funcionalidade de Plenária ainda não implementada.",
-        });
+        if (!selectedAssemblyId) {
+            toast({
+                title: "❌ Erro",
+                description: "Selecione uma AG primeiro.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        setIsSessionDialogOpen(true);
+        setChamadaType("plenaria");
     };
 
     const handleNovaChamadaSessao = async () => {
-        toast({
-            title: "🚧 Em desenvolvimento", 
-            description: "Funcionalidade de Sessão ainda não implementada.",
-        });
+        if (!selectedAssemblyId) {
+            toast({
+                title: "❌ Erro", 
+                description: "Selecione uma AG primeiro.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        setIsSessionDialogOpen(true);
+        setChamadaType("sessao");
     };
 
     const handleNovaChamada = () => {
@@ -926,6 +981,210 @@ export default function ChamadaAGPage() {
         });
     };
 
+    const handleCreateNewSession = async () => {
+        if (!session?.user?.id || !selectedAssemblyId || !sessionName.trim()) {
+            toast({
+                title: "❌ Erro",
+                description: "Preencha todos os campos obrigatórios.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            const sessionId = await createSession({
+                assemblyId: selectedAssemblyId as any,
+                name: sessionName.trim(),
+                type: chamadaType,
+                createdBy: session.user.id,
+            });
+
+            setCurrentSessionId(sessionId);
+            setCurrentSessionType(chamadaType);
+            setIsSessionDialogOpen(false);
+            setSessionName("");
+
+            toast({
+                title: "✅ Sessão criada",
+                description: `${getChamadaTypeLabel(chamadaType)} "${sessionName}" criada com sucesso.`,
+            });
+        } catch (error) {
+            console.error("Error creating session:", error);
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao criar sessão. Tente novamente.",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleSessionAttendanceToggle = async (participantId: string, currentAttendance: string) => {
+        if (!currentSessionId || !session?.user?.id) return;
+
+        const newAttendance = currentAttendance === "present" ? "absent" : "present";
+
+        try {
+            await markSessionAttendance({
+                sessionId: currentSessionId as any,
+                participantId,
+                attendance: newAttendance,
+                markedBy: session.user.id,
+            });
+
+            toast({
+                title: "✅ Presença atualizada",
+                description: `Participante marcado como ${newAttendance === "present" ? "presente" : "ausente"}.`,
+            });
+        } catch (error) {
+            console.error("Error updating attendance:", error);
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao atualizar presença. Tente novamente.",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleFinalizeSession = async () => {
+        if (!currentSessionId || !session?.user?.id) return;
+
+        const confirmMessage = currentSessionType === "avulsa" 
+            ? "ATENÇÃO: Esta é uma chamada avulsa. Os dados NÃO serão salvos permanentemente. Deseja continuar?"
+            : "Deseja finalizar esta sessão? Ela será arquivada mas pode ser reaberta posteriormente.";
+
+        if (!window.confirm(confirmMessage)) return;
+
+        try {
+            if (currentSessionType === "avulsa") {
+                // For avulsa, just clear the current data without saving
+                setCurrentSessionId(null);
+                setCurrentSessionType("avulsa");
+                
+                toast({
+                    title: "✅ Chamada avulsa finalizada",
+                    description: "Os dados foram descartados conforme esperado.",
+                });
+            } else {
+                // For plenária/sessão, archive the session
+                await archiveSession({
+                    sessionId: currentSessionId as any,
+                    archivedBy: session.user.id,
+                });
+
+                setCurrentSessionId(null);
+                setCurrentSessionType("avulsa");
+
+                toast({
+                    title: "✅ Sessão finalizada",
+                    description: "A sessão foi arquivada com sucesso.",
+                });
+            }
+        } catch (error) {
+            console.error("Error finalizing session:", error);
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao finalizar sessão. Tente novamente.",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleCreateSessionQrReader = async () => {
+        if (!session?.user?.id || !currentSessionId) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado e ter uma sessão ativa.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (!newReaderName.trim()) {
+            toast({
+                title: "Erro",
+                description: "Digite um nome para o leitor QR.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setIsCreatingReader(true);
+        try {
+            const result = await createSessionQrReader({
+                name: newReaderName.trim(),
+                sessionId: currentSessionId as any,
+                createdBy: session.user.id,
+            });
+
+            const readerUrl = `${window.location.origin}/leitor-qr/${result.token}`;
+            
+            toast({
+                title: "✅ Leitor QR criado",
+                description: `Leitor "${newReaderName}" criado para esta sessão.`,
+            });
+
+            // Copy URL to clipboard
+            try {
+                await navigator.clipboard.writeText(readerUrl);
+                toast({
+                    title: "🔗 Link copiado",
+                    description: "Link do leitor QR copiado para a área de transferência.",
+                });
+            } catch (error) {
+                console.log("Link do leitor:", readerUrl);
+            }
+
+            setNewReaderName("");
+        } catch (error) {
+            console.error("Error creating session QR reader:", error);
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao criar leitor QR para a sessão. Tente novamente.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsCreatingReader(false);
+        }
+    };
+
+    const handleCopySessionReaderLink = (token: string, name: string) => {
+        const readerUrl = `${window.location.origin}/leitor-qr/${token}`;
+        
+        navigator.clipboard.writeText(readerUrl).then(() => {
+            toast({
+                title: "🔗 Link copiado",
+                description: `Link do leitor "${name}" copiado.`,
+            });
+        }).catch(() => {
+            toast({
+                title: "Erro",
+                description: "Não foi possível copiar o link.",
+                variant: "destructive",
+            });
+        });
+    };
+
+    const handleDeleteSessionQrReader = async (id: string, name: string) => {
+        if (!session?.user?.id) return;
+
+        const confirmed = window.confirm(`Tem certeza que deseja deletar o leitor "${name}"?`);
+        if (!confirmed) return;
+
+        try {
+            await removeQrReader({ id: id as any });
+            toast({
+                title: "✅ Leitor deletado",
+                description: `Leitor "${name}" foi removido.`,
+            });
+        } catch (error) {
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao deletar leitor QR.",
+                variant: "destructive",
+            });
+        }
+    };
+
     if (loading || isLoadingNovaAG) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -1312,488 +1571,219 @@ export default function ChamadaAGPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Instructions */}
-                    <Card className="shadow-lg border-0">
-                        <CardContent className="p-6">
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
-                                <h3 className="text-lg font-semibold text-blue-800 mb-2">Como usar</h3>
-                                <p className="text-blue-700 mb-3">Clique nos nomes para alterar o status de presença:</p>
-                                <div className="flex items-center space-x-6 text-sm">
-                                    <div className="flex items-center space-x-2">
-                                        <CheckCircle className="w-4 h-4 text-green-600" />
-                                        <span className="text-green-700">Presente</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <XCircle className="w-4 h-4 text-red-600" />
-                                        <span className="text-red-700">Ausente</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <XCircle className="w-4 h-4 text-orange-600" />
-                                        <span className="text-orange-700">Excluído do quórum</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <Minus className="w-4 h-4 text-gray-400" />
-                                        <span className="text-gray-600">Não contabilizado</span>
-                                    </div>
+                    {/* Session Creation Dialog */}
+                    <Dialog open={isSessionDialogOpen} onOpenChange={setIsSessionDialogOpen}>
+                        <DialogContent className="sm:max-w-[500px]">
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center space-x-2">
+                                    {chamadaType === "plenaria" ? (
+                                        <Users className="w-5 h-5 text-purple-600" />
+                                    ) : (
+                                        <Building className="w-5 h-5 text-blue-600" />
+                                    )}
+                                    <span>Nova {getChamadaTypeLabel(chamadaType)}</span>
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Crie uma nova {chamadaType} para a AG selecionada.
+                                </DialogDescription>
+                            </DialogHeader>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <Label htmlFor="assembly-selection">Assembleia Geral</Label>
+                                    <select
+                                        id="assembly-selection"
+                                        value={selectedAssemblyId}
+                                        onChange={(e) => setSelectedAssemblyId(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    >
+                                        <option value="">Selecione uma AG</option>
+                                        {assemblies?.map((assembly) => (
+                                            <option key={assembly._id} value={assembly._id}>
+                                                {assembly.name} - {assembly.location}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="session-name">Nome da {getChamadaTypeLabel(chamadaType)}</Label>
+                                    <Input
+                                        id="session-name"
+                                        value={sessionName}
+                                        onChange={(e) => setSessionName(e.target.value)}
+                                        placeholder={`Ex: ${chamadaType === "plenaria" ? "Plenária de Abertura" : "Sessão Administrativa"}`}
+                                    />
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
 
-                    {/* Grid Layout */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* EBs Section */}
-                        <Card className="shadow-lg border-0">
-                            <CardHeader>
-                                <CardTitle className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                                        <Users className="w-5 h-5 text-blue-600" />
-                                        <span className="text-lg">Diretoria Executiva</span>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsSessionDialogOpen(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button 
+                                    onClick={handleCreateNewSession}
+                                    disabled={!selectedAssemblyId || !sessionName.trim()}
+                                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                                >
+                                    Criar {getChamadaTypeLabel(chamadaType)}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Session Status Card */}
+                    {currentSessionId && currentSessionData && (
+                        <Card className="shadow-lg border-0 border-l-4 border-l-blue-500">
+                            <CardContent className="p-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-4">
+                                        <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                                            {currentSessionType === "plenaria" ? (
+                                                <Users className="w-6 h-6 text-white" />
+                                            ) : currentSessionType === "sessao" ? (
+                                                <Building className="w-6 h-6 text-white" />
+                                            ) : (
+                                                <ClipboardCheck className="w-6 h-6 text-white" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-gray-900">
+                                                {currentSessionData.name}
+                                            </h3>
+                                            <p className="text-gray-600">
+                                                {getChamadaTypeLabel(currentSessionType)} em andamento
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center space-x-2">
-                                        {(() => {
-                                            const stats = getStats(filteredEbMembers);
-                                            return (
-                                                <>
-                                                    <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
-                                                        {stats.present} presentes
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
-                                                        {stats.absent} ausentes
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
-                                                        {stats.excluded} excluídos
-                                                    </Badge>
-                                                    <Badge 
-                                                        variant="outline" 
-                                                        className="text-gray-600 border-gray-200 text-xs"
-                                                    >
-                                                        {stats.quorumPercentage.toFixed(1)}% quórum
-                                                    </Badge>
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                </CardTitle>
-                                {/* Search bar for EB */}
-                                <div className="relative mt-2">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar por nome ou cargo na Diretoria Executiva..."
-                                        value={searchEb}
-                                        onChange={(e) => setSearchEb(e.target.value)}
-                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
-                                    />
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2 max-h-80 overflow-y-auto">
-                                    {filteredEbMembers.map((member) => {
-                                        return (
-                                            <div
-                                                key={member.id}
-                                                className={`group relative p-3 rounded-lg border transition-colors cursor-pointer ${getAttendanceColor(member.attendance)}`}
-                                                onClick={() => handleAttendanceChange("eb", member.id.toString(), member.name, member.role)}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="font-medium text-sm">{member.name}</p>
-                                                        <p className="text-xs text-gray-600">{member.role}</p>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        {getAttendanceIcon(member.attendance)}
-                                                        {/* Hover buttons */}
-                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("eb", member.id.toString(), member.name, "present", member.role);
-                                                                }}
-                                                                className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
-                                                                title="Presente"
-                                                            >
-                                                                <CheckCircle className="w-3 h-3 text-green-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("eb", member.id.toString(), member.name, "absent", member.role);
-                                                                }}
-                                                                className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
-                                                                title="Ausente"
-                                                            >
-                                                                <XCircle className="w-3 h-3 text-red-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("eb", member.id.toString(), member.name, "excluded", member.role);
-                                                                }}
-                                                                className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
-                                                                title="Excluído do quórum"
-                                                            >
-                                                                <XCircle className="w-3 h-3 text-orange-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("eb", member.id.toString(), member.name, "not-counting", member.role);
-                                                                }}
-                                                                className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
-                                                                title="Não contabilizado"
-                                                            >
-                                                                <Minus className="w-3 h-3 text-gray-600" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
+                                    
+                                    <div className="flex items-center space-x-4">
+                                        <div className="text-right">
+                                            <div className="flex items-center space-x-4 text-sm">
+                                                <div className="text-center">
+                                                    <p className="text-2xl font-bold text-green-600">
+                                                        {currentSessionData.attendanceStats.present}
+                                                    </p>
+                                                    <p className="text-gray-500">Presentes</p>
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-2xl font-bold text-red-600">
+                                                        {currentSessionData.attendanceStats.absent}
+                                                    </p>
+                                                    <p className="text-gray-500">Ausentes</p>
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-2xl font-bold text-blue-600">
+                                                        {currentSessionData.attendanceStats.total}
+                                                    </p>
+                                                    <p className="text-gray-500">Total</p>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
+                                        </div>
+                                        
+                                        <div className="flex space-x-2">
+                                            <Button
+                                                onClick={handleFinalizeSession}
+                                                variant="outline"
+                                                className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                                            >
+                                                <CheckCircle className="w-4 h-4 mr-2" />
+                                                Finalizar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* Session QR Readers Section */}
+                                <div className="mt-6 pt-6 border-t border-gray-200">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h4 className="font-semibold text-gray-900 flex items-center space-x-2">
+                                            <QrCode className="w-4 h-4" />
+                                            <span>Leitores QR da Sessão</span>
+                                            <Badge variant="outline" className="text-cyan-600 border-cyan-200">
+                                                {sessionQrReaders?.length || 0} leitores
+                                            </Badge>
+                                        </h4>
+                                        
+                                        <div className="flex items-center space-x-2">
+                                            <Input
+                                                placeholder="Nome do leitor..."
+                                                value={newReaderName}
+                                                onChange={(e) => setNewReaderName(e.target.value)}
+                                                onKeyPress={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        handleCreateSessionQrReader();
+                                                    }
+                                                }}
+                                                className="w-48"
+                                            />
+                                            <Button
+                                                onClick={handleCreateSessionQrReader}
+                                                disabled={isCreatingReader || !newReaderName.trim()}
+                                                size="sm"
+                                                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
+                                            >
+                                                {isCreatingReader ? (
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                ) : (
+                                                    <Plus className="w-4 h-4 mr-2" />
+                                                )}
+                                                Criar Leitor
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    
+                                    {sessionQrReaders && sessionQrReaders.length > 0 ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            {sessionQrReaders.map((reader) => (
+                                                <div key={reader._id} className="p-3 bg-cyan-50 rounded-lg border border-cyan-200">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-2">
+                                                            <Smartphone className="w-4 h-4 text-cyan-600" />
+                                                            <span className="font-medium text-cyan-800 text-sm">
+                                                                {reader.name}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex space-x-1">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                onClick={() => handleCopySessionReaderLink(reader.token, reader.name)}
+                                                                className="h-7 w-7 p-0 hover:bg-cyan-100"
+                                                            >
+                                                                <Copy className="w-3 h-3 text-cyan-600" />
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                onClick={() => handleDeleteSessionQrReader(reader._id, reader.name)}
+                                                                className="h-7 w-7 p-0 hover:bg-red-100"
+                                                            >
+                                                                <Trash2 className="w-3 h-3 text-red-600" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-cyan-600 mt-1">
+                                                        Específico para esta sessão
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                                            <QrCode className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                            <p className="text-gray-600 text-sm">
+                                                Nenhum leitor QR criado para esta sessão
+                                            </p>
+                                            <p className="text-gray-500 text-xs mt-1">
+                                                Leitores QR específicos podem escanear crachás para marcar presença nesta sessão
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
-
-                        {/* CRs Section */}
-                        <Card className="shadow-lg border-0">
-                            <CardHeader>
-                                <CardTitle className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                                        <UserCheck className="w-5 h-5 text-purple-600" />
-                                        <span className="text-lg">Coordenadores Regionais</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        {(() => {
-                                            const stats = getStats(filteredCrMembers);
-                                            return (
-                                                <>
-                                                    <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
-                                                        {stats.present} presentes
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
-                                                        {stats.absent} ausentes
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
-                                                        {stats.excluded} excluídos
-                                                    </Badge>
-                                                    <Badge 
-                                                        variant="outline" 
-                                                        className="text-gray-600 border-gray-200 text-xs"
-                                                    >
-                                                        {stats.quorumPercentage.toFixed(1)}% quórum
-                                                    </Badge>
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                </CardTitle>
-                                {/* Search bar for CR */}
-                                <div className="relative mt-2">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar por nome ou cargo nos Coordenadores Regionais..."
-                                        value={searchCr}
-                                        onChange={(e) => setSearchCr(e.target.value)}
-                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
-                                    />
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2 max-h-80 overflow-y-auto">
-                                    {filteredCrMembers.map((member) => {
-                                        return (
-                                            <div
-                                                key={member.id}
-                                                className={`group relative p-3 rounded-lg border transition-colors cursor-pointer ${getAttendanceColor(member.attendance)}`}
-                                                onClick={() => handleAttendanceChange("cr", member.id.toString(), member.name, member.role)}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="font-medium text-sm">{member.name}</p>
-                                                        <p className="text-xs text-gray-600">{member.role}</p>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        {getAttendanceIcon(member.attendance)}
-                                                        {/* Hover buttons */}
-                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("cr", member.id.toString(), member.name, "present", member.role);
-                                                                }}
-                                                                className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
-                                                                title="Presente"
-                                                            >
-                                                                <CheckCircle className="w-3 h-3 text-green-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("cr", member.id.toString(), member.name, "absent", member.role);
-                                                                }}
-                                                                className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
-                                                                title="Ausente"
-                                                            >
-                                                                <XCircle className="w-3 h-3 text-red-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("cr", member.id.toString(), member.name, "excluded", member.role);
-                                                                }}
-                                                                className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
-                                                                title="Excluído do quórum"
-                                                            >
-                                                                <XCircle className="w-3 h-3 text-orange-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("cr", member.id.toString(), member.name, "not-counting", member.role);
-                                                                }}
-                                                                className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
-                                                                title="Não contabilizado"
-                                                            >
-                                                                <Minus className="w-3 h-3 text-gray-600" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Comitês Plenos Section */}
-                        <Card className="shadow-lg border-0">
-                            <CardHeader>
-                                <CardTitle className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                                        <Building className="w-5 h-5 text-green-600" />
-                                        <span className="text-lg">Comitês Plenos</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        {(() => {
-                                            const stats = getStats(filteredComitesPlenos);
-                                            return (
-                                                <>
-                                                    <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
-                                                        {stats.present} presentes
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
-                                                        {stats.absent} ausentes
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
-                                                        {stats.excluded} excluídos
-                                                    </Badge>
-                                                    <Badge 
-                                                        variant="outline" 
-                                                        className="text-gray-600 border-gray-200 text-xs"
-                                                    >
-                                                        {stats.quorumPercentage.toFixed(1)}% quórum
-                                                    </Badge>
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                </CardTitle>
-                                {/* Search bar for Comitês Plenos */}
-                                <div className="relative mt-2">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar nos Comitês Plenos..."
-                                        value={searchPlenos}
-                                        onChange={(e) => setSearchPlenos(e.target.value)}
-                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
-                                    />
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2 max-h-80 overflow-y-auto">
-                                    {filteredComitesPlenos.map((comite) => {
-                                        return (
-                                            <div
-                                                key={comite.name}
-                                                className={`group relative p-3 rounded-lg border transition-colors cursor-pointer ${getAttendanceColor(comite.attendance)}`}
-                                                onClick={() => handleAttendanceChange("comite", comite.name, comite.name, undefined)}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="font-medium text-sm">{comite.name}</p>
-                                                        <p className="text-xs text-gray-600">{comite.cidade}, {comite.uf}</p>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        {getAttendanceIcon(comite.attendance)}
-                                                        {/* Hover buttons */}
-                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "present", undefined);
-                                                                }}
-                                                                className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
-                                                                title="Presente"
-                                                            >
-                                                                <CheckCircle className="w-3 h-3 text-green-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "absent", undefined);
-                                                                }}
-                                                                className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
-                                                                title="Ausente"
-                                                            >
-                                                                <XCircle className="w-3 h-3 text-red-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "excluded", undefined);
-                                                                }}
-                                                                className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
-                                                                title="Excluído do quórum"
-                                                            >
-                                                                <XCircle className="w-3 h-3 text-orange-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "not-counting", undefined);
-                                                                }}
-                                                                className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
-                                                                title="Não contabilizado"
-                                                            >
-                                                                <Minus className="w-3 h-3 text-gray-600" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Comitês Não Plenos Section */}
-                        <Card className="shadow-lg border-0">
-                            <CardHeader>
-                                <CardTitle className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                                        <Building2 className="w-5 h-5 text-orange-600" />
-                                        <span className="text-lg">Comitês Não Plenos</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        {(() => {
-                                            const stats = getStats(filteredComitesNaoPlenos);
-                                            return (
-                                                <>
-                                                    <Badge variant="outline" className="text-green-600 border-green-200 text-xs">
-                                                        {stats.present} presentes
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
-                                                        {stats.absent} ausentes
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
-                                                        {stats.excluded} excluídos
-                                                    </Badge>
-                                                    <Badge 
-                                                        variant="outline" 
-                                                        className="text-gray-600 border-gray-200 text-xs"
-                                                    >
-                                                        {stats.quorumPercentage.toFixed(1)}% quórum
-                                                    </Badge>
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                </CardTitle>
-                                {/* Search bar for Comitês Não Plenos */}
-                                <div className="relative mt-2">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar nos Comitês Não Plenos..."
-                                        value={searchNaoPlenos}
-                                        onChange={(e) => setSearchNaoPlenos(e.target.value)}
-                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition-all duration-200 w-full text-sm"
-                                    />
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2 max-h-80 overflow-y-auto">
-                                    {filteredComitesNaoPlenos.map((comite) => {
-                                        return (
-                                            <div
-                                                key={comite.name}
-                                                className={`group relative p-3 rounded-lg border transition-colors cursor-pointer ${getAttendanceColor(comite.attendance)}`}
-                                                onClick={() => handleAttendanceChange("comite", comite.name, comite.name, undefined)}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="font-medium text-sm">{comite.name}</p>
-                                                        <p className="text-xs text-gray-600">{comite.cidade}, {comite.uf}</p>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        {getAttendanceIcon(comite.attendance)}
-                                                        {/* Hover buttons */}
-                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "present", undefined);
-                                                                }}
-                                                                className="p-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
-                                                                title="Presente"
-                                                            >
-                                                                <CheckCircle className="w-3 h-3 text-green-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "absent", undefined);
-                                                                }}
-                                                                className="p-1 rounded bg-red-100 hover:bg-red-200 transition-colors"
-                                                                title="Ausente"
-                                                            >
-                                                                <XCircle className="w-3 h-3 text-red-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "excluded", undefined);
-                                                                }}
-                                                                className="p-1 rounded bg-orange-100 hover:bg-orange-200 transition-colors"
-                                                                title="Excluído do quórum"
-                                                            >
-                                                                <XCircle className="w-3 h-3 text-orange-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDirectAttendanceSet("comite", comite.name, comite.name, "not-counting", undefined);
-                                                                }}
-                                                                className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
-                                                                title="Não contabilizado"
-                                                            >
-                                                                <Minus className="w-3 h-3 text-gray-600" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                    )}
 
                     {/* Floating Summary Menu */}
                     <div className="fixed right-6 top-24 z-50">

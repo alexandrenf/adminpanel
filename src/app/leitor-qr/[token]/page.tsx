@@ -5,16 +5,22 @@ import { useParams } from "next/navigation";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
-import { CheckCircle, XCircle, Smartphone, QrCode, Users, AlertCircle } from "lucide-react";
+import { CheckCircle, XCircle, Smartphone, QrCode, Users, AlertCircle, Clock, Building } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../convex/_generated/api";
 import { Scanner } from "@yudiel/react-qr-scanner";
 
-type ScannedMember = {
-    type: "eb" | "cr" | "comite";
-    id: string;
-    name: string;
+type ScannedData = {
+    // Badge QR code format
+    participantId?: string;
+    participantName?: string;
+    assemblyId?: string;
+    assemblyName?: string;
+    // Legacy QR code format
+    type?: "eb" | "cr" | "comite";
+    id?: string;
+    name?: string;
     role?: string;
     status?: string;
     uf?: string;
@@ -25,20 +31,28 @@ export default function QrReaderPage() {
     const token = params?.token as string;
     
     const [isScanning, setIsScanning] = useState(true);
-    const [scannedData, setScannedData] = useState<ScannedMember | null>(null);
+    const [scannedData, setScannedData] = useState<ScannedData | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [resolvedParticipant, setResolvedParticipant] = useState<any>(null);
     const { toast } = useToast();
 
     // Get reader info by token
     const readerInfo = useQuery(convexApi.qrReaders.getByToken, { token: token as string });
 
-    // Get attendance records to validate scanned QR codes
+    // Get session attendance if this is a session-specific reader
+    const sessionAttendance = useQuery(
+        convexApi.agSessions?.getSessionAttendance,
+        readerInfo?.sessionId ? { sessionId: readerInfo.sessionId as any } : "skip"
+    );
+
+    // Get legacy attendance records for backwards compatibility
     const ebsAttendance = useQuery(convexApi.attendance.getByType, { type: "eb" });
     const crsAttendance = useQuery(convexApi.attendance.getByType, { type: "cr" });
     const comitesAttendance = useQuery(convexApi.attendance.getByType, { type: "comite" });
 
-    // Mutation to update attendance
-    const updateAttendance = useMutation(convexApi.attendance.updateAttendance);
+    // Mutations
+    const updateLegacyAttendance = useMutation(convexApi.attendance.updateAttendance);
+    const markSessionAttendance = useMutation(convexApi.agSessions?.markAttendance);
 
     // Check if reader exists and is valid
     if (readerInfo === undefined) {
@@ -65,6 +79,10 @@ export default function QrReaderPage() {
         );
     }
 
+    const isSessionReader = !!readerInfo.sessionId;
+    const sessionData = (readerInfo as any)?.session || null;
+    const assemblyData = (readerInfo as any)?.assembly || null;
+
     const handleQRCodeScan = (detectedCodes: { rawValue: string }[]) => {
         if (isProcessing || !detectedCodes?.[0]?.rawValue) return;
 
@@ -72,8 +90,36 @@ export default function QrReaderPage() {
         try {
             const parsed = JSON.parse(detectedCodes[0].rawValue);
             
-            // Validate QR code structure
-            if (!parsed.type || !parsed.id || !parsed.name) {
+            // Handle badge QR codes (new format)
+            if (parsed.participantId && parsed.participantName && parsed.assemblyId) {
+                if (isSessionReader) {
+                    // For session readers, find the participant in session attendance
+                    handleBadgeQRCode(parsed);
+                } else {
+                    toast({
+                        title: "QR Code de Crachá Detectado",
+                        description: "Este leitor não está configurado para sessões. Use um leitor de sessão específica.",
+                        variant: "destructive",
+                    });
+                    setIsProcessing(false);
+                    return;
+                }
+            }
+            // Handle legacy QR codes (old format)
+            else if (parsed.type && parsed.id && parsed.name) {
+                if (isSessionReader) {
+                    toast({
+                        title: "QR Code Legado Detectado",
+                        description: "Este QR code não é compatível com leitores de sessão. Use um leitor geral.",
+                        variant: "destructive",
+                    });
+                    setIsProcessing(false);
+                    return;
+                } else {
+                    handleLegacyQRCode(parsed);
+                }
+            }
+            else {
                 toast({
                     title: "QR Code Inválido",
                     description: "Este QR code não é válido para presença.",
@@ -83,35 +129,90 @@ export default function QrReaderPage() {
                 return;
             }
 
-            // Check if member exists in database
-            let memberExists = false;
-            if (parsed.type === "eb" && ebsAttendance) {
-                memberExists = ebsAttendance.some(record => record.memberId === parsed.id);
-            } else if (parsed.type === "cr" && crsAttendance) {
-                memberExists = crsAttendance.some(record => record.memberId === parsed.id);
-            } else if (parsed.type === "comite" && comitesAttendance) {
-                memberExists = comitesAttendance.some(record => record.memberId === parsed.id);
-            }
-
-            if (!memberExists) {
-                toast({
-                    title: "Membro não encontrado",
-                    description: "Este QR code não corresponde a nenhum membro registrado.",
-                    variant: "destructive",
-                });
-                setIsProcessing(false);
-                return;
-            }
-
-            setScannedData(parsed);
-            setIsScanning(false);
         } catch (error) {
             toast({
                 title: "Erro ao ler QR Code",
                 description: "QR code inválido ou corrompido.",
                 variant: "destructive",
             });
+            setIsProcessing(false);
         }
+    };
+
+    const handleBadgeQRCode = (qrData: ScannedData) => {
+        if (!sessionAttendance || !readerInfo.sessionId) {
+            toast({
+                title: "Erro de Configuração",
+                description: "Dados da sessão não disponíveis.",
+                variant: "destructive",
+            });
+            setIsProcessing(false);
+            return;
+        }
+
+        // Check if the assembly matches
+        if (qrData.assemblyId !== assemblyData?._id) {
+            toast({
+                title: "Assembleia Incorreta",
+                description: "Este QR code é para uma assembleia diferente.",
+                variant: "destructive",
+            });
+            setIsProcessing(false);
+            return;
+        }
+
+        // Find participant in session attendance records
+        const allParticipants = [
+            ...sessionAttendance.ebs,
+            ...sessionAttendance.crs,
+            ...sessionAttendance.comites,
+            ...sessionAttendance.participantes,
+        ];
+
+        const participant = allParticipants.find(p => 
+            p.participantId === qrData.participantId || 
+            p.participantName === qrData.participantName
+        );
+
+        if (!participant) {
+            toast({
+                title: "Participante não encontrado",
+                description: "Este participante não está registrado nesta sessão.",
+                variant: "destructive",
+            });
+            setIsProcessing(false);
+            return;
+        }
+
+        setScannedData(qrData);
+        setResolvedParticipant(participant);
+        setIsScanning(false);
+        setIsProcessing(false);
+    };
+
+    const handleLegacyQRCode = (qrData: ScannedData) => {
+        // Legacy QR code handling for general readers
+        let memberExists = false;
+        if (qrData.type === "eb" && ebsAttendance) {
+            memberExists = ebsAttendance.some(record => record.memberId === qrData.id);
+        } else if (qrData.type === "cr" && crsAttendance) {
+            memberExists = crsAttendance.some(record => record.memberId === qrData.id);
+        } else if (qrData.type === "comite" && comitesAttendance) {
+            memberExists = comitesAttendance.some(record => record.memberId === qrData.id);
+        }
+
+        if (!memberExists) {
+            toast({
+                title: "Membro não encontrado",
+                description: "Este QR code não corresponde a nenhum membro registrado.",
+                variant: "destructive",
+            });
+            setIsProcessing(false);
+            return;
+        }
+
+        setScannedData(qrData);
+        setIsScanning(false);
         setIsProcessing(false);
     };
 
@@ -120,23 +221,40 @@ export default function QrReaderPage() {
 
         setIsProcessing(true);
         try {
-            await updateAttendance({
-                type: scannedData.type,
-                memberId: scannedData.id,
-                name: scannedData.name,
-                role: scannedData.role,
-                status: "present",
-                attendance: "present",
-                lastUpdatedBy: `qr-reader-${readerInfo.name}`,
-            });
+            if (isSessionReader && readerInfo.sessionId && resolvedParticipant) {
+                // Mark session attendance
+                await markSessionAttendance({
+                    sessionId: readerInfo.sessionId as any,
+                    participantId: resolvedParticipant.participantId,
+                    attendance: "present",
+                    markedBy: `qr-reader-${readerInfo.name}`,
+                });
 
-            toast({
-                title: "✅ Presença marcada",
-                description: `${scannedData.name} foi marcado como presente!`,
-            });
+                toast({
+                    title: "✅ Presença marcada",
+                    description: `${resolvedParticipant.participantName} foi marcado como presente na ${sessionData?.name}!`,
+                });
+            } else if (!isSessionReader && scannedData.type && scannedData.id && scannedData.name) {
+                // Mark legacy attendance
+                await updateLegacyAttendance({
+                    type: scannedData.type,
+                    memberId: scannedData.id,
+                    name: scannedData.name,
+                    role: scannedData.role,
+                    status: "present",
+                    attendance: "present",
+                    lastUpdatedBy: `qr-reader-${readerInfo.name}`,
+                });
+
+                toast({
+                    title: "✅ Presença marcada",
+                    description: `${scannedData.name} foi marcado como presente!`,
+                });
+            }
 
             // Reset for next scan
             setScannedData(null);
+            setResolvedParticipant(null);
             setIsScanning(true);
         } catch (error) {
             toast({
@@ -150,7 +268,26 @@ export default function QrReaderPage() {
 
     const handleCancelScan = () => {
         setScannedData(null);
+        setResolvedParticipant(null);
         setIsScanning(true);
+    };
+
+    const getSessionTypeIcon = (type: string) => {
+        switch (type) {
+            case "plenaria": return <Users className="w-5 h-5 text-purple-600" />;
+            case "sessao": return <Building className="w-5 h-5 text-blue-600" />;
+            case "avulsa": return <Clock className="w-5 h-5 text-gray-600" />;
+            default: return <QrCode className="w-5 h-5 text-gray-600" />;
+        }
+    };
+
+    const getSessionTypeLabel = (type: string) => {
+        switch (type) {
+            case "plenaria": return "Plenária";
+            case "sessao": return "Sessão";
+            case "avulsa": return "Avulsa";
+            default: return "Geral";
+        }
     };
 
     const getMemberIcon = (type: string) => {
@@ -175,7 +312,7 @@ export default function QrReaderPage() {
             case "comite":
                 return "Comitê Local";
             default:
-                return "Desconhecido";
+                return "Participante";
         }
     };
 
@@ -198,12 +335,23 @@ export default function QrReaderPage() {
                                     <Smartphone className="w-6 h-6 text-white" />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
-                                        Bem-vindo, {readerInfo.name}!
+                                    <h1 className="text-2xl font-bold text-gray-900">
+                                        Leitor QR - {readerInfo.name}
                                     </h1>
-                                    <p className="text-gray-600 text-sm mt-1">
-                                        Leitor de QR Code para presença
-                                    </p>
+                                    {isSessionReader && sessionData && (
+                                        <div className="flex items-center justify-center space-x-2 mt-2">
+                                            {getSessionTypeIcon(sessionData.type)}
+                                            <p className="text-lg text-gray-700">
+                                                {sessionData.name}
+                                            </p>
+                                            <Badge variant="outline" className="text-xs">
+                                                {getSessionTypeLabel(sessionData.type)}
+                                            </Badge>
+                                        </div>
+                                    )}
+                                    {!isSessionReader && (
+                                        <p className="text-gray-600">Leitor Geral</p>
+                                    )}
                                 </div>
                             </CardTitle>
                         </CardHeader>
@@ -211,85 +359,135 @@ export default function QrReaderPage() {
 
                     {/* Scanner or Confirmation */}
                     <Card className="shadow-xl border-0 bg-white/90 backdrop-blur-sm">
-                        <CardContent className="p-6">
+                        <CardContent className="p-8">
                             {isScanning ? (
-                                <div className="text-center space-y-4">
-                                    <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                                <div className="space-y-6">
+                                    <div className="text-center">
                                         <QrCode className="w-12 h-12 mx-auto mb-3 text-blue-600" />
-                                        <h3 className="font-semibold text-blue-800 mb-2">Aponte a câmera para o QR Code</h3>
-                                        <p className="text-blue-700 text-sm">
-                                            Posicione o QR code dentro da área de escaneamento
+                                        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                                            Escaneie o QR Code
+                                        </h2>
+                                        <p className="text-gray-600">
+                                            {isSessionReader ? 
+                                                "Aponte a câmera para o QR code do crachá do participante" :
+                                                "Aponte a câmera para o QR code de presença"
+                                            }
                                         </p>
                                     </div>
-
-                                    <div className="bg-black rounded-lg overflow-hidden shadow-lg" style={{ width: "100%", height: "400px" }}>
+                                    
+                                    <div className="relative bg-black rounded-lg overflow-hidden aspect-square max-w-sm mx-auto">
                                         <Scanner
                                             onScan={handleQRCodeScan}
-                                            onError={(error: unknown) => {
-                                                console.error("QR Scanner error:", error);
+                                            formats={['qr_code']}
+                                            components={{
+                                                finder: true,
                                             }}
-                                            constraints={{
-                                                facingMode: "environment"
+                                            styles={{
+                                                container: { width: '100%', height: '100%' },
+                                                video: { width: '100%', height: '100%', objectFit: 'cover' }
                                             }}
                                         />
                                     </div>
 
                                     {isProcessing && (
-                                        <div className="flex items-center justify-center space-x-2 py-4">
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                                            <span className="text-blue-600">Processando...</span>
+                                        <div className="text-center">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                                            <p className="text-gray-600">Processando QR code...</p>
                                         </div>
                                     )}
                                 </div>
                             ) : (
-                                scannedData && (
-                                    <div className="text-center space-y-6">
-                                        <div className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-100">
-                                            <div className="flex items-center justify-center space-x-3 mb-4">
-                                                {getMemberIcon(scannedData.type)}
-                                                <div>
-                                                    <h3 className="font-bold text-green-800 text-lg">{scannedData.name}</h3>
-                                                    <p className="text-green-700 text-sm">{getMemberTypeLabel(scannedData.type)}</p>
-                                                    {scannedData.role && (
-                                                        <p className="text-green-600 text-xs">{scannedData.role}</p>
-                                                    )}
-                                                    {scannedData.status && (
-                                                        <Badge variant="outline" className="text-green-600 border-green-200 mt-1">
-                                                            {scannedData.status}
+                                <div className="space-y-6">
+                                    <div className="text-center">
+                                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <CheckCircle className="w-8 h-8 text-green-600" />
+                                        </div>
+                                        
+                                        {isSessionReader && resolvedParticipant ? (
+                                            <div>
+                                                <div className="flex items-center justify-center space-x-3 mb-4">
+                                                    <Users className="w-5 h-5 text-blue-600" />
+                                                    <div>
+                                                        <h3 className="font-bold text-green-800 text-lg">
+                                                            {resolvedParticipant.participantName}
+                                                        </h3>
+                                                        <p className="text-green-700 text-sm">
+                                                            {resolvedParticipant.participantRole || "Participante"}
+                                                        </p>
+                                                        {resolvedParticipant.comiteLocal && (
+                                                            <p className="text-green-600 text-xs">
+                                                                {resolvedParticipant.comiteLocal}
+                                                            </p>
+                                                        )}
+                                                        <Badge 
+                                                            variant={resolvedParticipant.attendance === "present" ? "default" : "outline"} 
+                                                            className="text-green-600 border-green-200 mt-1"
+                                                        >
+                                                            {resolvedParticipant.attendance === "present" ? "Já presente" : "Ausente"}
                                                         </Badge>
-                                                    )}
+                                                    </div>
                                                 </div>
+                                                <p className="text-green-700 font-medium">
+                                                    Marcar presença em: {sessionData?.name}?
+                                                </p>
                                             </div>
-                                            <p className="text-green-700 font-medium">
-                                                Deseja marcar esta pessoa como presente?
-                                            </p>
-                                        </div>
-
-                                        <div className="flex space-x-3 justify-center">
-                                            <Button
-                                                onClick={handleMarkAsPresent}
-                                                disabled={isProcessing}
-                                                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
-                                            >
-                                                {isProcessing ? (
-                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                                                ) : (
-                                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                                )}
-                                                Marcar Presente
-                                            </Button>
-                                            <Button
-                                                onClick={handleCancelScan}
-                                                variant="outline"
-                                                disabled={isProcessing}
-                                                className="hover:bg-gray-50"
-                                            >
-                                                <XCircle className="w-4 h-4 mr-2" />
-                                                Cancelar
-                                            </Button>
-                                        </div>
+                                        ) : scannedData && (
+                                            <div>
+                                                <div className="flex items-center justify-center space-x-3 mb-4">
+                                                    {getMemberIcon(scannedData.type || "")}
+                                                    <div>
+                                                        <h3 className="font-bold text-green-800 text-lg">
+                                                            {scannedData.name || scannedData.participantName}
+                                                        </h3>
+                                                        <p className="text-green-700 text-sm">
+                                                            {getMemberTypeLabel(scannedData.type || "")}
+                                                        </p>
+                                                        {scannedData.role && (
+                                                            <p className="text-green-600 text-xs">{scannedData.role}</p>
+                                                        )}
+                                                        {scannedData.status && (
+                                                            <Badge variant="outline" className="text-green-600 border-green-200 mt-1">
+                                                                {scannedData.status}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <p className="text-green-700 font-medium">
+                                                    Deseja marcar esta pessoa como presente?
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
-                                )
+
+                                    <div className="flex space-x-4">
+                                        <Button
+                                            onClick={handleCancelScan}
+                                            variant="outline"
+                                            className="flex-1"
+                                            disabled={isProcessing}
+                                        >
+                                            <XCircle className="w-4 h-4 mr-2" />
+                                            Cancelar
+                                        </Button>
+                                        <Button
+                                            onClick={handleMarkAsPresent}
+                                            className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                    Marcando...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                                    Marcar Presente
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
                             )}
                         </CardContent>
                     </Card>
@@ -297,15 +495,50 @@ export default function QrReaderPage() {
                     {/* Instructions */}
                     <Card className="shadow-xl border-0 bg-white/90 backdrop-blur-sm">
                         <CardContent className="p-6">
-                            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-100">
-                                <h3 className="text-lg font-semibold text-amber-800 mb-2">Instruções</h3>
-                                <ul className="text-amber-700 text-sm space-y-1">
-                                    <li>• Aponte a câmera para o QR code do participante</li>
-                                    <li>• Aguarde a leitura automática</li>
-                                    <li>• Confirme se deseja marcar como presente</li>
-                                    <li>• O sistema marcará automaticamente a presença</li>
-                                </ul>
-                            </div>
+                            <h3 className="font-semibold text-gray-900 mb-3">
+                                {isSessionReader ? "Instruções para Sessão" : "Instruções Gerais"}
+                            </h3>
+                            <ul className="space-y-2 text-sm text-gray-600">
+                                {isSessionReader ? (
+                                    <>
+                                        <li className="flex items-center space-x-2">
+                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                            <span>Este leitor marca presença na sessão específica: <strong>{sessionData?.name}</strong></span>
+                                        </li>
+                                        <li className="flex items-center space-x-2">
+                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                            <span>Escaneie apenas QR codes de crachás de participantes</span>
+                                        </li>
+                                        <li className="flex items-center space-x-2">
+                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                            <span>Somente participantes registrados nesta sessão podem ter presença marcada</span>
+                                        </li>
+                                    </>
+                                ) : (
+                                    <>
+                                        <li className="flex items-center space-x-2">
+                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                            <span>Este é um leitor geral para presença na assembleia</span>
+                                        </li>
+                                        <li className="flex items-center space-x-2">
+                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                            <span>Escaneie QR codes de presença tradicionais</span>
+                                        </li>
+                                        <li className="flex items-center space-x-2">
+                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                            <span>Para sessões específicas, use leitores de sessão</span>
+                                        </li>
+                                    </>
+                                )}
+                                <li className="flex items-center space-x-2">
+                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                    <span>Mantenha boa iluminação para melhor leitura</span>
+                                </li>
+                                <li className="flex items-center space-x-2">
+                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                    <span>Aguarde a confirmação antes de escanear o próximo código</span>
+                                </li>
+                            </ul>
                         </CardContent>
                     </Card>
                 </div>
