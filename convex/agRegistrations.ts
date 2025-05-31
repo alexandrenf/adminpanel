@@ -590,7 +590,14 @@ export const createFromForm = mutation({
       participantIdToCheck = args.personalInfo.comiteLocal;
     }
 
+    // Enhanced debugging
+    console.log(`Eligibility check: role=${args.personalInfo.role}, participantIdToCheck=${participantIdToCheck}, assemblyId=${args.assemblyId}`);
+    console.log(`EB selection: selectedEBId=${args.personalInfo.selectedEBId}`);
+    console.log(`CR selection: selectedCRId=${args.personalInfo.selectedCRId}`);
+    console.log(`Comite Local: comiteLocal=${args.personalInfo.comiteLocal}`);
+
     // Check if participant exists in the assembly's participant list
+    // But allow fallback for some participant types that might not be in agParticipants
     const participant = await ctx.db
       .query("agParticipants")
       .withIndex("by_assembly")
@@ -602,8 +609,81 @@ export const createFromForm = mutation({
       )
       .first();
 
+    console.log(`Participant found in assembly: ${!!participant}`);
+
+    // Enhanced eligibility check with better error handling
     if (!participant) {
-      throw new Error("Participant is not eligible for this assembly");
+      // For EB roles, they must be in agParticipants table for this specific assembly
+      if (args.personalInfo.role === 'eb') {
+        if (!args.personalInfo.selectedEBId) {
+          throw new Error("Please select a specific Executive Board position to register");
+        }
+        throw new Error(`Selected Executive Board position is not eligible for this assembly`);
+      }
+      
+      // For CR roles, check if they exist in global list and allow registration
+      if (args.personalInfo.role === 'cr') {
+        if (!args.personalInfo.selectedCRId) {
+          throw new Error("Please select a specific Regional Coordinator position to register");
+        }
+        
+        // Check if this CR exists in the global participant list
+        const crExists = await ctx.db
+          .query("agParticipants")
+          .filter((q) => 
+            q.and(
+              q.eq(q.field("participantId"), args.personalInfo.selectedCRId),
+              q.eq(q.field("type"), "cr")
+            )
+          )
+          .first();
+        
+        console.log(`CR exists in global list: ${!!crExists}`);
+        
+        if (!crExists) {
+          throw new Error("Selected Regional Coordinator position is not recognized in the system. Please contact support if you believe this is an error.");
+        }
+        
+        // For CR, we allow registration even if not specifically in this assembly's participant list
+        // This provides flexibility for CRs that might participate in multiple assemblies
+      }
+      
+      // For comite_local, check if the comite exists in the global list
+      else if (args.personalInfo.role === 'comite_local' && args.personalInfo.comiteLocal) {
+        // Check if this comite local exists in the global participant list
+        // Note: The type in agParticipants is "comite", not "comite_local"
+        const comiteExists = await ctx.db
+          .query("agParticipants")
+          .filter((q) => 
+            q.and(
+              q.eq(q.field("participantId"), args.personalInfo.comiteLocal),
+              q.eq(q.field("type"), "comite")
+            )
+          )
+          .first();
+        
+        console.log(`Comite Local exists in global list: ${!!comiteExists}`);
+        
+        if (!comiteExists) {
+          throw new Error("Selected Comitê Local is not recognized in the system. Please contact support to add your local committee.");
+        }
+        
+        // For comite_local, we allow registration even if not specifically in this assembly's participant list
+        // This provides flexibility for comitês locais that might participate in multiple assemblies
+      } else if (args.personalInfo.role === 'comite_local' && !args.personalInfo.comiteLocal) {
+        throw new Error("Please select your Comitê Local to register");
+      } else {
+        // For other participant types, provide a more informative error
+        const participantTypeLabel = {
+          'comite_aspirante': 'Comitê Aspirante',
+          'supco': 'Conselho Supervisor',
+          'observador_externo': 'Observador Externo',
+          'alumni': 'Alumni'
+        }[args.personalInfo.role] || args.personalInfo.role;
+        
+        console.error(`Eligibility check failed for participant type: ${args.personalInfo.role}, participantIdToCheck: ${participantIdToCheck}, assemblyId: ${args.assemblyId}`);
+        throw new Error(`${participantTypeLabel} registration is not currently available for this assembly. Please contact support if you believe this is an error.`);
+      }
     }
 
     // Determine the participantId based on the role
@@ -1063,6 +1143,38 @@ export const bulkDelete = mutation({
       deletedFiles,
       deletedItems: deletedRegistrations,
       message: `${deletedRegistrations.length} registrations have been permanently deleted.`
+    };
+  },
+});
+
+// Mark attendance for a registration
+export const markAttendance = mutation({
+  args: {
+    registrationId: v.id("agRegistrations"),
+    markedAt: v.number(),
+    markedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const registration = await ctx.db.get(args.registrationId);
+    if (!registration) {
+      throw new Error("Registration not found");
+    }
+
+    if (registration.status !== "approved") {
+      throw new Error("Only approved registrations can have attendance marked");
+    }
+
+    // Update registration with attendance information
+    await ctx.db.patch(args.registrationId, {
+      attendanceMarked: true,
+      attendanceMarkedAt: args.markedAt,
+      attendanceMarkedBy: args.markedBy,
+    });
+
+    return {
+      registrationId: args.registrationId,
+      participantName: registration.participantName,
+      message: "Attendance marked successfully"
     };
   },
 }); 
