@@ -546,6 +546,7 @@ export default function AGAdminPage() {
                     if (assembly) {
                         await handleRegistrationApproval({
                             registrationId: selectedRegistration._id,
+                            assemblyId: selectedRegistration.assemblyId,
                             participantName: selectedRegistration.participantName,
                             participantEmail: selectedRegistration.email || '',
                             assemblyName: assembly.name,

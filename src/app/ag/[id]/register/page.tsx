@@ -432,6 +432,7 @@ export default function AGRegistrationPage() {
                             // Send approval email for auto-approved resubmissions
                             await handleRegistrationApproval({
                                 registrationId: actualRegistrationId as string,
+                                assemblyId: assemblyId as string,
                                 participantName: formData.nome,
                                 participantEmail: formData.email,
                                 assemblyName: assembly.name,
@@ -534,6 +535,7 @@ export default function AGRegistrationPage() {
                             // Send approval email directly for auto-approved AGE registration
                             await handleRegistrationApproval({
                                 registrationId: actualRegistrationId as string,
+                                assemblyId: assemblyId as string,
                                 participantName: formData.nome,
                                 participantEmail: formData.email,
                                 assemblyName: assembly.name,
