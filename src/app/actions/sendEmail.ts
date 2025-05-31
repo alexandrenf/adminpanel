@@ -472,12 +472,12 @@ Equipe IFMSA Brazil
                 <div class="payment-exempt">
                   <p><strong>Status:</strong> Isento de Pagamento</p>
                   ${confirmData.paymentExemptReason ? `<p><strong>Motivo:</strong> ${confirmData.paymentExemptReason}</p>` : ''}
-                </div>
+      </div>
               ` : `
                 <div class="payment-required">
                   <p><strong>Valor:</strong> ${confirmData.paymentAmount}</p>
                   <p><strong>Status:</strong> Pagamento Necessário</p>
-                </div>
+    </div>
               `}
             </div>
             ` : 'Sua inscrição será analisada em breve.'}
@@ -876,8 +876,8 @@ Equipe IFMSA Brazil
               `}
             </div>
             ` : ''}
-            
-            ${approvedData.additionalInstructions ? `
+      
+      ${approvedData.additionalInstructions ? `
             <div class="instructions-section">
               <h3>📝 Instruções Importantes</h3>
         <p>${approvedData.additionalInstructions}</p>
