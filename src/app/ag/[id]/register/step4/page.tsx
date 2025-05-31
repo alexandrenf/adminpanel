@@ -362,6 +362,7 @@ export default function AGRegistrationStep4Page() {
                     // Send approval email for auto-approved registrations
                     await handleRegistrationApproval({
                         registrationId: actualRegistrationId as string,
+                        assemblyId: assemblyId as string,
                         participantName: step1Data!.nome,
                         participantEmail: step1Data!.email,
                         assemblyName: assembly.name,

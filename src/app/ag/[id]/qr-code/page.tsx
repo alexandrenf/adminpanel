@@ -9,7 +9,6 @@ import { CheckCircle, XCircle, Users, QrCode, Calendar, MapPin, UserCheck, Clock
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../convex/_generated/api";
-import QRCodeLib from 'qrcode';
 
 // Utility function to format dates without timezone conversion
 const formatDateWithoutTimezone = (date: Date) => {
@@ -24,53 +23,113 @@ export default function QRCodePage() {
     const searchParams = useSearchParams();
     const { toast } = useToast();
     
-    const assemblyId = params?.id as string;
-    const registrationId = searchParams?.get('registration');
+    const urlId = params?.id as string;
+    const registrationIdFromQuery = searchParams?.get('registration');
     
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
     const [attendanceMarked, setAttendanceMarked] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    // Queries
-    const assembly = useQuery(convexApi.assemblies?.getById, 
-        assemblyId ? { id: assemblyId as any } : "skip"
+    // Helper functions
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case "pending": return "bg-yellow-100 text-yellow-800 border-yellow-200";
+            case "pending_review": return "bg-orange-100 text-orange-800 border-orange-200";
+            case "approved": return "bg-green-100 text-green-800 border-green-200";
+            case "rejected": return "bg-red-100 text-red-800 border-red-200";
+            case "cancelled": return "bg-gray-100 text-gray-800 border-gray-200";
+            default: return "bg-gray-100 text-gray-800 border-gray-200";
+        }
+    };
+
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+            case "pending": return "Pendente";
+            case "pending_review": return "Aguardando Análise";
+            case "approved": return "Aprovado";
+            case "rejected": return "Rejeitado";
+            case "cancelled": return "Cancelado";
+            default: return status;
+        }
+    };
+
+    const getParticipantTypeLabel = (type: string) => {
+        switch (type?.toLowerCase()) {
+            case "eb": return "Executive Board";
+            case "cr": return "Coordenador Regional";
+            case "comite_local": return "Comitê Local";
+            case "comite_aspirante": return "Comitê Aspirante";
+            case "supco": return "Conselho Supervisor";
+            case "observador_externo": return "Observador Externo";
+            case "alumni": return "Alumni";
+            default: return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || "N/A";
+        }
+    };
+
+    // Try to fetch registration using the URL ID first (in case it's a registration ID)
+    const potentialRegistration = useQuery(
+        convexApi.agRegistrations?.getById,
+        urlId ? { id: urlId as any } : "skip"
     );
-    const registration = useQuery(convexApi.agRegistrations?.getById, 
+
+    // Determine the actual registration ID and assembly ID
+    const registrationId = registrationIdFromQuery || (potentialRegistration ? urlId : null);
+    const assemblyId = potentialRegistration?.assemblyId || (registrationIdFromQuery ? urlId : null);
+    
+    // Fetch registration and assembly data
+    const registration = useQuery(
+        convexApi.agRegistrations?.getById,
         registrationId ? { id: registrationId as any } : "skip"
     );
 
-    // Mutations
+    const assembly = useQuery(
+        convexApi.assemblies?.getById,
+        assemblyId ? { id: assemblyId as any } : "skip"
+    );
+    
+    // Get assembly from registration if the direct assembly query didn't work
+    const assemblyFromRegistration = useQuery(
+        convexApi.assemblies?.getById,
+        registration?.assemblyId ? { id: registration.assemblyId as any } : "skip"
+    );
+    
+    // Use the assembly data from whichever query succeeded
+    const finalAssembly = assembly || assemblyFromRegistration;
+
     const markAttendance = useMutation(convexApi.agRegistrations?.markAttendance);
 
-    // Generate QR code when page loads
+    // Generate QR code URL
     useEffect(() => {
-        if (assemblyId && registrationId) {
-            const qrUrl = `${window.location.origin}/ag/${assemblyId}/qr-code?registration=${registrationId}`;
-            QRCodeLib.toDataURL(qrUrl, {
-                width: 256,
-                margin: 2,
-                color: {
-                    dark: '#000000',
-                    light: '#ffffff'
-                }
-            }).then(setQrCodeDataUrl).catch(console.error);
+        if (registration && finalAssembly) {
+            const currentUrl = window.location.href;
+            // Generate QR code from current URL
+            import('qrcode').then((QRCodeLib) => {
+                QRCodeLib.toDataURL(currentUrl, {
+                    width: 256,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#ffffff'
+                    }
+                }).then(setQrCodeDataUrl).catch(console.error);
+            });
         }
-    }, [assemblyId, registrationId]);
+    }, [registration, finalAssembly]);
 
     // Handle attendance marking
     const handleMarkAttendance = async () => {
-        if (!registrationId) return;
-
+        if (!registration || !finalAssembly) return;
+        
         try {
-            await markAttendance({
-                registrationId: registrationId as any,
+            await markAttendance({ 
+                registrationId: registration._id as any,
                 markedAt: Date.now(),
-                markedBy: 'qr_scan'
+                markedBy: 'system' // You might want to get actual user info here
             });
             setAttendanceMarked(true);
             toast({
                 title: "✅ Presença Confirmada",
-                description: "Presença foi marcada com sucesso!",
+                description: "Presença marcada com sucesso!",
             });
         } catch (error) {
             toast({
@@ -83,7 +142,7 @@ export default function QRCodePage() {
 
     // Generate and download digital badge
     const downloadBadge = async () => {
-        if (!registration || !assembly || !canvasRef.current) return;
+        if (!registration || !finalAssembly || !canvasRef.current) return;
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
@@ -108,17 +167,17 @@ export default function QRCodePage() {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 36px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(assembly.name, canvas.width / 2, 60);
+        ctx.fillText(finalAssembly.name, canvas.width / 2, 60);
 
         // Assembly dates
         ctx.font = '24px Arial';
-        const startDate = formatDateWithoutTimezone(new Date(assembly.startDate));
-        const endDate = formatDateWithoutTimezone(new Date(assembly.endDate));
+        const startDate = formatDateWithoutTimezone(new Date(finalAssembly.startDate));
+        const endDate = formatDateWithoutTimezone(new Date(finalAssembly.endDate));
         ctx.fillText(`${startDate} - ${endDate}`, canvas.width / 2, 100);
 
         // Assembly location
         ctx.font = '20px Arial';
-        ctx.fillText(assembly.location, canvas.width / 2, 140);
+        ctx.fillText(finalAssembly.location, canvas.width / 2, 140);
 
         // Participant name
         ctx.fillStyle = '#1f2937';
@@ -172,7 +231,7 @@ export default function QRCodePage() {
 
                 // Download the canvas as image
                 const link = document.createElement('a');
-                link.download = `Cracha_${registration.participantName.replace(/\s+/g, '_')}_${assembly?.name?.replace(/\s+/g, '_') || 'AG'}.png`;
+                link.download = `Cracha_${registration.participantName.replace(/\s+/g, '_')}_${finalAssembly?.name?.replace(/\s+/g, '_') || 'AG'}.png`;
                 link.href = canvas.toDataURL();
                 link.click();
 
@@ -185,7 +244,7 @@ export default function QRCodePage() {
         } else {
             // Download without QR code
             const link = document.createElement('a');
-            link.download = `Cracha_${registration.participantName.replace(/\s+/g, '_')}_${assembly?.name?.replace(/\s+/g, '_') || 'AG'}.png`;
+            link.download = `Cracha_${registration.participantName.replace(/\s+/g, '_')}_${finalAssembly?.name?.replace(/\s+/g, '_') || 'AG'}.png`;
             link.href = canvas.toDataURL();
             link.click();
 
@@ -203,16 +262,18 @@ export default function QRCodePage() {
 
     // Share badge
     const shareBadge = async () => {
-        if (navigator.share && registrationId && assemblyId) {
+        if (navigator.share && registration && finalAssembly) {
             try {
+                const shareUrl = `${window.location.origin}/ag/${finalAssembly._id}/qr-code?registration=${registration._id}`;
                 await navigator.share({
                     title: `Crachá - ${registration?.participantName}`,
-                    text: `Crachá para ${assembly?.name}`,
-                    url: `${window.location.origin}/ag/${assemblyId}/qr-code?registration=${registrationId}`
+                    text: `Crachá para ${finalAssembly?.name}`,
+                    url: shareUrl
                 });
             } catch (error) {
                 // Fallback to copying URL
-                navigator.clipboard.writeText(`${window.location.origin}/ag/${assemblyId}/qr-code?registration=${registrationId}`);
+                const shareUrl = `${window.location.origin}/ag/${finalAssembly._id}/qr-code?registration=${registration._id}`;
+                navigator.clipboard.writeText(shareUrl);
                 toast({
                     title: "🔗 Link copiado",
                     description: "Link do crachá copiado para a área de transferência.",
@@ -220,46 +281,14 @@ export default function QRCodePage() {
             }
         } else {
             // Fallback to copying URL
-            navigator.clipboard.writeText(`${window.location.origin}/ag/${assemblyId}/qr-code?registration=${registrationId}`);
+            const shareUrl = registration && finalAssembly ? 
+                `${window.location.origin}/ag/${finalAssembly._id}/qr-code?registration=${registration._id}` :
+                window.location.href;
+            navigator.clipboard.writeText(shareUrl);
             toast({
                 title: "🔗 Link copiado",
                 description: "Link do crachá copiado para a área de transferência.",
             });
-        }
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case "pending": return "bg-yellow-100 text-yellow-800 border-yellow-200";
-            case "pending_review": return "bg-orange-100 text-orange-800 border-orange-200";
-            case "approved": return "bg-green-100 text-green-800 border-green-200";
-            case "rejected": return "bg-red-100 text-red-800 border-red-200";
-            case "cancelled": return "bg-gray-100 text-gray-800 border-gray-200";
-            default: return "bg-gray-100 text-gray-800 border-gray-200";
-        }
-    };
-
-    const getStatusLabel = (status: string) => {
-        switch (status) {
-            case "pending": return "Pendente";
-            case "pending_review": return "Aguardando Análise";
-            case "approved": return "Aprovado";
-            case "rejected": return "Rejeitado";
-            case "cancelled": return "Cancelado";
-            default: return status;
-        }
-    };
-
-    const getParticipantTypeLabel = (type: string) => {
-        switch (type?.toLowerCase()) {
-            case "eb": return "Executive Board";
-            case "cr": return "Coordenador Regional";
-            case "comite_local": return "Comitê Local";
-            case "comite_aspirante": return "Comitê Aspirante";
-            case "supco": return "Conselho Supervisor";
-            case "observador_externo": return "Observador Externo";
-            case "alumni": return "Alumni";
-            default: return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || "N/A";
         }
     };
 
@@ -278,7 +307,7 @@ export default function QRCodePage() {
                             Esta página requer um parâmetro &quot;registration&quot; com o ID da inscrição.
                         </p>
                         <p className="text-sm text-gray-600 mt-2">
-                            Exemplo: /ag/{assemblyId}/qr-code?registration=abc123
+                            Exemplo: /ag/[assemblyId]/qr-code?registration=abc123
                         </p>
                     </CardContent>
                 </Card>
@@ -286,7 +315,7 @@ export default function QRCodePage() {
         );
     }
 
-    if (!registration || !assembly) {
+    if (!registration || !finalAssembly) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center p-6">
                 <Card className="w-full max-w-2xl">
@@ -307,18 +336,18 @@ export default function QRCodePage() {
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-800 to-indigo-600 bg-clip-text text-transparent mb-2">
                         Crachá Eletrônico
                     </h1>
-                    <p className="text-gray-600">{assembly.name}</p>
+                    <p className="text-gray-600">{finalAssembly.name}</p>
                 </div>
 
                 {/* Digital Badge */}
                 <Card className="shadow-lg border-0 print:shadow-none print:border">
                     <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
                         <div className="text-center">
-                            <CardTitle className="text-2xl mb-2">{assembly.name}</CardTitle>
+                            <CardTitle className="text-2xl mb-2">{finalAssembly.name}</CardTitle>
                             <p className="text-blue-100">
-                                {formatDateWithoutTimezone(new Date(assembly.startDate))} - {formatDateWithoutTimezone(new Date(assembly.endDate))}
+                                {formatDateWithoutTimezone(new Date(finalAssembly.startDate))} - {formatDateWithoutTimezone(new Date(finalAssembly.endDate))}
                             </p>
-                            <p className="text-blue-100 text-sm">{assembly.location}</p>
+                            <p className="text-blue-100 text-sm">{finalAssembly.location}</p>
                         </div>
                     </CardHeader>
                     <CardContent className="p-8 text-center">
@@ -445,7 +474,7 @@ export default function QRCodePage() {
                                 <div>
                                     <p className="font-semibold">Data</p>
                                     <p className="text-sm text-gray-600">
-                                        {formatDateWithoutTimezone(new Date(assembly.startDate))} - {formatDateWithoutTimezone(new Date(assembly.endDate))}
+                                        {formatDateWithoutTimezone(new Date(finalAssembly.startDate))} - {formatDateWithoutTimezone(new Date(finalAssembly.endDate))}
                                     </p>
                                 </div>
                             </div>
@@ -453,14 +482,14 @@ export default function QRCodePage() {
                                 <MapPin className="w-5 h-5 text-gray-500" />
                                 <div>
                                     <p className="font-semibold">Local</p>
-                                    <p className="text-sm text-gray-600">{assembly.location}</p>
+                                    <p className="text-sm text-gray-600">{finalAssembly.location}</p>
                                 </div>
                             </div>
                             <div className="flex items-center space-x-3">
                                 <Users className="w-5 h-5 text-gray-500" />
                                 <div>
                                     <p className="font-semibold">Tipo</p>
-                                    <p className="text-sm text-gray-600 capitalize">{assembly.type?.replace('_', ' ')}</p>
+                                    <p className="text-sm text-gray-600 capitalize">{finalAssembly.type?.replace('_', ' ')}</p>
                                 </div>
                             </div>
                         </div>

@@ -50,15 +50,17 @@ export async function handleNewRegistration(registrationData: {
     assemblyDates: assemblyDates,
     modalityName: registrationData.modalityName,
     paymentRequired: registrationData.paymentRequired,
-    paymentAmount: registrationData.paymentAmount ? `R$ ${registrationData.paymentAmount.toFixed(2)}` : undefined,
-    registrationUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.registrationId}/payment`,
+    paymentAmount: registrationData.paymentAmount ? 
+      new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(registrationData.paymentAmount / 100) : undefined,
     isPaymentExempt: registrationData.isPaymentExempt,
     paymentExemptReason: registrationData.paymentExemptReason,
   });
 
   if (!result.success) {
     console.error('Failed to send registration confirmation email:', result.error);
-    // Consider implementing retry logic or alerting admins
   }
 
   return result;
@@ -69,6 +71,7 @@ export async function handleNewRegistration(registrationData: {
  */
 export async function handleRegistrationApproval(registrationData: {
   registrationId: string;
+  assemblyId: string;
   participantName: string;
   participantEmail: string;
   assemblyName: string;
@@ -92,7 +95,7 @@ export async function handleRegistrationApproval(registrationData: {
     assemblyDates: assemblyDates,
     modalityName: registrationData.modalityName,
     additionalInstructions: registrationData.additionalInstructions,
-    qrCodeUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.registrationId}/qr-code`,
+    qrCodeUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.assemblyId}/qr-code?registration=${registrationData.registrationId}`,
     paymentAmount: registrationData.paymentAmount,
     isPaymentExempt: registrationData.isPaymentExempt,
     paymentExemptReason: registrationData.paymentExemptReason,
@@ -275,6 +278,8 @@ export async function processRegistrationStatusChange(
     paymentAmount?: number;
     rejectionReason?: string;
     additionalInstructions?: string;
+    isPaymentExempt?: boolean;
+    paymentExemptReason?: string;
   }
 ) {
   switch (newStatus) {
@@ -289,6 +294,7 @@ export async function processRegistrationStatusChange(
       // Send approval email
       return await handleRegistrationApproval({
         registrationId,
+        assemblyId: 'assembly123',
         participantName: registrationData.participantName,
         participantEmail: registrationData.participantEmail,
         assemblyName: registrationData.assemblyName,
@@ -297,6 +303,13 @@ export async function processRegistrationStatusChange(
         assemblyEndDate: registrationData.assemblyEndDate,
         modalityName: registrationData.modalityName,
         additionalInstructions: registrationData.additionalInstructions,
+        paymentAmount: registrationData.paymentAmount ? 
+          new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+          }).format(registrationData.paymentAmount / 100) : undefined,
+        isPaymentExempt: registrationData.isPaymentExempt,
+        paymentExemptReason: registrationData.paymentExemptReason,
       });
 
     case 'rejected':
