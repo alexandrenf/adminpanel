@@ -1145,4 +1145,36 @@ export const bulkDelete = mutation({
       message: `${deletedRegistrations.length} registrations have been permanently deleted.`
     };
   },
+});
+
+// Mark attendance for a registration
+export const markAttendance = mutation({
+  args: {
+    registrationId: v.id("agRegistrations"),
+    markedAt: v.number(),
+    markedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const registration = await ctx.db.get(args.registrationId);
+    if (!registration) {
+      throw new Error("Registration not found");
+    }
+
+    if (registration.status !== "approved") {
+      throw new Error("Only approved registrations can have attendance marked");
+    }
+
+    // Update registration with attendance information
+    await ctx.db.patch(args.registrationId, {
+      attendanceMarked: true,
+      attendanceMarkedAt: args.markedAt,
+      attendanceMarkedBy: args.markedBy,
+    });
+
+    return {
+      registrationId: args.registrationId,
+      participantName: registration.participantName,
+      message: "Attendance marked successfully"
+    };
+  },
 }); 

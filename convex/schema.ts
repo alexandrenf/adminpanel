@@ -145,6 +145,11 @@ export default defineSchema({
     // Resubmission tracking
     resubmittedAt: v.optional(v.number()),
     resubmissionNote: v.optional(v.string()),
+    
+    // Attendance tracking
+    attendanceMarked: v.optional(v.boolean()),
+    attendanceMarkedAt: v.optional(v.number()),
+    attendanceMarkedBy: v.optional(v.string()),
   }).index("by_assembly", ["assemblyId"])
     .index("by_participant", ["participantId"])
     .index("by_status", ["status"])
