@@ -199,7 +199,7 @@ export default function AGRegistrationPage() {
         if (isIfmsaEmail) {
             return [
                 { value: "eb", label: "EB (Executive Board)" },
-                { value: "cr", label: "CR (Country Representative)" },
+                { value: "cr", label: "CR (Coordenador Regional)" },
                 { value: "supco", label: "SupCo (Conselho Supervisor)" },
             ];
         } else {
