@@ -88,13 +88,23 @@ export default function QRCodePage() {
 
     const markAttendance = useMutation(convexApi.agRegistrations?.markAttendance);
 
-    // Generate QR code URL
+    // Generate QR code with participant data
     useEffect(() => {
         if (registration && finalAssembly) {
-            const currentUrl = window.location.href;
-            // Generate QR code from current URL
+            // Create QR code data with participant information
+            const qrData = {
+                participantId: registration._id,
+                participantName: registration.participantName,
+                assemblyId: finalAssembly._id,
+                assemblyName: finalAssembly.name
+            };
+            
+            // Convert to JSON string for QR code
+            const qrContent = JSON.stringify(qrData);
+            
+            // Generate QR code from participant data
             import('qrcode').then((QRCodeLib) => {
-                QRCodeLib.toDataURL(currentUrl, {
+                QRCodeLib.toDataURL(qrContent, {
                     width: 256,
                     margin: 2,
                     color: {
@@ -211,7 +221,7 @@ export default function QRCodePage() {
                 ctx.fillStyle = '#374151';
                 ctx.font = '20px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText('Escaneie para marcar presença', canvas.width / 2, 950);
+                ctx.fillText('Código de identificação do participante', canvas.width / 2, 950);
 
                 // Footer
                 ctx.fillStyle = '#9ca3af';
@@ -373,7 +383,7 @@ export default function QRCodePage() {
                                             className="w-48 h-48"
                                         />
                                         <p className="text-sm text-gray-600">
-                                            Escaneie para marcar presença
+                                            Código de identificação do participante
                                         </p>
                                     </div>
                                 </div>
