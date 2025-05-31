@@ -124,7 +124,7 @@ export async function handleRegistrationRejection(registrationData: {
     rejectionReason: registrationData.rejectionReason,
     canResubmit: registrationData.canResubmit,
     resubmissionUrl: registrationData.canResubmit ? `${env.NEXTAUTH_URL}/ag/${registrationData.registrationId}/resubmit` : undefined,
-    contactEmail: env.WEBMASTER_EMAIL,
+    contactEmail: 'atendimento@ifmsabrazil.org',
   });
 
   if (!result.success) {
