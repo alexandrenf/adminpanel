@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "../../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../../components/ui/card";
 import { Input } from "../../../../components/ui/input";
 import { Label } from "../../../../components/ui/label";
 import { Checkbox } from "../../../../components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "../../../../components/ui/alert";
 import {
     Select,
     SelectContent,
@@ -27,7 +28,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "../../../../components/ui/popover";
-import { Check, ChevronsUpDown, UserPlus, ArrowRight, Calendar, Users, MapPin, XCircle } from "lucide-react";
+import { Check, ChevronsUpDown, UserPlus, ArrowRight, Calendar, Users, MapPin, XCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -86,16 +87,21 @@ export default function AGRegistrationPage() {
     const { data: session } = useSession();
     const router = useRouter();
     const params = useParams();
+    const searchParams = useSearchParams();
     const { toast } = useToast();
     
     // Get assemblyId with type safety
     const assemblyId = params?.id;
     
+    // Check if this is a resubmission
+    const resubmitRegistrationId = searchParams?.get('resubmit');
+    const isResubmission = !!resubmitRegistrationId;
+    
     // Convex queries
     const assembly = useQuery(convexApi.assemblies?.getById, assemblyId ? { id: assemblyId as any } : "skip");
     const registrationStatus = useQuery(
         convexApi.agRegistrations?.getUserRegistrationStatus,
-        session?.user?.id && assemblyId ? { assemblyId: assemblyId as any, userId: session.user.id } : "skip"
+        session?.user?.id && assemblyId && !isResubmission ? { assemblyId: assemblyId as any, userId: session.user.id } : "skip"
     );
     const activeModalities = useQuery(
         convexApi.registrationModalities?.getActiveByAssembly,
@@ -113,23 +119,50 @@ export default function AGRegistrationPage() {
     const { data: ebData } = api.eb.getAll.useQuery();
     const { data: crData } = api.cr.getAll.useQuery();
     
+    // Fetch existing registration data for resubmission
+    const existingRegistrationData = useQuery(
+        convexApi.agRegistrations?.getById,
+        resubmitRegistrationId ? { id: resubmitRegistrationId as any } : "skip"
+    );
+    
     // Initial form data
-    const initialFormData: RegistrationFormData = useMemo(() => ({
-        nome: "",
-        email: session?.user?.email || "",
-        emailSolar: "",
-        dataNascimento: "",
-        cpf: "",
-        nomeCracha: "",
-        celular: "",
-        uf: "",
-        cidade: "",
-        role: "",
-        comiteLocal: "",
-        comiteAspirante: "",
-        autorizacaoCompartilhamento: false,
-        selectedModalityId: "", // Initialize modality selection
-    }), [session?.user?.email]);
+    const initialFormData: RegistrationFormData = useMemo(() => {
+        if (isResubmission && existingRegistrationData) {
+            return {
+                nome: existingRegistrationData.participantName || "",
+                email: existingRegistrationData.email || session?.user?.email || "",
+                emailSolar: existingRegistrationData.emailSolar || "",
+                dataNascimento: existingRegistrationData.dataNascimento || "",
+                cpf: existingRegistrationData.cpf || "",
+                nomeCracha: existingRegistrationData.nomeCracha || "",
+                celular: existingRegistrationData.celular || "",
+                uf: existingRegistrationData.uf || "",
+                cidade: existingRegistrationData.cidade || "",
+                role: existingRegistrationData.participantRole || "",
+                comiteLocal: existingRegistrationData.comiteLocal || "",
+                comiteAspirante: existingRegistrationData.comiteAspirante || "",
+                autorizacaoCompartilhamento: existingRegistrationData.autorizacaoCompartilhamento || false,
+                selectedModalityId: existingRegistrationData.modalityId || "",
+            };
+        }
+        
+        return {
+            nome: "",
+            email: session?.user?.email || "",
+            emailSolar: "",
+            dataNascimento: "",
+            cpf: "",
+            nomeCracha: "",
+            celular: "",
+            uf: "",
+            cidade: "",
+            role: "",
+            comiteLocal: "",
+            comiteAspirante: "",
+            autorizacaoCompartilhamento: false,
+            selectedModalityId: "",
+        };
+    }, [session?.user?.email, isResubmission, existingRegistrationData]);
 
     const [formData, setFormData] = useState<RegistrationFormData>(initialFormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -139,6 +172,7 @@ export default function AGRegistrationPage() {
     
     // Convex mutations
     const createRegistration = useMutation(convexApi.agRegistrations?.createFromForm);
+    const resubmitRegistration = useMutation(convexApi.agRegistrations?.resubmit);
 
     // Handle input changes
     const handleInputChange = useCallback((field: keyof RegistrationFormData, value: string | boolean) => {
@@ -247,98 +281,146 @@ export default function AGRegistrationPage() {
         if (assembly?.type === "AGE") {
             // For AGE, create registration directly with auto-approval
             try {
-                const registrationData = {
-                    assemblyId: assemblyId as any,
-                    modalityId: formData.selectedModalityId as any,
-                    userId: session!.user!.id,
-                    personalInfo: {
-                        nome: formData.nome,
-                        email: formData.email,
-                        emailSolar: formData.emailSolar,
-                        dataNascimento: formData.dataNascimento,
-                        cpf: formData.cpf,
-                        nomeCracha: formData.nomeCracha,
-                        celular: formData.celular,
-                        uf: formData.uf,
-                        cidade: formData.cidade,
-                        role: formData.role,
-                        comiteLocal: formData.comiteLocal,
-                        comiteAspirante: formData.comiteAspirante,
-                        autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
-                    },
-                    additionalInfo: {
-                        experienciaAnterior: "", // Empty for AGE
-                        motivacao: "AGE - Não especificado", // Default for AGE
-                        expectativas: "", // Empty for AGE
-                        dietaRestricoes: "", // Empty for AGE
-                        alergias: "", // Empty for AGE
-                        medicamentos: "", // Empty for AGE
-                        necessidadesEspeciais: "", // Empty for AGE
-                        restricaoQuarto: "", // Empty for AGE
-                        pronomes: "", // Empty for AGE
-                        contatoEmergenciaNome: "", // Empty for AGE
-                        contatoEmergenciaTelefone: "", // Empty for AGE
-                        outrasObservacoes: "", // Empty for AGE
-                        participacaoComites: [], // Empty for AGE
-                        interesseVoluntariado: false, // Default for AGE
-                    },
-                    status: "approved" as const, // Auto-approve AGE registrations
-                };
-
-                const registrationId = await createRegistration(registrationData);
-                
-                // Send confirmation email for AGE registration
-                try {
-                    const selectedModality = activeModalities?.find(m => m._id === formData.selectedModalityId);
+                if (isResubmission) {
+                    // Handle AGE resubmission
+                    await resubmitRegistration({
+                        registrationId: resubmitRegistrationId as any,
+                        updatedPersonalInfo: {
+                            nome: formData.nome,
+                            email: formData.email,
+                            emailSolar: formData.emailSolar,
+                            dataNascimento: formData.dataNascimento,
+                            cpf: formData.cpf,
+                            nomeCracha: formData.nomeCracha,
+                            celular: formData.celular,
+                            uf: formData.uf,
+                            cidade: formData.cidade,
+                            role: formData.role,
+                            comiteLocal: formData.comiteLocal,
+                            comiteAspirante: formData.comiteAspirante,
+                            autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
+                        },
+                        updatedAdditionalInfo: {
+                            experienciaAnterior: "", // Empty for AGE
+                            motivacao: "AGE - Não especificado", // Default for AGE
+                            expectativas: "", // Empty for AGE
+                            dietaRestricoes: "", // Empty for AGE
+                            alergias: "", // Empty for AGE
+                            medicamentos: "", // Empty for AGE
+                            necessidadesEspeciais: "", // Empty for AGE
+                            restricaoQuarto: "", // Empty for AGE
+                            pronomes: "", // Empty for AGE
+                            contatoEmergenciaNome: "", // Empty for AGE
+                            contatoEmergenciaTelefone: "", // Empty for AGE
+                            outrasObservacoes: "", // Empty for AGE
+                            participacaoComites: [], // Empty for AGE
+                            interesseVoluntariado: false, // Default for AGE
+                        },
+                        resubmissionNote: "AGE resubmission with updated information",
+                    });
                     
-                    // Add null checks for safety
-                    if (!assembly || !selectedModality) {
-                        console.warn('⚠️ Cannot send AGE confirmation email: missing assembly or modality data');
-                    } else {
-                        // Send confirmation email first
-                        await handleNewRegistration({
-                            registrationId: registrationId as string,
-                            participantName: formData.nome,
-                            participantEmail: formData.email,
-                            assemblyName: assembly.name,
-                            assemblyLocation: assembly.location,
-                            assemblyStartDate: new Date(assembly.startDate),
-                            assemblyEndDate: new Date(assembly.endDate),
-                            modalityName: selectedModality.name,
-                            paymentRequired: selectedModality.price ? selectedModality.price > 0 : false,
-                            paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price : undefined,
-                        });
-                        console.log('✅ AGE confirmation email sent successfully');
+                    toast({
+                        title: "✅ Reenvio Realizado com Sucesso!",
+                        description: "Sua inscrição AGE foi reenviada e aprovada automaticamente.",
+                    });
+                    
+                    // Navigate directly to success page
+                    router.push(`/ag/${assemblyId}/register/success/${resubmitRegistrationId}`);
+                } else {
+                    // Handle new AGE registration (existing logic)
+                    const registrationData = {
+                        assemblyId: assemblyId as any,
+                        modalityId: formData.selectedModalityId as any,
+                        userId: session!.user!.id,
+                        personalInfo: {
+                            nome: formData.nome,
+                            email: formData.email,
+                            emailSolar: formData.emailSolar,
+                            dataNascimento: formData.dataNascimento,
+                            cpf: formData.cpf,
+                            nomeCracha: formData.nomeCracha,
+                            celular: formData.celular,
+                            uf: formData.uf,
+                            cidade: formData.cidade,
+                            role: formData.role,
+                            comiteLocal: formData.comiteLocal,
+                            comiteAspirante: formData.comiteAspirante,
+                            autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
+                        },
+                        additionalInfo: {
+                            experienciaAnterior: "", // Empty for AGE
+                            motivacao: "AGE - Não especificado", // Default for AGE
+                            expectativas: "", // Empty for AGE
+                            dietaRestricoes: "", // Empty for AGE
+                            alergias: "", // Empty for AGE
+                            medicamentos: "", // Empty for AGE
+                            necessidadesEspeciais: "", // Empty for AGE
+                            restricaoQuarto: "", // Empty for AGE
+                            pronomes: "", // Empty for AGE
+                            contatoEmergenciaNome: "", // Empty for AGE
+                            contatoEmergenciaTelefone: "", // Empty for AGE
+                            outrasObservacoes: "", // Empty for AGE
+                            participacaoComites: [], // Empty for AGE
+                            interesseVoluntariado: false, // Default for AGE
+                        },
+                        status: "approved" as const, // Auto-approve AGE registrations
+                    };
 
-                        // Send approval email since AGE is auto-approved
-                        await handleRegistrationApproval({
-                            registrationId: registrationId as string,
-                            participantName: formData.nome,
-                            participantEmail: formData.email,
-                            assemblyName: assembly.name,
-                            assemblyLocation: assembly.location,
-                            assemblyStartDate: new Date(assembly.startDate),
-                            assemblyEndDate: new Date(assembly.endDate),
-                            modalityName: selectedModality.name,
-                            additionalInstructions: "Sua inscrição AGE foi aprovada automaticamente. Você receberá mais informações sobre o evento em breve."
-                        });
-                        console.log('✅ AGE approval email sent successfully');
+                    const registrationId = await createRegistration(registrationData);
+                    
+                    // Send confirmation email for AGE registration
+                    try {
+                        const selectedModality = activeModalities?.find(m => m._id === formData.selectedModalityId);
+                        
+                        // Add null checks for safety
+                        if (!assembly || !selectedModality) {
+                            console.warn('⚠️ Cannot send AGE confirmation email: missing assembly or modality data');
+                        } else {
+                            // Send confirmation email first
+                            await handleNewRegistration({
+                                registrationId: registrationId as string,
+                                participantName: formData.nome,
+                                participantEmail: formData.email,
+                                assemblyName: assembly.name,
+                                assemblyLocation: assembly.location,
+                                assemblyStartDate: new Date(assembly.startDate),
+                                assemblyEndDate: new Date(assembly.endDate),
+                                modalityName: selectedModality.name,
+                                paymentRequired: selectedModality.price ? selectedModality.price > 0 : false,
+                                paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price : undefined,
+                            });
+                            console.log('✅ AGE confirmation email sent successfully');
+
+                            // Send approval email since AGE is auto-approved
+                            await handleRegistrationApproval({
+                                registrationId: registrationId as string,
+                                participantName: formData.nome,
+                                participantEmail: formData.email,
+                                assemblyName: assembly.name,
+                                assemblyLocation: assembly.location,
+                                assemblyStartDate: new Date(assembly.startDate),
+                                assemblyEndDate: new Date(assembly.endDate),
+                                modalityName: selectedModality.name,
+                                additionalInstructions: "Sua inscrição AGE foi aprovada automaticamente. Você receberá mais informações sobre o evento em breve."
+                            });
+                            console.log('✅ AGE approval email sent successfully');
+                        }
+                    } catch (emailError) {
+                        console.error('⚠️ Failed to send AGE emails:', emailError);
+                        // Don't fail the registration if email fails
                     }
-                } catch (emailError) {
-                    console.error('⚠️ Failed to send AGE emails:', emailError);
-                    // Don't fail the registration if email fails
+                    
+                    toast({
+                        title: "✅ Inscrição Realizada com Sucesso!",
+                        description: "Sua inscrição AGE foi aprovada automaticamente.",
+                    });
+                    
+                    // Navigate directly to success page
+                    router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
                 }
                 
-                toast({
-                    title: "✅ Inscrição Realizada com Sucesso!",
-                    description: "Sua inscrição AGE foi aprovada automaticamente.",
-                });
-                
-                // Navigate directly to success page
-                router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
-                
             } catch (error) {
-                console.error("Error creating AGE registration:", error);
+                console.error("Error with AGE registration:", error);
                 toast({
                     title: "❌ Erro",
                     description: "Erro ao finalizar inscrição AGE. Tente novamente.",
@@ -347,7 +429,7 @@ export default function AGRegistrationPage() {
             }
         } else {
             // For regular AG, save form data and continue to step 2
-            sessionStorage.setItem('agRegistrationStep1', JSON.stringify({
+            const dataToSave = {
                 nome: formData.nome,
                 email: formData.email,
                 emailSolar: formData.emailSolar,
@@ -362,12 +444,19 @@ export default function AGRegistrationPage() {
                 comiteAspirante: formData.comiteAspirante,
                 autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
                 selectedModalityId: formData.selectedModalityId,
-            }));
+                // Add resubmission info if applicable
+                ...(isResubmission && {
+                    resubmitRegistrationId: resubmitRegistrationId,
+                    isResubmission: true,
+                })
+            };
+
+            sessionStorage.setItem('agRegistrationStep1', JSON.stringify(dataToSave));
 
             // Navigate to step 2
             router.push(`/ag/${assemblyId}/register/step2`);
         }
-    }, [validateForm, formData, assemblyId, assembly?.type, session, createRegistration, toast, router]);
+    }, [validateForm, formData, assemblyId, assembly?.type, session, createRegistration, toast, router, isResubmission, resubmitRegistration]);
 
     // Check email domain
     useEffect(() => {
@@ -382,6 +471,53 @@ export default function AGRegistrationPage() {
         
         checkIfmsaEmail();
     }, [session]);
+
+    // Update form data when existing registration data loads
+    useEffect(() => {
+        if (isResubmission && existingRegistrationData) {
+            setFormData({
+                nome: existingRegistrationData.participantName || "",
+                email: existingRegistrationData.email || session?.user?.email || "",
+                emailSolar: existingRegistrationData.emailSolar || "",
+                dataNascimento: existingRegistrationData.dataNascimento || "",
+                cpf: existingRegistrationData.cpf || "",
+                nomeCracha: existingRegistrationData.nomeCracha || "",
+                celular: existingRegistrationData.celular || "",
+                uf: existingRegistrationData.uf || "",
+                cidade: existingRegistrationData.cidade || "",
+                role: existingRegistrationData.participantRole || "",
+                comiteLocal: existingRegistrationData.comiteLocal || "",
+                comiteAspirante: existingRegistrationData.comiteAspirante || "",
+                autorizacaoCompartilhamento: existingRegistrationData.autorizacaoCompartilhamento || false,
+                selectedModalityId: existingRegistrationData.modalityId || "",
+            });
+        }
+    }, [isResubmission, existingRegistrationData, session?.user?.email]);
+
+    // Check if user is authorized to resubmit this registration
+    useEffect(() => {
+        if (isResubmission && existingRegistrationData && session?.user?.id) {
+            if (existingRegistrationData.participantId !== session.user.id) {
+                toast({
+                    title: "❌ Acesso Negado",
+                    description: "Você não tem permissão para reenviar esta inscrição.",
+                    variant: "destructive",
+                });
+                router.push(`/ag/${assemblyId}`);
+                return;
+            }
+            
+            if (existingRegistrationData.status !== "rejected") {
+                toast({
+                    title: "❌ Erro",
+                    description: "Apenas inscrições rejeitadas podem ser reenviadas.",
+                    variant: "destructive",
+                });
+                router.push(`/ag/${assemblyId}`);
+                return;
+            }
+        }
+    }, [isResubmission, existingRegistrationData, session?.user?.id, assemblyId, router, toast]);
 
     // Redirect if already registered
     useEffect(() => {
@@ -512,6 +648,24 @@ export default function AGRegistrationPage() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {/* Resubmission Alert */}
+                    {isResubmission && existingRegistrationData && (
+                        <Alert className="border-orange-200 bg-orange-50">
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <AlertTitle className="text-orange-800">Reenvio de Inscrição</AlertTitle>
+                            <AlertDescription className="text-orange-700">
+                                <div className="space-y-2">
+                                    <p><strong>Motivo da rejeição:</strong> {existingRegistrationData.reviewNotes || "Não especificado"}</p>
+                                    <p>Você pode alterar qualquer informação abaixo antes de reenviar sua inscrição.</p>
+                                    <div className="flex items-center gap-2 text-sm mt-2">
+                                        <RefreshCw className="h-3 w-3" />
+                                        <span>Reenvio da Inscrição #{existingRegistrationData._id.slice(-8)}</span>
+                                    </div>
+                                </div>
+                            </AlertDescription>
+                        </Alert>
+                    )}
 
                     {/* Modality Selection */}
                     {activeModalities && activeModalities.length > 0 && (

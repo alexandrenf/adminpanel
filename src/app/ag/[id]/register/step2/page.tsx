@@ -9,6 +9,7 @@ import { Input } from "../../../../../components/ui/input";
 import { Label } from "../../../../../components/ui/label";
 import { Textarea } from "../../../../../components/ui/textarea";
 import { Checkbox } from "../../../../../components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "../../../../../components/ui/alert";
 import {
     Select,
     SelectContent,
@@ -25,7 +26,8 @@ import {
     MapPin,
     AlertTriangle,
     FileText,
-    ArrowRight
+    ArrowRight,
+    RefreshCw
 } from "lucide-react";
 import { useQuery } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
@@ -97,8 +99,19 @@ export default function AGRegistrationStep2Page() {
     const [formData, setFormData] = useState<Step2FormData>(initialStep2FormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
+    // Check if this is a resubmission
+    const [isResubmission, setIsResubmission] = useState(false);
+    const [resubmitRegistrationId, setResubmitRegistrationId] = useState<string | null>(null);
+    const [rejectionReason, setRejectionReason] = useState<string>("");
+    
     // Fetch assembly data
     const assembly = useQuery(convexApi.assemblies?.getById, { id: assemblyId as any });
+    
+    // Fetch existing registration data for resubmission
+    const existingRegistrationData = useQuery(
+        convexApi.agRegistrations?.getById,
+        resubmitRegistrationId ? { id: resubmitRegistrationId as any } : "skip"
+    );
     
     // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
@@ -202,12 +215,40 @@ export default function AGRegistrationStep2Page() {
     useEffect(() => {
         const savedStep1 = sessionStorage.getItem('agRegistrationStep1');
         if (savedStep1) {
-            setStep1Data(JSON.parse(savedStep1));
+            const step1 = JSON.parse(savedStep1);
+            setStep1Data(step1);
+            
+            // Check if this is a resubmission
+            if (step1.isResubmission && step1.resubmitRegistrationId) {
+                setIsResubmission(true);
+                setResubmitRegistrationId(step1.resubmitRegistrationId);
+            }
         } else {
             // If no step 1 data, redirect back to step 1
             router.push(`/ag/${assemblyId}/register`);
         }
     }, [assemblyId, router]);
+
+    // Load existing registration data for resubmission
+    useEffect(() => {
+        if (isResubmission && existingRegistrationData) {
+            setRejectionReason(existingRegistrationData.reviewNotes || "Não especificado");
+            
+            // Pre-populate form with existing data
+            setFormData({
+                dietaRestricoes: existingRegistrationData.dietaRestricoes || "",
+                alergias: existingRegistrationData.alergias || "",
+                medicamentos: existingRegistrationData.medicamentos || "",
+                necessidadesEspeciais: existingRegistrationData.necessidadesEspeciais || "",
+                restricaoQuarto: existingRegistrationData.restricaoQuarto || "",
+                pronomes: existingRegistrationData.pronomes || "",
+                contatoEmergenciaNome: existingRegistrationData.contatoEmergenciaNome || "",
+                contatoEmergenciaTelefone: existingRegistrationData.contatoEmergenciaTelefone || "",
+                outrasObservacoes: existingRegistrationData.outrasObservacoes || "",
+                aceitaTermos: false, // Always require re-acceptance
+            });
+        }
+    }, [isResubmission, existingRegistrationData]);
 
     // Show error if assemblyId is missing
     if (!assemblyId) {
@@ -326,6 +367,24 @@ export default function AGRegistrationStep2Page() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {/* Resubmission Alert */}
+                    {isResubmission && (
+                        <Alert className="border-orange-200 bg-orange-50">
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <AlertTitle className="text-orange-800">Reenvio de Inscrição</AlertTitle>
+                            <AlertDescription className="text-orange-700">
+                                <div className="space-y-2">
+                                    <p><strong>Motivo da rejeição:</strong> {rejectionReason}</p>
+                                    <p>Você pode alterar qualquer informação abaixo antes de reenviar sua inscrição.</p>
+                                    <div className="flex items-center gap-2 text-sm mt-2">
+                                        <RefreshCw className="h-3 w-3" />
+                                        <span>Reenvio da Inscrição #{resubmitRegistrationId?.slice(-8)}</span>
+                                    </div>
+                                </div>
+                            </AlertDescription>
+                        </Alert>
+                    )}
 
                     {/* Personal Info Summary */}
                     <Card className="bg-green-50 border-green-200">
