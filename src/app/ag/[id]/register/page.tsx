@@ -59,6 +59,8 @@ type RegistrationFormData = {
     role: string;
     comiteLocal?: string;
     comiteAspirante?: string;
+    selectedEBId?: string;
+    selectedCRId?: string;
     autorizacaoCompartilhamento: boolean;
     selectedModalityId?: string;
 };
@@ -114,10 +116,9 @@ export default function AGRegistrationPage() {
     // Fetch comitês locais from agParticipants
     const comitesLocais = useQuery(convexApi.assemblies?.getComitesLocais) || [];
     
-    // Fetch local committees for dropdown - keeping original for compatibility
-    const { data: registrosData } = api.registros.get.useQuery();
-    const { data: ebData } = api.eb.getAll.useQuery();
-    const { data: crData } = api.cr.getAll.useQuery();
+    // Fetch EBs and CRs from agParticipants
+    const ebs = useQuery(convexApi.assemblies?.getEBs) || [];
+    const crs = useQuery(convexApi.assemblies?.getCRs) || [];
     
     // Fetch existing registration data for resubmission
     const existingRegistrationData = useQuery(
@@ -141,6 +142,8 @@ export default function AGRegistrationPage() {
                 role: existingRegistrationData.participantRole || "",
                 comiteLocal: existingRegistrationData.comiteLocal || "",
                 comiteAspirante: existingRegistrationData.comiteAspirante || "",
+                selectedEBId: existingRegistrationData.participantType === "eb" ? existingRegistrationData.participantId : "",
+                selectedCRId: existingRegistrationData.participantType === "cr" ? existingRegistrationData.participantId : "",
                 autorizacaoCompartilhamento: existingRegistrationData.autorizacaoCompartilhamento || false,
                 selectedModalityId: existingRegistrationData.modalityId || "",
             };
@@ -159,6 +162,8 @@ export default function AGRegistrationPage() {
             role: "",
             comiteLocal: "",
             comiteAspirante: "",
+            selectedEBId: "",
+            selectedCRId: "",
             autorizacaoCompartilhamento: false,
             selectedModalityId: "",
         };
@@ -168,6 +173,8 @@ export default function AGRegistrationPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [existingRegistration, setExistingRegistration] = useState<any>(null);
     const [comiteLocalOpen, setComiteLocalOpen] = useState(false);
+    const [ebOpen, setEbOpen] = useState(false);
+    const [crOpen, setCrOpen] = useState(false);
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean>(false);
     
     // Convex mutations
@@ -199,7 +206,7 @@ export default function AGRegistrationPage() {
         if (isIfmsaEmail) {
             return [
                 { value: "eb", label: "EB (Executive Board)" },
-                { value: "cr", label: "CR (Country Representative)" },
+                { value: "cr", label: "CR (Coordenador Regional)" },
                 { value: "supco", label: "SupCo (Conselho Supervisor)" },
             ];
         } else {
@@ -249,6 +256,24 @@ export default function AGRegistrationPage() {
             return false;
         }
 
+        if (formData.role === 'eb' && !formData.selectedEBId) {
+            toast({
+                title: "❌ Erro",
+                description: "Selecione sua posição no Executive Board.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        if (formData.role === 'cr' && !formData.selectedCRId) {
+            toast({
+                title: "❌ Erro",
+                description: "Selecione sua posição de Coordenador Regional.",
+                variant: "destructive",
+            });
+            return false;
+        }
+
         if (!formData.autorizacaoCompartilhamento) {
             toast({
                 title: "❌ Erro",
@@ -283,7 +308,7 @@ export default function AGRegistrationPage() {
             try {
                 if (isResubmission) {
                     // Handle AGE resubmission
-                    await resubmitRegistration({
+                    const result = await resubmitRegistration({
                         registrationId: resubmitRegistrationId as any,
                         updatedPersonalInfo: {
                             nome: formData.nome,
@@ -298,11 +323,13 @@ export default function AGRegistrationPage() {
                             role: formData.role,
                             comiteLocal: formData.comiteLocal,
                             comiteAspirante: formData.comiteAspirante,
+                            selectedEBId: formData.selectedEBId,
+                            selectedCRId: formData.selectedCRId,
                             autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
                         },
                         updatedAdditionalInfo: {
                             experienciaAnterior: "", // Empty for AGE
-                            motivacao: "AGE - Não especificado", // Default for AGE
+                            motivacao: "AGE Resubmissão - Não especificado", // Default for AGE
                             expectativas: "", // Empty for AGE
                             dietaRestricoes: "", // Empty for AGE
                             alergias: "", // Empty for AGE
@@ -316,16 +343,67 @@ export default function AGRegistrationPage() {
                             participacaoComites: [], // Empty for AGE
                             interesseVoluntariado: false, // Default for AGE
                         },
-                        resubmissionNote: "AGE resubmission with updated information",
+                        resubmissionNote: "Resubmissão AGE com dados atualizados",
                     });
                     
+                    // Handle the new response format for resubmission
+                    const actualRegistrationId = typeof result === 'string' ? result : result.registrationId;
+                    
+                    // Send appropriate email based on auto-approval status
+                    try {
+                        const selectedModality = activeModalities?.find(m => m._id === formData.selectedModalityId);
+                        const isAutoApproved = typeof result === 'object' && result.isAutoApproved;
+                        
+                        if (!assembly || !selectedModality) {
+                            console.warn('⚠️ Cannot send resubmission email: missing assembly or modality data');
+                        } else if (isAutoApproved) {
+                            // Send approval email for auto-approved resubmissions
+                            await handleRegistrationApproval({
+                                registrationId: actualRegistrationId as string,
+                                participantName: formData.nome,
+                                participantEmail: formData.email,
+                                assemblyName: assembly.name,
+                                assemblyLocation: assembly.location,
+                                assemblyStartDate: new Date(assembly.startDate),
+                                assemblyEndDate: new Date(assembly.endDate),
+                                modalityName: selectedModality.name,
+                                additionalInstructions: "Sua resubmissão foi aprovada automaticamente. Bem-vindo(a)!",
+                                paymentAmount: selectedModality.price && selectedModality.price > 0 ? 
+                                    new Intl.NumberFormat('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                    }).format(selectedModality.price / 100) : undefined,
+                                isPaymentExempt: selectedModality.price === 0,
+                            });
+                            console.log('✅ Auto-approval resubmission email sent successfully');
+                        } else {
+                            // Send confirmation email for regular resubmissions
+                            await handleNewRegistration({
+                                registrationId: actualRegistrationId as string,
+                                participantName: formData.nome,
+                                participantEmail: formData.email,
+                                assemblyName: assembly.name,
+                                assemblyLocation: assembly.location,
+                                assemblyStartDate: new Date(assembly.startDate),
+                                assemblyEndDate: new Date(assembly.endDate),
+                                modalityName: selectedModality.name,
+                                paymentRequired: selectedModality.price ? selectedModality.price > 0 : false,
+                                paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price : undefined,
+                            });
+                            console.log('✅ Resubmission confirmation email sent successfully');
+                        }
+                    } catch (emailError) {
+                        console.error('⚠️ Failed to send resubmission email:', emailError);
+                        // Don't fail the registration if email fails
+                    }
+
                     toast({
-                        title: "✅ Reenvio Realizado com Sucesso!",
-                        description: "Sua inscrição AGE foi reenviada e aprovada automaticamente.",
+                        title: "✅ Sucesso",
+                        description: "Inscrição resubmetida com sucesso!",
                     });
-                    
-                    // Navigate directly to success page
-                    router.push(`/ag/${assemblyId}/register/success/${resubmitRegistrationId}`);
+
+                    // Navigate to success page
+                    router.push(`/ag/${assemblyId}/register/success/${actualRegistrationId}`);
                 } else {
                     // Handle new AGE registration (existing logic)
                     const registrationData = {
@@ -345,6 +423,8 @@ export default function AGRegistrationPage() {
                             role: formData.role,
                             comiteLocal: formData.comiteLocal,
                             comiteAspirante: formData.comiteAspirante,
+                            selectedEBId: formData.selectedEBId,
+                            selectedCRId: formData.selectedCRId,
                             autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
                         },
                         additionalInfo: {
@@ -366,34 +446,22 @@ export default function AGRegistrationPage() {
                         status: "approved" as const, // Auto-approve AGE registrations
                     };
 
-                    const registrationId = await createRegistration(registrationData);
+                    const result = await createRegistration(registrationData);
                     
-                    // Send confirmation email for AGE registration
+                    // Handle the new response format
+                    const actualRegistrationId = typeof result === 'string' ? result : result.registrationId;
+                    
+                    // For AGE registrations that are auto-approved, send approval email directly
                     try {
                         const selectedModality = activeModalities?.find(m => m._id === formData.selectedModalityId);
                         
                         // Add null checks for safety
                         if (!assembly || !selectedModality) {
-                            console.warn('⚠️ Cannot send AGE confirmation email: missing assembly or modality data');
+                            console.warn('⚠️ Cannot send AGE approval email: missing assembly or modality data');
                         } else {
-                            // Send confirmation email first
-                            await handleNewRegistration({
-                                registrationId: registrationId as string,
-                                participantName: formData.nome,
-                                participantEmail: formData.email,
-                                assemblyName: assembly.name,
-                                assemblyLocation: assembly.location,
-                                assemblyStartDate: new Date(assembly.startDate),
-                                assemblyEndDate: new Date(assembly.endDate),
-                                modalityName: selectedModality.name,
-                                paymentRequired: selectedModality.price ? selectedModality.price > 0 : false,
-                                paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price : undefined,
-                            });
-                            console.log('✅ AGE confirmation email sent successfully');
-
-                            // Send approval email since AGE is auto-approved
+                            // Send approval email directly for auto-approved AGE registration
                             await handleRegistrationApproval({
-                                registrationId: registrationId as string,
+                                registrationId: actualRegistrationId as string,
                                 participantName: formData.nome,
                                 participantEmail: formData.email,
                                 assemblyName: assembly.name,
@@ -401,12 +469,18 @@ export default function AGRegistrationPage() {
                                 assemblyStartDate: new Date(assembly.startDate),
                                 assemblyEndDate: new Date(assembly.endDate),
                                 modalityName: selectedModality.name,
-                                additionalInstructions: "Sua inscrição AGE foi aprovada automaticamente. Você receberá mais informações sobre o evento em breve."
+                                additionalInstructions: "Sua inscrição na AGE foi aprovada automaticamente. Bem-vindo(a)!",
+                                paymentAmount: selectedModality.price && selectedModality.price > 0 ? 
+                                    new Intl.NumberFormat('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                    }).format(selectedModality.price / 100) : undefined,
+                                isPaymentExempt: selectedModality.price === 0,
                             });
                             console.log('✅ AGE approval email sent successfully');
                         }
                     } catch (emailError) {
-                        console.error('⚠️ Failed to send AGE emails:', emailError);
+                        console.error('⚠️ Failed to send AGE approval email:', emailError);
                         // Don't fail the registration if email fails
                     }
                     
@@ -415,8 +489,8 @@ export default function AGRegistrationPage() {
                         description: "Sua inscrição AGE foi aprovada automaticamente.",
                     });
                     
-                    // Navigate directly to success page
-                    router.push(`/ag/${assemblyId}/register/success/${registrationId}`);
+                    // Navigate to success page
+                    router.push(`/ag/${assemblyId}/register/success/${actualRegistrationId}`);
                 }
                 
             } catch (error) {
@@ -442,6 +516,8 @@ export default function AGRegistrationPage() {
                 role: formData.role,
                 comiteLocal: formData.comiteLocal,
                 comiteAspirante: formData.comiteAspirante,
+                selectedEBId: formData.selectedEBId,
+                selectedCRId: formData.selectedCRId,
                 autorizacaoCompartilhamento: formData.autorizacaoCompartilhamento,
                 selectedModalityId: formData.selectedModalityId,
                 // Add resubmission info if applicable
@@ -497,7 +573,7 @@ export default function AGRegistrationPage() {
     // Check if user is authorized to resubmit this registration
     useEffect(() => {
         if (isResubmission && existingRegistrationData && session?.user?.id) {
-            if (existingRegistrationData.participantId !== session.user.id) {
+            if (existingRegistrationData.registeredBy !== session.user.id) {
                 toast({
                     title: "❌ Acesso Negado",
                     description: "Você não tem permissão para reenviar esta inscrição.",
@@ -836,6 +912,128 @@ export default function AGRegistrationPage() {
                                                 onChange={(e) => handleInputChange('comiteAspirante', e.target.value)}
                                                 placeholder="Nome do seu comitê aspirante"
                                             />
+                                        </div>
+                                    )}
+
+                                    {/* EB Selection Dropdown */}
+                                    {formData.role === 'eb' && (
+                                        <div>
+                                            <Label htmlFor="selectedEB">Posição no Executive Board *</Label>
+                                            <Popover open={ebOpen} onOpenChange={setEbOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={ebOpen}
+                                                        className="w-full justify-between"
+                                                        disabled={ebs === undefined}
+                                                    >
+                                                        {ebs === undefined ? (
+                                                            "Carregando posições..."
+                                                        ) : formData.selectedEBId ? (
+                                                            ebs.find((eb) => eb.participantId === formData.selectedEBId)?.name || formData.selectedEBId
+                                                        ) : (
+                                                            "Selecione sua posição no EB..."
+                                                        )}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-full p-0">
+                                                    <Command>
+                                                        <CommandInput placeholder="Buscar por posição..." />
+                                                        <CommandEmpty>
+                                                            {ebs?.length === 0 
+                                                                ? "Nenhuma posição EB encontrada no sistema."
+                                                                : "Nenhuma posição encontrada."
+                                                            }
+                                                        </CommandEmpty>
+                                                        <CommandGroup className="max-h-64 overflow-y-auto">
+                                                            {ebs?.map((eb) => (
+                                                                <CommandItem
+                                                                    key={eb.id}
+                                                                    value={eb.participantId}
+                                                                    onSelect={() => {
+                                                                        handleInputChange('selectedEBId', eb.participantId);
+                                                                        setEbOpen(false);
+                                                                    }}
+                                                                >
+                                                                    <Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            formData.selectedEBId === eb.participantId ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    <div>
+                                                                        <div className="font-medium">{eb.name}</div>
+                                                                        <div className="text-sm text-gray-500">{eb.participantName}</div>
+                                                                    </div>
+                                                                </CommandItem>
+                                                            )) || []}
+                                                        </CommandGroup>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    )}
+
+                                    {/* CR Selection Dropdown */}
+                                    {formData.role === 'cr' && (
+                                        <div>
+                                            <Label htmlFor="selectedCR">Posição de Coordenador Regional *</Label>
+                                            <Popover open={crOpen} onOpenChange={setCrOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={crOpen}
+                                                        className="w-full justify-between"
+                                                        disabled={crs === undefined}
+                                                    >
+                                                        {crs === undefined ? (
+                                                            "Carregando posições..."
+                                                        ) : formData.selectedCRId ? (
+                                                            crs.find((cr) => cr.participantId === formData.selectedCRId)?.name || formData.selectedCRId
+                                                        ) : (
+                                                            "Selecione sua posição de CR..."
+                                                        )}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-full p-0">
+                                                    <Command>
+                                                        <CommandInput placeholder="Buscar por posição..." />
+                                                        <CommandEmpty>
+                                                            {crs?.length === 0 
+                                                                ? "Nenhuma posição CR encontrada no sistema."
+                                                                : "Nenhuma posição encontrada."
+                                                            }
+                                                        </CommandEmpty>
+                                                        <CommandGroup className="max-h-64 overflow-y-auto">
+                                                            {crs?.map((cr) => (
+                                                                <CommandItem
+                                                                    key={cr.id}
+                                                                    value={cr.participantId}
+                                                                    onSelect={() => {
+                                                                        handleInputChange('selectedCRId', cr.participantId);
+                                                                        setCrOpen(false);
+                                                                    }}
+                                                                >
+                                                                    <Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            formData.selectedCRId === cr.participantId ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    <div>
+                                                                        <div className="font-medium">{cr.name}</div>
+                                                                        <div className="text-sm text-gray-500">{cr.participantName}</div>
+                                                                    </div>
+                                                                </CommandItem>
+                                                            )) || []}
+                                                        </CommandGroup>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
                                         </div>
                                     )}
 

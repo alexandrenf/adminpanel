@@ -61,7 +61,7 @@ import { handleRegistrationApproval, handleRegistrationRejection } from "~/app/a
 const getParticipantTypeLabel = (type: string) => {
     switch (type?.toLowerCase()) {
         case "eb": return "Executive Board";
-        case "cr": return "Country Representative";
+        case "cr": return "Coordenador Regional";
         case "comite_local": return "Comitê Local";
         case "comite_aspirante": return "Comitê Aspirante";
         case "supco": return "Conselho Supervisor";
@@ -69,6 +69,20 @@ const getParticipantTypeLabel = (type: string) => {
         case "alumni": return "Alumni";
         default: return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || "N/A";
     }
+};
+
+// Enhanced function that includes role information for EB and CR
+const getDetailedParticipantTypeLabel = (registration: Registration) => {
+    const baseType = getParticipantTypeLabel(registration.participantType);
+    
+    // For EB and CR, try to show the specific role if available
+    if (registration.participantType?.toLowerCase() === "eb" && registration.participantRole) {
+        return `${baseType} - ${registration.participantRole}`;
+    } else if (registration.participantType?.toLowerCase() === "cr" && registration.participantRole) {
+        return `${baseType} - ${registration.participantRole}`;
+    }
+    
+    return baseType;
 };
 
 const getRoomRestrictionLabel = (restriction: string) => {
@@ -224,7 +238,7 @@ function ModalityRegistrationsView({ modality, onReviewRegistration }: {
     const getParticipantTypeLabel = (type: string) => {
         switch (type?.toLowerCase()) {
             case "eb": return "Executive Board";
-            case "cr": return "Country Representative";
+            case "cr": return "Coordenador Regional";
             case "comite_local": return "Comitê Local";
             case "comite_aspirante": return "Comitê Aspirante";
             case "supco": return "Conselho Supervisor";
@@ -1294,7 +1308,7 @@ export default function AGAdminPage() {
                                                             </TableCell>
                                                             <TableCell>
                                                                 <Badge variant="outline">
-                                                                    {getParticipantTypeLabel(registration.participantType)}
+                                                                    {getDetailedParticipantTypeLabel(registration)}
                                                                 </Badge>
                                                             </TableCell>
                                                             <TableCell>{registration.email}</TableCell>
@@ -1458,7 +1472,7 @@ export default function AGAdminPage() {
                                                             </TableCell>
                                                             <TableCell>
                                                                 <Badge variant="outline">
-                                                                    {getParticipantTypeLabel(registration.participantType)}
+                                                                    {getDetailedParticipantTypeLabel(registration)}
                                                                 </Badge>
                                                             </TableCell>
                                                             <TableCell>{registration.email}</TableCell>
@@ -1566,7 +1580,7 @@ export default function AGAdminPage() {
                                                 <div>
                                                     <Label className="font-semibold text-blue-700">Tipo de Participante:</Label>
                                                     <Badge variant="outline" className="text-xs">
-                                                        {getParticipantTypeLabel(selectedRegistration.participantType)}
+                                                        {getDetailedParticipantTypeLabel(selectedRegistration)}
                                                     </Badge>
                                                 </div>
                                                 <div>
