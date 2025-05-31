@@ -183,7 +183,34 @@ export default function AGRegistrationPage() {
 
     // Handle input changes
     const handleInputChange = useCallback((field: keyof RegistrationFormData, value: string | boolean) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        // Debug EB selection specifically
+        if (field === 'selectedEBId') {
+            console.log('🔍 Frontend: Setting selectedEBId to:', value, 'type:', typeof value);
+        }
+        
+        // Clear related fields when role changes
+        if (field === 'role') {
+            setFormData(prev => ({
+                ...prev,
+                role: value as string,
+                comiteLocal: undefined,
+                comiteAspirante: undefined,
+                selectedEBId: undefined,
+                selectedCRId: undefined,
+            }));
+            return;
+        }
+        
+        setFormData(prev => {
+            const newData = { ...prev, [field]: value };
+            
+            // Debug the complete form data when EB is selected
+            if (field === 'selectedEBId') {
+                console.log('🔍 Frontend: Complete form data after EB selection:', newData);
+            }
+            
+            return newData;
+        });
     }, []);
 
     // Format CPF input
@@ -396,12 +423,12 @@ export default function AGRegistrationPage() {
                         console.error('⚠️ Failed to send resubmission email:', emailError);
                         // Don't fail the registration if email fails
                     }
-
+                    
                     toast({
                         title: "✅ Sucesso",
                         description: "Inscrição resubmetida com sucesso!",
                     });
-
+                    
                     // Navigate to success page
                     router.push(`/ag/${assemblyId}/register/success/${actualRegistrationId}`);
                 } else {
