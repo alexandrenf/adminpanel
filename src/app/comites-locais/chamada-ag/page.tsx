@@ -24,7 +24,8 @@ import {
     Plus,
     Trash2,
     Copy,
-    ExternalLink
+    ExternalLink,
+    ChevronDown
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useQuery, useMutation } from "convex/react";
@@ -44,6 +45,12 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "~/components/ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 
@@ -143,6 +150,9 @@ export default function ChamadaAGPage() {
     const [isQrReadersDialogOpen, setIsQrReadersDialogOpen] = useState(false);
     const [newReaderName, setNewReaderName] = useState("");
     const [isCreatingReader, setIsCreatingReader] = useState(false);
+
+    // Chamada type state
+    const [chamadaType, setChamadaType] = useState<"avulsa" | "plenaria" | "sessao">("avulsa");
 
     // Convex queries - handle cases where table might be empty or queries fail
     const ebsAttendance = useQuery(convexApi.attendance.getByType, { type: "eb" });
@@ -262,12 +272,12 @@ export default function ChamadaAGPage() {
         );
     }
 
-    // Nova AG function to load all data and populate Convex
-    const handleNovaAG = async () => {
+    // Nova Chamada functions
+    const handleNovaChamadaAvulsa = async () => {
         if (!session?.user?.id) {
             toast({
                 title: "Erro",
-                description: "Você precisa estar logado para criar uma nova AG.",
+                description: "Você precisa estar logado para criar uma nova chamada.",
                 variant: "destructive",
             });
             return;
@@ -275,7 +285,7 @@ export default function ChamadaAGPage() {
 
         if (isLoadingNovaAG) return;
 
-        if (window.confirm("NOVA AG: Deseja carregar todos os dados e criar uma nova sessão?\n\nEsta ação irá:\n• Carregar dados do CSV, EBs e CRs\n• Limpar completamente a tabela de presença\n• Limpar todos os leitores QR\n• Criar novos registros para todos os membros\n\nDeseja continuar?")) {
+        if (window.confirm("NOVA CHAMADA AVULSA: Deseja carregar todos os dados e criar uma nova sessão?\n\nEsta ação irá:\n• Carregar dados do CSV, EBs e CRs\n• Limpar completamente a tabela de presença\n• Limpar todos os leitores QR\n• Criar novos registros para todos os membros\n\nDeseja continuar?")) {
             setIsLoadingNovaAG(true);
             setLoading(true);
             
@@ -402,22 +412,61 @@ export default function ChamadaAGPage() {
                 setLoading(false);
                 
                 toast({
-                    title: "✅ Nova AG criada com sucesso",
+                    title: "✅ Nova chamada avulsa criada com sucesso",
                     description: `${allRecords.length} registros foram carregados na nova sessão.`,
                 });
                 
             } catch (error) {
-                console.error("Error creating new AG:", error);
+                console.error("Error creating new chamada:", error);
                 setError(error instanceof Error ? error.message : "Erro ao carregar dados");
                 setLoading(false);
                 toast({
-                    title: "❌ Erro ao criar nova AG",
+                    title: "❌ Erro ao criar nova chamada",
                     description: "Erro ao carregar dados. Tente novamente.",
                     variant: "destructive",
                 });
             } finally {
                 setIsLoadingNovaAG(false);
             }
+        }
+    };
+
+    const handleNovaChamadaPlenaria = async () => {
+        toast({
+            title: "🚧 Em desenvolvimento",
+            description: "Funcionalidade de Plenária ainda não implementada.",
+        });
+    };
+
+    const handleNovaChamadaSessao = async () => {
+        toast({
+            title: "🚧 Em desenvolvimento", 
+            description: "Funcionalidade de Sessão ainda não implementada.",
+        });
+    };
+
+    const handleNovaChamada = () => {
+        switch (chamadaType) {
+            case "avulsa":
+                handleNovaChamadaAvulsa();
+                break;
+            case "plenaria":
+                handleNovaChamadaPlenaria();
+                break;
+            case "sessao":
+                handleNovaChamadaSessao();
+                break;
+        }
+    };
+
+    const getChamadaTypeLabel = (type: "avulsa" | "plenaria" | "sessao") => {
+        switch (type) {
+            case "avulsa":
+                return "Avulsa";
+            case "plenaria":
+                return "Plenária";
+            case "sessao":
+                return "Sessão";
         }
     };
 
@@ -907,9 +956,9 @@ export default function ChamadaAGPage() {
                                 <ArrowLeft className="w-4 h-4 mr-2" />
                                 Voltar
                             </Button>
-                            <Button onClick={() => { setError(null); handleNovaAG(); }} className="bg-blue-600 hover:bg-blue-700">
+                            <Button onClick={() => { setError(null); handleNovaChamada(); }} className="bg-blue-600 hover:bg-blue-700">
                                 <ClipboardCheck className="w-4 h-4 mr-2" />
-                                Tentar Carregar Nova AG
+                                Tentar Carregar Nova Chamada
                             </Button>
                         </div>
                     </div>
@@ -948,23 +997,59 @@ export default function ChamadaAGPage() {
                                 Clique no botão abaixo para carregar todos os dados e iniciar uma nova sessão de Assembleia Geral
                             </p>
                             
-                            <Button
-                                onClick={handleNovaAG}
-                                disabled={isLoadingNovaAG}
-                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300 text-lg px-8 py-3"
-                            >
-                                {isLoadingNovaAG ? (
-                                    <>
-                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                                        Carregando Nova AG...
-                                    </>
-                                ) : (
-                                    <>
-                                        <ClipboardCheck className="w-5 h-5 mr-3" />
-                                        Nova AG
-                                    </>
-                                )}
-                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        disabled={isLoadingNovaAG}
+                                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                                    >
+                                        {isLoadingNovaAG ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                Carregando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ClipboardCheck className="w-4 h-4 mr-2" />
+                                                Nova Chamada ({getChamadaTypeLabel(chamadaType)})
+                                                <ChevronDown className="w-4 h-4 ml-2" />
+                                            </>
+                                        )}
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="w-48">
+                                    <DropdownMenuItem 
+                                        onClick={() => {
+                                            setChamadaType("avulsa");
+                                            handleNovaChamadaAvulsa();
+                                        }}
+                                        className="cursor-pointer"
+                                    >
+                                        <ClipboardCheck className="w-4 h-4 mr-2" />
+                                        Chamada Avulsa
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                        onClick={() => {
+                                            setChamadaType("plenaria");
+                                            handleNovaChamadaPlenaria();
+                                        }}
+                                        className="cursor-pointer"
+                                    >
+                                        <Users className="w-4 h-4 mr-2" />
+                                        Plenária
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                        onClick={() => {
+                                            setChamadaType("sessao");
+                                            handleNovaChamadaSessao();
+                                        }}
+                                        className="cursor-pointer"
+                                    >
+                                        <Building className="w-4 h-4 mr-2" />
+                                        Sessão
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                             
                             <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
                                 <p className="text-blue-800 text-sm">
@@ -1016,23 +1101,59 @@ export default function ChamadaAGPage() {
                         <CardContent className="p-6">
                             <div className="flex flex-wrap items-center justify-between gap-4">
                                 <div className="flex flex-wrap items-center gap-3">
-                                    <Button
-                                        onClick={handleNovaAG}
-                                        disabled={isLoadingNovaAG}
-                                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
-                                    >
-                                        {isLoadingNovaAG ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Carregando...
-                                            </>
-                                        ) : (
-                                            <>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                disabled={isLoadingNovaAG}
+                                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                                            >
+                                                {isLoadingNovaAG ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                        Carregando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ClipboardCheck className="w-4 h-4 mr-2" />
+                                                        Nova Chamada ({getChamadaTypeLabel(chamadaType)})
+                                                        <ChevronDown className="w-4 h-4 ml-2" />
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="w-48">
+                                            <DropdownMenuItem 
+                                                onClick={() => {
+                                                    setChamadaType("avulsa");
+                                                    handleNovaChamadaAvulsa();
+                                                }}
+                                                className="cursor-pointer"
+                                            >
                                                 <ClipboardCheck className="w-4 h-4 mr-2" />
-                                                Nova AG
-                                            </>
-                                        )}
-                                    </Button>
+                                                Chamada Avulsa
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem 
+                                                onClick={() => {
+                                                    setChamadaType("plenaria");
+                                                    handleNovaChamadaPlenaria();
+                                                }}
+                                                className="cursor-pointer"
+                                            >
+                                                <Users className="w-4 h-4 mr-2" />
+                                                Plenária
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem 
+                                                onClick={() => {
+                                                    setChamadaType("sessao");
+                                                    handleNovaChamadaSessao();
+                                                }}
+                                                className="cursor-pointer"
+                                            >
+                                                <Building className="w-4 h-4 mr-2" />
+                                                Sessão
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                     <Button
                                         onClick={downloadExcelReport}
                                         className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
