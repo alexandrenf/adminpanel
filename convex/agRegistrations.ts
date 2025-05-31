@@ -592,9 +592,10 @@ export const createFromForm = mutation({
 
     // Enhanced debugging
     console.log(`Eligibility check: role=${args.personalInfo.role}, participantIdToCheck=${participantIdToCheck}, assemblyId=${args.assemblyId}`);
-    console.log(`EB selection: selectedEBId=${args.personalInfo.selectedEBId}`);
-    console.log(`CR selection: selectedCRId=${args.personalInfo.selectedCRId}`);
-    console.log(`Comite Local: comiteLocal=${args.personalInfo.comiteLocal}`);
+    console.log(`EB selection: selectedEBId=${args.personalInfo.selectedEBId}, type: ${typeof args.personalInfo.selectedEBId}`);
+    console.log(`CR selection: selectedCRId=${args.personalInfo.selectedCRId}, type: ${typeof args.personalInfo.selectedCRId}`);
+    console.log(`Comite Local: comiteLocal=${args.personalInfo.comiteLocal}, type: ${typeof args.personalInfo.comiteLocal}`);
+    console.log(`Full personalInfo object:`, JSON.stringify(args.personalInfo, null, 2));
 
     // Check if participant exists in the assembly's participant list
     // But allow fallback for some participant types that might not be in agParticipants
@@ -615,10 +616,12 @@ export const createFromForm = mutation({
     if (!participant) {
       // For EB roles, they must be in agParticipants table for this specific assembly
       if (args.personalInfo.role === 'eb') {
-        if (!args.personalInfo.selectedEBId) {
-          throw new Error("Please select a specific Executive Board position to register");
+        if (!args.personalInfo.selectedEBId || args.personalInfo.selectedEBId.trim() === '') {
+          console.error(`EB registration failed: selectedEBId is empty or invalid. Received: "${args.personalInfo.selectedEBId}" (type: ${typeof args.personalInfo.selectedEBId})`);
+          throw new Error("Please select a specific Executive Board position to register. Make sure you have selected a position from the dropdown.");
         }
-        throw new Error(`Selected Executive Board position is not eligible for this assembly`);
+        console.error(`EB registration failed: Selected EB position "${args.personalInfo.selectedEBId}" not found in assembly ${args.assemblyId}`);
+        throw new Error(`Selected Executive Board position is not eligible for this assembly. Please contact support if you believe this is an error.`);
       }
       
       // For CR roles, check if they exist in global list and allow registration
