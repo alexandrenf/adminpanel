@@ -1080,8 +1080,8 @@ export default function AGPage() {
                                 <CheckCircle className="w-4 h-4 mr-2" />
                                 Ver Comprovante
                             </Button>
-                            <Button 
-                                className="w-full bg-blue-500 hover:bg-blue-600"
+                                <Button 
+                                    className="w-full bg-blue-500 hover:bg-blue-600"
                                 onClick={() => router.push(`/ag/${assembly._id}/qr-code?registration=${registrationStatus.registrationId}`)}
                                 variant="outline"
                             >

@@ -8,9 +8,9 @@ import { Badge } from "../../../components/ui/badge";
 import { 
     ClipboardCheck, 
     Users, 
-    CheckCircle, 
-    XCircle, 
-    Minus, 
+    CheckCircle,
+    XCircle,
+    Minus,
     ArrowLeft, 
     UserCheck,
     UserX,
@@ -30,7 +30,8 @@ import {
     ChevronDown,
     Smartphone,
     RotateCcw,
-    BarChart3
+    BarChart3,
+    Clock
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useQuery, useMutation } from "convex/react";
@@ -59,6 +60,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
+import SessionAttendanceManager from "~/app/_components/SessionAttendanceManager";
 
 type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
@@ -223,6 +225,12 @@ export default function ChamadaAGPage() {
     const markSessionAttendance = useMutation(convexApi.agSessions?.markAttendance);
     const archiveSession = useMutation(convexApi.agSessions?.archiveSession);
     const reopenSession = useMutation(convexApi.agSessions?.reopenSession);
+
+    // Modal states
+    const [novaChamadaModalOpen, setNovaChamadaModalOpen] = useState(false);
+    const [novaChamadaType, setNovaChamadaType] = useState<"plenaria" | "sessao" | "avulsa" | null>(null);
+    const [novaChamadaName, setNovaChamadaName] = useState("");
+    const [novaChamadaAssemblyId, setNovaChamadaAssemblyId] = useState<string>("");
 
     useEffect(() => {
         if (ebData) {
@@ -501,16 +509,56 @@ export default function ChamadaAGPage() {
     };
 
     const handleNovaChamada = () => {
-        switch (chamadaType) {
-            case "avulsa":
-                handleNovaChamadaAvulsa();
-                break;
-            case "plenaria":
-                handleNovaChamadaPlenaria();
-                break;
-            case "sessao":
-                handleNovaChamadaSessao();
-                break;
+        setNovaChamadaModalOpen(true);
+        setNovaChamadaType(null);
+        setNovaChamadaName("");
+        setNovaChamadaAssemblyId(selectedAssemblyId || "");
+    };
+
+    const handleCreateNewSessionFromModal = async () => {
+        // For avulsa, we don't need assembly selection
+        const needsAssembly = novaChamadaType === "plenaria" || novaChamadaType === "sessao";
+        
+        if (!session?.user?.id || !novaChamadaType || !novaChamadaName.trim() || (needsAssembly && !novaChamadaAssemblyId)) {
+            toast({
+                title: "Erro",
+                description: needsAssembly 
+                    ? "Selecione a assembleia, tipo de sessão e digite um nome."
+                    : "Selecione o tipo de sessão e digite um nome.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        try {
+            const result = await createSession({
+                assemblyId: needsAssembly ? (novaChamadaAssemblyId as any) : null,
+                name: novaChamadaName.trim(),
+                type: novaChamadaType,
+                createdBy: session.user.id
+            });
+            
+            if (result) {
+                setCurrentSessionId(result as string);
+                setCurrentSessionType(novaChamadaType);
+                if (needsAssembly && novaChamadaAssemblyId) {
+                    setSelectedAssemblyId(novaChamadaAssemblyId);
+                }
+                toast({
+                    title: "✅ Sessão criada",
+                    description: `${getChamadaTypeLabel(novaChamadaType)} "${novaChamadaName}" foi criada com sucesso!`
+                });
+                setNovaChamadaModalOpen(false);
+                setNovaChamadaName("");
+                setNovaChamadaType(null);
+                setNovaChamadaAssemblyId("");
+            }
+        } catch (error) {
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao criar sessão. Tente novamente.",
+                variant: "destructive"
+            });
         }
     };
 
@@ -981,43 +1029,6 @@ export default function ChamadaAGPage() {
         });
     };
 
-    const handleCreateNewSession = async () => {
-        if (!session?.user?.id || !selectedAssemblyId || !sessionName.trim()) {
-            toast({
-                title: "❌ Erro",
-                description: "Preencha todos os campos obrigatórios.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        try {
-            const sessionId = await createSession({
-                assemblyId: selectedAssemblyId as any,
-                name: sessionName.trim(),
-                type: chamadaType,
-                createdBy: session.user.id,
-            });
-
-            setCurrentSessionId(sessionId);
-            setCurrentSessionType(chamadaType);
-            setIsSessionDialogOpen(false);
-            setSessionName("");
-
-            toast({
-                title: "✅ Sessão criada",
-                description: `${getChamadaTypeLabel(chamadaType)} "${sessionName}" criada com sucesso.`,
-            });
-        } catch (error) {
-            console.error("Error creating session:", error);
-            toast({
-                title: "❌ Erro",
-                description: "Erro ao criar sessão. Tente novamente.",
-                variant: "destructive",
-            });
-        }
-    };
-
     const handleSessionAttendanceToggle = async (participantId: string, currentAttendance: string) => {
         if (!currentSessionId || !session?.user?.id) return;
 
@@ -1027,6 +1038,8 @@ export default function ChamadaAGPage() {
             await markSessionAttendance({
                 sessionId: currentSessionId as any,
                 participantId,
+                participantType: "session_participant", // Generic type for session-based attendance
+                participantName: participantId, // Use ID as name for now
                 attendance: newAttendance,
                 markedBy: session.user.id,
             });
@@ -1256,59 +1269,23 @@ export default function ChamadaAGPage() {
                                 Clique no botão abaixo para carregar todos os dados e iniciar uma nova sessão de Assembleia Geral
                             </p>
                             
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        disabled={isLoadingNovaAG}
-                                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
-                                    >
-                                        {isLoadingNovaAG ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Carregando...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <ClipboardCheck className="w-4 h-4 mr-2" />
-                                                Nova Chamada ({getChamadaTypeLabel(chamadaType)})
-                                                <ChevronDown className="w-4 h-4 ml-2" />
-                                            </>
-                                        )}
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="w-48">
-                                    <DropdownMenuItem 
-                                        onClick={() => {
-                                            setChamadaType("avulsa");
-                                            handleNovaChamadaAvulsa();
-                                        }}
-                                        className="cursor-pointer"
-                                    >
+                            <Button
+                                onClick={handleNovaChamada}
+                                disabled={isLoadingNovaAG}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                            >
+                                {isLoadingNovaAG ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Carregando...
+                                    </>
+                                ) : (
+                                    <>
                                         <ClipboardCheck className="w-4 h-4 mr-2" />
-                                        Chamada Avulsa
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                        onClick={() => {
-                                            setChamadaType("plenaria");
-                                            handleNovaChamadaPlenaria();
-                                        }}
-                                        className="cursor-pointer"
-                                    >
-                                        <Users className="w-4 h-4 mr-2" />
-                                        Plenária
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                        onClick={() => {
-                                            setChamadaType("sessao");
-                                            handleNovaChamadaSessao();
-                                        }}
-                                        className="cursor-pointer"
-                                    >
-                                        <Building className="w-4 h-4 mr-2" />
-                                        Sessão
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                                        Nova Chamada
+                                    </>
+                                )}
+                            </Button>
                             
                             <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
                                 <p className="text-blue-800 text-sm">
@@ -1360,59 +1337,23 @@ export default function ChamadaAGPage() {
                         <CardContent className="p-6">
                             <div className="flex flex-wrap items-center justify-between gap-4">
                                 <div className="flex flex-wrap items-center gap-3">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                disabled={isLoadingNovaAG}
-                                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
-                                            >
-                                                {isLoadingNovaAG ? (
-                                                    <>
-                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                        Carregando...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <ClipboardCheck className="w-4 h-4 mr-2" />
-                                                        Nova Chamada ({getChamadaTypeLabel(chamadaType)})
-                                                        <ChevronDown className="w-4 h-4 ml-2" />
-                                                    </>
-                                                )}
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="start" className="w-48">
-                                            <DropdownMenuItem 
-                                                onClick={() => {
-                                                    setChamadaType("avulsa");
-                                                    handleNovaChamadaAvulsa();
-                                                }}
-                                                className="cursor-pointer"
-                                            >
+                                    <Button
+                                        onClick={handleNovaChamada}
+                                        disabled={isLoadingNovaAG}
+                                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                                    >
+                                        {isLoadingNovaAG ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                Carregando...
+                                            </>
+                                        ) : (
+                                            <>
                                                 <ClipboardCheck className="w-4 h-4 mr-2" />
-                                                Chamada Avulsa
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem 
-                                                onClick={() => {
-                                                    setChamadaType("plenaria");
-                                                    handleNovaChamadaPlenaria();
-                                                }}
-                                                className="cursor-pointer"
-                                            >
-                                                <Users className="w-4 h-4 mr-2" />
-                                                Plenária
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem 
-                                                onClick={() => {
-                                                    setChamadaType("sessao");
-                                                    handleNovaChamadaSessao();
-                                                }}
-                                                className="cursor-pointer"
-                                            >
-                                                <Building className="w-4 h-4 mr-2" />
-                                                Sessão
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                                Nova Chamada
+                                            </>
+                                        )}
+                                    </Button>
                                     <Button
                                         onClick={downloadExcelReport}
                                         className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
@@ -1587,7 +1528,7 @@ export default function ChamadaAGPage() {
                                     Crie uma nova {chamadaType} para a AG selecionada.
                                 </DialogDescription>
                             </DialogHeader>
-                            
+
                             <div className="space-y-4">
                                 <div>
                                     <Label htmlFor="assembly-selection">Assembleia Geral</Label>
@@ -1604,7 +1545,7 @@ export default function ChamadaAGPage() {
                                             </option>
                                         ))}
                                     </select>
-                                </div>
+                                    </div>
 
                                 <div>
                                     <Label htmlFor="session-name">Nome da {getChamadaTypeLabel(chamadaType)}</Label>
@@ -1615,14 +1556,14 @@ export default function ChamadaAGPage() {
                                         placeholder={`Ex: ${chamadaType === "plenaria" ? "Plenária de Abertura" : "Sessão Administrativa"}`}
                                     />
                                 </div>
-                            </div>
+                                                    </div>
 
                             <DialogFooter>
                                 <Button variant="outline" onClick={() => setIsSessionDialogOpen(false)}>
                                     Cancelar
                                 </Button>
                                 <Button 
-                                    onClick={handleCreateNewSession}
+                                    onClick={handleCreateNewSessionFromModal}
                                     disabled={!selectedAssemblyId || !sessionName.trim()}
                                     className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                                 >
@@ -1642,147 +1583,112 @@ export default function ChamadaAGPage() {
                                             {currentSessionType === "plenaria" ? (
                                                 <Users className="w-6 h-6 text-white" />
                                             ) : currentSessionType === "sessao" ? (
-                                                <Building className="w-6 h-6 text-white" />
-                                            ) : (
                                                 <ClipboardCheck className="w-6 h-6 text-white" />
+                                            ) : (
+                                                <Clock className="w-6 h-6 text-white" />
                                             )}
                                         </div>
                                         <div>
                                             <h3 className="text-xl font-bold text-gray-900">
-                                                {currentSessionData.name}
+                                                Sessão Ativa: {currentSessionData.name}
                                             </h3>
                                             <p className="text-gray-600">
-                                                {getChamadaTypeLabel(currentSessionType)} em andamento
+                                                {getChamadaTypeLabel(currentSessionType)} • {currentSessionData.attendanceStats.total || 0} presenças registradas
                                             </p>
                                         </div>
                                     </div>
                                     
-                                    <div className="flex items-center space-x-4">
-                                        <div className="text-right">
-                                            <div className="flex items-center space-x-4 text-sm">
-                                                <div className="text-center">
-                                                    <p className="text-2xl font-bold text-green-600">
-                                                        {currentSessionData.attendanceStats.present}
-                                                    </p>
-                                                    <p className="text-gray-500">Presentes</p>
-                                                </div>
-                                                <div className="text-center">
-                                                    <p className="text-2xl font-bold text-red-600">
-                                                        {currentSessionData.attendanceStats.absent}
-                                                    </p>
-                                                    <p className="text-gray-500">Ausentes</p>
-                                                </div>
-                                                <div className="text-center">
-                                                    <p className="text-2xl font-bold text-blue-600">
-                                                        {currentSessionData.attendanceStats.total}
-                                                    </p>
-                                                    <p className="text-gray-500">Total</p>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    <div className="flex items-center space-x-3">
+                                        <Button
+                                            onClick={handleCreateSessionQrReader}
+                                            className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
+                                        >
+                                            <Plus className="w-4 h-4 mr-2" />
+                                            Novo Leitor QR
+                                        </Button>
                                         
-                                        <div className="flex space-x-2">
-                                            <Button
-                                                onClick={handleFinalizeSession}
-                                                variant="outline"
-                                                className="border-orange-200 text-orange-600 hover:bg-orange-50"
-                                            >
-                                                <CheckCircle className="w-4 h-4 mr-2" />
-                                                Finalizar
-                                            </Button>
-                                        </div>
+                                        <Button
+                                            onClick={handleFinalizeSession}
+                                            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                                        >
+                                            <CheckCircle className="w-4 h-4 mr-2" />
+                                            Finalizar Sessão
+                                        </Button>
                                     </div>
                                 </div>
-                                
-                                {/* Session QR Readers Section */}
-                                <div className="mt-6 pt-6 border-t border-gray-200">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h4 className="font-semibold text-gray-900 flex items-center space-x-2">
-                                            <QrCode className="w-4 h-4" />
-                                            <span>Leitores QR da Sessão</span>
-                                            <Badge variant="outline" className="text-cyan-600 border-cyan-200">
-                                                {sessionQrReaders?.length || 0} leitores
+
+                                {/* Session QR Readers */}
+                                {sessionQrReaders && sessionQrReaders.length > 0 && (
+                                    <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                        <h4 className="font-semibold text-blue-800 mb-3 flex items-center space-x-2">
+                                            <Smartphone className="w-4 h-4" />
+                                            <span>Leitores QR desta Sessão</span>
+                                            <Badge variant="outline" className="text-blue-600 border-blue-300">
+                                                {sessionQrReaders.length} ativos
                                             </Badge>
                                         </h4>
-                                        
-                                        <div className="flex items-center space-x-2">
-                                            <Input
-                                                placeholder="Nome do leitor..."
-                                                value={newReaderName}
-                                                onChange={(e) => setNewReaderName(e.target.value)}
-                                                onKeyPress={(e) => {
-                                                    if (e.key === 'Enter') {
-                                                        handleCreateSessionQrReader();
-                                                    }
-                                                }}
-                                                className="w-48"
-                                            />
-                                            <Button
-                                                onClick={handleCreateSessionQrReader}
-                                                disabled={isCreatingReader || !newReaderName.trim()}
-                                                size="sm"
-                                                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
-                                            >
-                                                {isCreatingReader ? (
-                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                ) : (
-                                                    <Plus className="w-4 h-4 mr-2" />
-                                                )}
-                                                Criar Leitor
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    
-                                    {sessionQrReaders && sessionQrReaders.length > 0 ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                             {sessionQrReaders.map((reader) => (
-                                                <div key={reader._id} className="p-3 bg-cyan-50 rounded-lg border border-cyan-200">
+                                                <div key={reader._id} className="bg-white p-3 rounded border border-blue-200">
                                                     <div className="flex items-center justify-between">
-                                                        <div className="flex items-center space-x-2">
-                                                            <Smartphone className="w-4 h-4 text-cyan-600" />
-                                                            <span className="font-medium text-cyan-800 text-sm">
-                                                                {reader.name}
-                                                            </span>
+                                                        <div>
+                                                            <p className="font-medium text-sm text-blue-900">{reader.name}</p>
+                                                            <p className="text-xs text-blue-600">
+                                                                Criado {new Date(reader.createdAt).toLocaleString('pt-BR')}
+                                                            </p>
                                                         </div>
-                                                        <div className="flex space-x-1">
+                                                        <div className="flex items-center space-x-1">
                                                             <Button
                                                                 size="sm"
-                                                                variant="ghost"
+                                                                variant="outline"
                                                                 onClick={() => handleCopySessionReaderLink(reader.token, reader.name)}
-                                                                className="h-7 w-7 p-0 hover:bg-cyan-100"
+                                                                className="text-blue-600 border-blue-200 hover:bg-blue-50"
                                                             >
-                                                                <Copy className="w-3 h-3 text-cyan-600" />
+                                                                <Copy className="w-3 h-3" />
                                                             </Button>
                                                             <Button
                                                                 size="sm"
-                                                                variant="ghost"
-                                                                onClick={() => handleDeleteSessionQrReader(reader._id, reader.name)}
-                                                                className="h-7 w-7 p-0 hover:bg-red-100"
+                                                                variant="outline"
+                                                                onClick={() => {
+                                                                    const baseUrl = window.location.origin;
+                                                                    const readerUrl = `${baseUrl}/leitor-qr/${reader.token}`;
+                                                                    window.open(readerUrl, '_blank');
+                                                                }}
+                                                                className="text-blue-600 border-blue-200 hover:bg-blue-50"
                                                             >
-                                                                <Trash2 className="w-3 h-3 text-red-600" />
+                                                                <ExternalLink className="w-3 h-3" />
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleDeleteSessionQrReader(reader._id, reader.name)}
+                                                                className="text-red-600 border-red-200 hover:bg-red-50"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
                                                             </Button>
                                                         </div>
                                                     </div>
-                                                    <p className="text-xs text-cyan-600 mt-1">
-                                                        Específico para esta sessão
-                                                    </p>
                                                 </div>
                                             ))}
                                         </div>
-                                    ) : (
-                                        <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                                            <QrCode className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                                            <p className="text-gray-600 text-sm">
-                                                Nenhum leitor QR criado para esta sessão
-                                            </p>
-                                            <p className="text-gray-500 text-xs mt-1">
-                                                Leitores QR específicos podem escanear crachás para marcar presença nesta sessão
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
+                                        <p className="text-xs text-blue-600 mt-3">
+                                            Leitores QR específicos podem escanear crachás para marcar presença nesta sessão
+                                        </p>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
+                    )}
+
+                    {/* Manual Attendance Management for Current Session */}
+                    {currentSessionId && currentSessionData && (
+                        <SessionAttendanceManager 
+                            sessionId={currentSessionId}
+                            sessionType={currentSessionType}
+                            sessionName={currentSessionData.name}
+                            assemblyId={selectedAssemblyId}
+                            onAttendanceUpdate={handleSessionAttendanceToggle}
+                        />
                     )}
 
                     {/* Floating Summary Menu */}
@@ -1846,6 +1752,132 @@ export default function ChamadaAGPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Nova Chamada Modal */}
+            <Dialog open={novaChamadaModalOpen} onOpenChange={setNovaChamadaModalOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center space-x-2">
+                            <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                            <span>Nova Chamada</span>
+                        </DialogTitle>
+                        <DialogDescription>
+                            Escolha o tipo de sessão e forneça um nome para criar uma nova chamada.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-6">
+                        <div>
+                            <Label className="text-base font-semibold">Tipo de Sessão</Label>
+                            <div className="grid grid-cols-1 gap-3 mt-3">
+                                <div 
+                                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                                        novaChamadaType === "avulsa" 
+                                            ? "border-blue-500 bg-blue-50" 
+                                            : "border-gray-200 hover:border-gray-300"
+                                    }`}
+                                    onClick={() => setNovaChamadaType("avulsa")}
+                                >
+                                    <div className="flex items-center space-x-3">
+                                        <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                                        <div>
+                                            <h3 className="font-semibold text-gray-900">Chamada Avulsa</h3>
+                                            <p className="text-sm text-gray-600">Sessão geral para presença (não requer assembleia)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div 
+                                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                                        novaChamadaType === "plenaria" 
+                                            ? "border-purple-500 bg-purple-50" 
+                                            : "border-gray-200 hover:border-gray-300"
+                                    }`}
+                                    onClick={() => setNovaChamadaType("plenaria")}
+                                >
+                                    <div className="flex items-center space-x-3">
+                                        <Users className="w-5 h-5 text-purple-600" />
+                                        <div>
+                                            <h3 className="font-semibold text-gray-900">Plenária</h3>
+                                            <p className="text-sm text-gray-600">Sessão plenária de uma assembleia específica</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div 
+                                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                                        novaChamadaType === "sessao" 
+                                            ? "border-green-500 bg-green-50" 
+                                            : "border-gray-200 hover:border-gray-300"
+                                    }`}
+                                    onClick={() => setNovaChamadaType("sessao")}
+                                >
+                                    <div className="flex items-center space-x-3">
+                                        <Building className="w-5 h-5 text-green-600" />
+                                        <div>
+                                            <h3 className="font-semibold text-gray-900">Sessão</h3>
+                                            <p className="text-sm text-gray-600">Sessão específica de uma assembleia</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {novaChamadaType && (novaChamadaType === "plenaria" || novaChamadaType === "sessao") && (
+                            <div>
+                                <Label className="text-base font-semibold">Assembleia Geral</Label>
+                                <div className="mt-3">
+                                    <select
+                                        value={novaChamadaAssemblyId}
+                                        onChange={(e) => setNovaChamadaAssemblyId(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">Selecione uma assembleia...</option>
+                                        {assemblies?.map((assembly) => (
+                                            <option key={assembly._id} value={assembly._id}>
+                                                {assembly.name} - {assembly.location} ({assembly.type})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {novaChamadaType && (novaChamadaType === "avulsa" || (novaChamadaAssemblyId && (novaChamadaType === "plenaria" || novaChamadaType === "sessao"))) && (
+                            <div>
+                                <Label htmlFor="nova-chamada-name">Nome da {getChamadaTypeLabel(novaChamadaType)}</Label>
+                                <Input
+                                    id="nova-chamada-name"
+                                    value={novaChamadaName}
+                                    onChange={(e) => setNovaChamadaName(e.target.value)}
+                                    placeholder={
+                                        novaChamadaType === "plenaria" 
+                                            ? "Ex: Plenária de Abertura" 
+                                            : novaChamadaType === "sessao"
+                                            ? "Ex: Sessão Administrativa"
+                                            : "Ex: Chamada Geral"
+                                    }
+                                    className="mt-2"
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setNovaChamadaModalOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button 
+                            onClick={handleCreateNewSessionFromModal}
+                            disabled={!novaChamadaType || !novaChamadaName.trim() || ((novaChamadaType === "plenaria" || novaChamadaType === "sessao") && !novaChamadaAssemblyId)}
+                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                        >
+                            <ClipboardCheck className="w-4 h-4 mr-2" />
+                            Criar {novaChamadaType ? getChamadaTypeLabel(novaChamadaType) : "Sessão"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </main>
     );
 } 

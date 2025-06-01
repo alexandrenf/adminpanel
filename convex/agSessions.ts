@@ -4,7 +4,7 @@ import { v } from "convex/values";
 // Create a new session (plenária, sessão, or avulsa)
 export const createSession = mutation({
   args: {
-    assemblyId: v.id("assemblies"),
+    assemblyId: v.optional(v.id("assemblies")),
     name: v.string(),
     type: v.string(), // "plenaria" | "sessao" | "avulsa"
     createdBy: v.string(),
@@ -19,9 +19,15 @@ export const createSession = mutation({
       createdBy: args.createdBy,
     });
 
-    // Create attendance records based on session type
-    if (args.type === "plenaria" || args.type === "sessao") {
-      await initializeSessionAttendance(ctx, sessionId, args.assemblyId, args.type, args.createdBy);
+    // Initialize attendance records only for plenaria and sessao
+    if (args.type !== "avulsa" && args.assemblyId) {
+      await initializeSessionAttendance(
+        ctx,
+        sessionId,
+        args.assemblyId,
+        args.type,
+        args.createdBy
+      );
     }
 
     return sessionId;
@@ -36,55 +42,58 @@ const initializeSessionAttendance = async (
   sessionType: string,
   createdBy: string
 ) => {
-  // Get all approved registrations for this assembly
-  const registrations = await ctx.db
-    .query("agRegistrations")
-    .withIndex("by_assembly_and_status", (q: any) => 
-      q.eq("assemblyId", assemblyId).eq("status", "approved")
-    )
-    .collect();
-
   const attendanceRecords = [];
-  const processedComites = new Set<string>();
 
-  for (const registration of registrations) {
-    if (registration.participantType === "eb" || registration.participantType === "cr") {
-      // Individual attendance for EBs and CRs
-      attendanceRecords.push({
-        sessionId: sessionId as any,
-        assemblyId: assemblyId as any,
-        participantId: registration._id,
-        participantType: registration.participantType,
-        participantName: registration.participantName,
-        participantRole: registration.participantRole,
-        attendance: "absent",
-        markedAt: Date.now(),
-        markedBy: createdBy,
-        lastUpdated: Date.now(),
-        lastUpdatedBy: createdBy,
-      });
-    } else if (
-      (registration.participantType === "comite_local" || registration.participantType === "comite") &&
-      registration.comiteLocal &&
-      !processedComites.has(registration.comiteLocal) &&
-      sessionType === "plenaria"
-    ) {
-      // Group attendance for Comitês Locais in plenárias only
-      processedComites.add(registration.comiteLocal);
-      attendanceRecords.push({
-        sessionId: sessionId as any,
-        assemblyId: assemblyId as any,
-        participantId: registration.comiteLocal, // Use comité name as ID for group
-        participantType: "comite_local",
-        participantName: registration.comiteLocal,
-        comiteLocal: registration.comiteLocal,
-        attendance: "absent",
-        markedAt: Date.now(),
-        markedBy: createdBy,
-        lastUpdated: Date.now(),
-        lastUpdatedBy: createdBy,
-      });
-    } else if (sessionType === "sessao") {
+  if (sessionType === "plenaria") {
+    // For plenaria, get participants from agParticipants (CSV data)
+    const participants = await ctx.db
+      .query("agParticipants")
+      .withIndex("by_assembly", (q: any) => q.eq("assemblyId", assemblyId))
+      .collect();
+
+    for (const participant of participants) {
+      if (participant.type === "eb" || participant.type === "cr") {
+        // Individual attendance for EBs and CRs
+        attendanceRecords.push({
+          sessionId: sessionId as any,
+          assemblyId: assemblyId as any,
+          participantId: participant.participantId,
+          participantType: participant.type,
+          participantName: participant.name,
+          participantRole: participant.role,
+          attendance: "not-counting",
+          markedAt: Date.now(),
+          markedBy: createdBy,
+          lastUpdated: Date.now(),
+          lastUpdatedBy: createdBy,
+        });
+      } else if (participant.type === "comite") {
+        // Individual attendance for each comité in plenária
+        attendanceRecords.push({
+          sessionId: sessionId as any,
+          assemblyId: assemblyId as any,
+          participantId: participant.participantId,
+          participantType: "comite_local",
+          participantName: participant.participantId,
+          comiteLocal: participant.participantId,
+          attendance: "not-counting",
+          markedAt: Date.now(),
+          markedBy: createdBy,
+          lastUpdated: Date.now(),
+          lastUpdatedBy: createdBy,
+        });
+      }
+    }
+  } else if (sessionType === "sessao") {
+    // For sessão, get from agRegistrations (people who registered for this assembly)
+    const registrations = await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_assembly_and_status", (q: any) => 
+        q.eq("assemblyId", assemblyId).eq("status", "approved")
+      )
+      .collect();
+
+    for (const registration of registrations) {
       // Individual attendance for all participants in sessões
       attendanceRecords.push({
         sessionId: sessionId as any,
@@ -94,7 +103,7 @@ const initializeSessionAttendance = async (
         participantName: registration.participantName,
         participantRole: registration.participantRole,
         comiteLocal: registration.comiteLocal,
-        attendance: "absent",
+        attendance: "not-counting",
         markedAt: Date.now(),
         markedBy: createdBy,
         lastUpdated: Date.now(),
@@ -160,35 +169,64 @@ export const getSessionWithStats = query({
   },
 });
 
-// Mark attendance for a participant
+// Mark attendance for a session participant
 export const markAttendance = mutation({
   args: {
     sessionId: v.id("agSessions"),
     participantId: v.string(),
-    attendance: v.string(), // "present" | "absent"
+    participantType: v.string(),
+    participantName: v.string(),
+    participantRole: v.optional(v.string()),
+    attendance: v.string(), // "present" | "absent" | "excluded" | "not-counting"
     markedBy: v.string(),
   },
   handler: async (ctx, args) => {
-    // Find the attendance record
-    const attendanceRecord = await ctx.db
+    // Find existing attendance record
+    const existingRecord = await ctx.db
       .query("agSessionAttendance")
-      .withIndex("by_session_and_participant", (q: any) => 
-        q.eq("sessionId", args.sessionId).eq("participantId", args.participantId)
+      .withIndex("by_session", (q: any) => q.eq("sessionId", args.sessionId))
+      .filter((q: any) =>
+        q.and(
+          q.eq(q.field("participantId"), args.participantId),
+          q.eq(q.field("participantType"), args.participantType)
+        )
       )
       .first();
 
-    if (!attendanceRecord) {
-      throw new Error("Attendance record not found");
+    const now = Date.now();
+
+    if (existingRecord) {
+      // Update existing record
+      await ctx.db.patch(existingRecord._id, {
+        attendance: args.attendance,
+        lastUpdated: now,
+        lastUpdatedBy: args.markedBy,
+      });
+      return existingRecord._id;
+    } else {
+      // Get session to get assemblyId
+      const session = await ctx.db.get(args.sessionId);
+      if (!session) {
+        throw new Error("Session not found");
+      }
+
+      // Create new attendance record
+      const newRecord = await ctx.db.insert("agSessionAttendance", {
+        sessionId: args.sessionId,
+        assemblyId: session.assemblyId, // Can be undefined for avulsa sessions
+        participantId: args.participantId,
+        participantType: args.participantType,
+        participantName: args.participantName,
+        participantRole: args.participantRole,
+        attendance: args.attendance,
+        markedAt: now,
+        markedBy: args.markedBy,
+        lastUpdated: now,
+        lastUpdatedBy: args.markedBy,
+      });
+
+      return newRecord;
     }
-
-    // Update the attendance
-    await ctx.db.patch(attendanceRecord._id, {
-      attendance: args.attendance,
-      lastUpdated: Date.now(),
-      lastUpdatedBy: args.markedBy,
-    });
-
-    return { success: true };
   },
 });
 

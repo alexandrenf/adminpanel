@@ -180,7 +180,7 @@ export default defineSchema({
 
   // Sessions for plenárias and sessões
   agSessions: defineTable({
-    assemblyId: v.id("assemblies"),
+    assemblyId: v.optional(v.id("assemblies")), // Optional for avulsa sessions
     name: v.string(), // User-defined session name
     type: v.string(), // "plenaria" | "sessao" | "avulsa" 
     status: v.string(), // "active" | "archived"
@@ -195,7 +195,7 @@ export default defineSchema({
   // Session attendance records
   agSessionAttendance: defineTable({
     sessionId: v.id("agSessions"),
-    assemblyId: v.id("assemblies"),
+    assemblyId: v.optional(v.id("assemblies")), // Optional for avulsa sessions
     participantId: v.string(), // Matches registrationId for individual participants or comiteLocal for groups
     participantType: v.string(), // "eb" | "cr" | "comite_local" | "individual"
     participantName: v.string(),
