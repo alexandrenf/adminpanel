@@ -1148,45 +1148,54 @@ export default function ChamadaAGPage() {
                         }
                     });
                 }
-                
-                // If it's a different structure, try to handle it as a flat array
-                if (!('ebs' in sessionAttendance) && Array.isArray(sessionAttendance)) {
-                    (sessionAttendance as any[]).forEach((record: any) => {
-                        const status = record.attendance === "present" ? "Presente" : 
+
+                // Handle individual participants for sessions
+                if ('participantes' in sessionAttendance && Array.isArray((sessionAttendance as any).participantes)) {
+                    // For sessions, we'll create a single worksheet with all individual participants
+                    if (currentSessionType === "sessao") {
+                        const individualParticipants = (sessionAttendance as any).participantes.map((record: any) => ({
+                            'Nome': record.participantName || 'N/A',
+                            'Cargo/Função': record.participantRole || 'Participante',
+                            'Comitê/Instituição': record.comiteLocal || '-',
+                            'ID': record.participantId || '-',
+                            'Status': record.attendance === "present" ? "Presente" : 
                                      record.attendance === "absent" ? "Ausente" : 
-                                     record.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado";
+                                     record.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado",
+                            'Última Atualização': new Date(record.lastUpdated || record.markedAt).toLocaleString('pt-BR')
+                        }));
 
-                        if (record.participantType === "eb") {
-                            reportData.ebs.push({
-                                'Tipo': 'EB',
-                                'Nome': record.participantName,
-                                'Cargo': record.participantRole || 'N/A',
-                                'Status': status
-                            });
-                        } else if (record.participantType === "cr") {
-                            reportData.crs.push({
-                                'Tipo': 'CR',
-                                'Nome': record.participantName,
-                                'Cargo': record.participantRole || 'N/A',
-                                'Status': status
-                            });
-                        } else if (record.participantType === "comite") {
-                            const comiteData = {
-                                'Tipo': record.participantStatus === "Pleno" ? 'Comitê Pleno' : 'Comitê Não-Pleno',
-                                'Nome': record.participantName,
-                                'Escola': record.participantSchool || 'N/A',
-                                'Regional': record.participantRegion || 'N/A',
-                                'Localização': record.participantLocation || 'N/A',
-                                'Status': status
-                            };
+                        // For sessions, create a single comprehensive worksheet
+                        createWorksheet(individualParticipants, 'Participantes da Sessão');
+                        
+                        // Generate Excel file
+                        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                        const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                        
+                        // Create download link
+                        const url = URL.createObjectURL(dataBlob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        
+                        // Add session info to filename
+                        const sessionInfo = currentSessionData?.name ? `-${currentSessionData.name.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+                        link.download = `relatorio-presenca-sessao${sessionInfo}-${new Date().toISOString().split('T')[0]}.xlsx`;
+                        
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
 
-                            if (record.participantStatus === "Pleno") {
-                                reportData.comitesPlenos.push(comiteData);
-                            } else {
-                                reportData.comitesNaoPlenos.push(comiteData);
-                            }
-                        }
-                    });
+                        // Show summary in toast
+                        const presentCount = individualParticipants.filter((p: any) => p.Status === "Presente").length;
+                        const totalCount = individualParticipants.length;
+                        
+                        toast({
+                            title: "✅ Relatório gerado com sucesso",
+                            description: `Sessão "${currentSessionData?.name}": ${presentCount} presentes de ${totalCount} participantes (${((presentCount/totalCount)*100).toFixed(1)}% de presença)`,
+                        });
+                        
+                        return; // Exit early for sessions
+                    }
                 }
             }
         } else {

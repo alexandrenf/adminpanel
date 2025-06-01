@@ -230,6 +230,15 @@ export default function SessionAttendanceManager({
                     });
                     setComitesLocais(comitesWithAttendance);
                 }
+
+                // For sessao, load individual participants
+                if (sessionType === "sessao") {
+                    const sessionParticipants = sessionAttendance.participantes || [];
+                    setIndividualParticipants(sessionParticipants.map((p: any) => ({
+                        ...p,
+                        attendance: p.attendance || "not-counting"
+                    })));
+                }
             }
         } else if (sessionType === "avulsa") {
             // For avulsa, use traditional attendance data
@@ -526,29 +535,355 @@ export default function SessionAttendanceManager({
     );
 
     if (sessionType === "sessao") {
-        // For sessão, show simplified interface with placeholder for future implementation
+        // For sessão, show individual participant management
+        const filteredParticipants = individualParticipants.filter(p => {
+            if (!searchParticipants.trim()) return true;
+            
+            const searchLower = searchParticipants.toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '');
+            
+            const nameMatch = (p.participantName || '').toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .includes(searchLower);
+            
+            const roleMatch = (p.participantRole || '').toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .includes(searchLower);
+                
+            const comiteMatch = (p.comiteLocal || '').toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .includes(searchLower);
+            
+            return nameMatch || roleMatch || comiteMatch;
+        });
+
+        const stats = getStats(filteredParticipants);
+
         return (
             <div className="space-y-6">
                 <InstructionsCard />
                 
                 <Card className="shadow-lg border-0">
                     <CardHeader>
-                        <CardTitle className="flex items-center space-x-2">
-                            <Building className="w-5 h-5 text-blue-600" />
-                            <span>Gestão de Presenças - {sessionName}</span>
+                        <CardTitle className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                                <Building className="w-5 h-5 text-blue-600" />
+                                <span>Gestão Individual de Participantes - {sessionName}</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Badge variant="outline" className="text-green-600 border-green-200">
+                                    {stats.present} presentes
+                                </Badge>
+                                <Badge variant="outline" className="text-red-600 border-red-200">
+                                    {stats.absent} ausentes
+                                </Badge>
+                                <Badge variant="outline" className="text-gray-600 border-gray-200">
+                                    {stats.total} total
+                                </Badge>
+                            </div>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="text-center py-12">
-                        <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                            Gestão de Participantes Individual
-                        </h3>
-                        <p className="text-gray-600 mb-4">
-                            Para sessões, a gestão de presenças é individual por participante inscrito.
-                        </p>
-                        <p className="text-sm text-blue-600">
-                            Esta funcionalidade será implementada em breve.
-                        </p>
+                    <CardContent>
+                        <div className="space-y-4">
+                            {/* Search bar */}
+                            <div className="relative">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                                <Input
+                                    placeholder="Buscar por nome, cargo ou comitê..."
+                                    value={searchParticipants}
+                                    onChange={(e) => setSearchParticipants(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
+
+                            {/* Participants list */}
+                            <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                                {filteredParticipants.length > 0 ? (
+                                    filteredParticipants.map((participant) => (
+                                        <div
+                                            key={participant.participantId}
+                                            className={`group relative p-4 rounded-lg border transition-all duration-200 cursor-pointer ${getAttendanceColor(participant.attendance)}`}
+                                            onClick={async () => {
+                                                const nextState = getNextAttendanceState(participant.attendance);
+                                                try {
+                                                    await markSessionAttendance({
+                                                        sessionId: sessionId as any,
+                                                        participantId: participant.participantId,
+                                                        participantType: participant.participantType || "individual",
+                                                        participantName: participant.participantName,
+                                                        participantRole: participant.participantRole,
+                                                        attendance: nextState,
+                                                        markedBy: session?.user?.id || "system"
+                                                    });
+
+                                                    toast({
+                                                        title: "✅ Presença atualizada",
+                                                        description: `${participant.participantName} marcado como ${getAttendanceLabel(nextState)}`,
+                                                    });
+
+                                                    // Update local state immediately
+                                                    setIndividualParticipants(prev => prev.map(p => 
+                                                        p.participantId === participant.participantId 
+                                                            ? { ...p, attendance: nextState } 
+                                                            : p
+                                                    ));
+                                                } catch (error) {
+                                                    console.error("Error updating attendance:", error);
+                                                    toast({
+                                                        title: "❌ Erro",
+                                                        description: "Erro ao atualizar presença. Tente novamente.",
+                                                        variant: "destructive",
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-2">
+                                                        <p className="font-medium text-base">{participant.participantName}</p>
+                                                        {participant.participantRole && (
+                                                            <Badge variant="outline" className="text-xs">
+                                                                {participant.participantRole}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    {participant.comiteLocal && (
+                                                        <p className="text-sm text-gray-600 mt-1">
+                                                            {participant.comiteLocal}
+                                                        </p>
+                                                    )}
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        ID: {participant.participantId}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center space-x-3">
+                                                    {getAttendanceIcon(participant.attendance)}
+                                                    <Badge
+                                                        variant={participant.attendance === "present" ? "default" : 
+                                                                participant.attendance === "absent" ? "destructive" :
+                                                                participant.attendance === "excluded" ? "secondary" : "outline"}
+                                                        className="min-w-[100px] text-center"
+                                                    >
+                                                        {getAttendanceLabel(participant.attendance)}
+                                                    </Badge>
+                                                    
+                                                    {/* Quick action buttons */}
+                                                    <div className="hidden group-hover:flex items-center space-x-1">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="w-8 h-8 p-0"
+                                                            title="Presente"
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    await markSessionAttendance({
+                                                                        sessionId: sessionId as any,
+                                                                        participantId: participant.participantId,
+                                                                        participantType: participant.participantType || "individual",
+                                                                        participantName: participant.participantName,
+                                                                        participantRole: participant.participantRole,
+                                                                        attendance: "present",
+                                                                        markedBy: session?.user?.id || "system"
+                                                                    });
+
+                                                                    toast({
+                                                                        title: "✅ Presença marcada",
+                                                                        description: `${participant.participantName} marcado como presente`,
+                                                                    });
+
+                                                                    setIndividualParticipants(prev => prev.map(p => 
+                                                                        p.participantId === participant.participantId 
+                                                                            ? { ...p, attendance: "present" } 
+                                                                            : p
+                                                                    ));
+                                                                } catch (error) {
+                                                                    console.error("Error:", error);
+                                                                    toast({
+                                                                        title: "❌ Erro",
+                                                                        description: "Erro ao marcar presença.",
+                                                                        variant: "destructive",
+                                                                    });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <CheckCircle className="w-4 h-4 text-green-600" />
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="w-8 h-8 p-0"
+                                                            title="Ausente"
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    await markSessionAttendance({
+                                                                        sessionId: sessionId as any,
+                                                                        participantId: participant.participantId,
+                                                                        participantType: participant.participantType || "individual",
+                                                                        participantName: participant.participantName,
+                                                                        participantRole: participant.participantRole,
+                                                                        attendance: "absent",
+                                                                        markedBy: session?.user?.id || "system"
+                                                                    });
+
+                                                                    toast({
+                                                                        title: "✅ Ausência marcada",
+                                                                        description: `${participant.participantName} marcado como ausente`,
+                                                                    });
+
+                                                                    setIndividualParticipants(prev => prev.map(p => 
+                                                                        p.participantId === participant.participantId 
+                                                                            ? { ...p, attendance: "absent" } 
+                                                                            : p
+                                                                    ));
+                                                                } catch (error) {
+                                                                    console.error("Error:", error);
+                                                                    toast({
+                                                                        title: "❌ Erro",
+                                                                        description: "Erro ao marcar ausência.",
+                                                                        variant: "destructive",
+                                                                    });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <XCircle className="w-4 h-4 text-red-600" />
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="w-8 h-8 p-0"
+                                                            title="Excluído"
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    await markSessionAttendance({
+                                                                        sessionId: sessionId as any,
+                                                                        participantId: participant.participantId,
+                                                                        participantType: participant.participantType || "individual",
+                                                                        participantName: participant.participantName,
+                                                                        participantRole: participant.participantRole,
+                                                                        attendance: "excluded",
+                                                                        markedBy: session?.user?.id || "system"
+                                                                    });
+
+                                                                    toast({
+                                                                        title: "✅ Exclusão marcada",
+                                                                        description: `${participant.participantName} excluído do quórum`,
+                                                                    });
+
+                                                                    setIndividualParticipants(prev => prev.map(p => 
+                                                                        p.participantId === participant.participantId 
+                                                                            ? { ...p, attendance: "excluded" } 
+                                                                            : p
+                                                                    ));
+                                                                } catch (error) {
+                                                                    console.error("Error:", error);
+                                                                    toast({
+                                                                        title: "❌ Erro",
+                                                                        description: "Erro ao excluir do quórum.",
+                                                                        variant: "destructive",
+                                                                    });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <XCircle className="w-4 h-4 text-orange-600" />
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="w-8 h-8 p-0"
+                                                            title="Não Contabilizado"
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    await markSessionAttendance({
+                                                                        sessionId: sessionId as any,
+                                                                        participantId: participant.participantId,
+                                                                        participantType: participant.participantType || "individual",
+                                                                        participantName: participant.participantName,
+                                                                        participantRole: participant.participantRole,
+                                                                        attendance: "not-counting",
+                                                                        markedBy: session?.user?.id || "system"
+                                                                    });
+
+                                                                    toast({
+                                                                        title: "✅ Status atualizado",
+                                                                        description: `${participant.participantName} não contabilizado`,
+                                                                    });
+
+                                                                    setIndividualParticipants(prev => prev.map(p => 
+                                                                        p.participantId === participant.participantId 
+                                                                            ? { ...p, attendance: "not-counting" } 
+                                                                            : p
+                                                                    ));
+                                                                } catch (error) {
+                                                                    console.error("Error:", error);
+                                                                    toast({
+                                                                        title: "❌ Erro",
+                                                                        description: "Erro ao atualizar status.",
+                                                                        variant: "destructive",
+                                                                    });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Minus className="w-4 h-4 text-gray-400" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-12">
+                                        <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                        <p className="text-gray-600">
+                                            {searchParticipants 
+                                                ? "Nenhum participante encontrado com os critérios de busca."
+                                                : "Nenhum participante registrado para esta sessão."}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Summary */}
+                            {filteredParticipants.length > 0 && (
+                                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <h4 className="font-semibold text-gray-900 mb-3">Resumo de Presença</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-green-600">{stats.present}</div>
+                                            <div className="text-sm text-gray-600">Presentes</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-red-600">{stats.absent}</div>
+                                            <div className="text-sm text-gray-600">Ausentes</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-orange-600">{stats.excluded}</div>
+                                            <div className="text-sm text-gray-600">Excluídos</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-gray-600">{stats.notCounting}</div>
+                                            <div className="text-sm text-gray-600">Não Contabilizados</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 text-center">
+                                        <div className="text-sm text-gray-600">Quórum</div>
+                                        <div className="text-xl font-bold text-blue-600">
+                                            {stats.quorumPercentage.toFixed(1)}%
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                            ({stats.present} de {stats.eligibleForQuorum} elegíveis)
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </CardContent>
                 </Card>
             </div>
