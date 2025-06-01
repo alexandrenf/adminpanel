@@ -498,6 +498,65 @@ export const getComitesLocais = query({
   },
 });
 
+// Get comitês locais with status for attendance management in plenárias
+export const getComitesLocaisWithStatus = query({
+  args: { assemblyId: v.optional(v.id("assemblies")) },
+  handler: async (ctx, args) => {
+    let participants;
+    
+    if (args.assemblyId) {
+      // Get comités for specific assembly
+      participants = await ctx.db
+        .query("agParticipants")
+        .withIndex("by_assembly_and_type")
+        .filter((q) => 
+          q.and(
+            q.eq(q.field("assemblyId"), args.assemblyId),
+            q.eq(q.field("type"), "comite")
+          )
+        )
+        .collect();
+    } else {
+      // Get all comités (for backward compatibility)
+      participants = await ctx.db
+        .query("agParticipants")
+        .filter((q) => q.eq(q.field("type"), "comite"))
+        .collect();
+    }
+
+    // Create a map to deduplicate committees by participantId, keeping the status
+    const comiteMap = new Map();
+    
+    participants.forEach(participant => {
+      if (participant.participantId && participant.participantId.trim()) {
+        const key = participant.participantId.trim();
+        if (!comiteMap.has(key)) {
+          // Format display name as [ParticipantId] - [Escola]
+          const displayName = participant.escola && participant.escola.trim() 
+            ? `${participant.participantId.trim()} - ${participant.escola.trim()}`
+            : participant.participantId.trim();
+          
+          comiteMap.set(key, {
+            id: participant.participantId.trim(),
+            name: displayName,
+            participantId: participant.participantId.trim(),
+            escola: participant.escola?.trim() || '',
+            cidade: participant.cidade?.trim() || '',
+            uf: participant.uf?.trim() || '',
+            agFiliacao: participant.agFiliacao?.trim() || '',
+            status: participant.status || 'Não-pleno' // Include the status field!
+          });
+        }
+      }
+    });
+
+    // Convert map to array, filter out valid entries, and sort by participantId
+    return Array.from(comiteMap.values())
+      .filter(comite => comite.participantId && comite.participantId.length > 0)
+      .sort((a, b) => a.participantId.localeCompare(b.participantId, 'pt-BR', { sensitivity: 'base' }));
+  },
+});
+
 // Get unique EBs from all agParticipants for registration dropdown
 export const getEBs = query({
   args: {},

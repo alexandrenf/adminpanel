@@ -22,11 +22,16 @@ export default defineSchema({
   qrReaders: defineTable({
     name: v.string(), // Name of the QR reader/person
     token: v.string(), // Unique token for the QR reader link
+    sessionId: v.optional(v.id("agSessions")), // Optional session assignment - null for legacy/general readers
+    sessionType: v.optional(v.string()), // "plenaria" | "sessao" | "avulsa" - for session-specific readers
+    assemblyId: v.optional(v.id("assemblies")), // Assembly context for session readers
     createdAt: v.number(), // timestamp
     createdBy: v.string(), // user identifier who created it
     isActive: v.boolean(), // whether the reader is active
   }).index("by_token", ["token"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_session", ["sessionId"])
+    .index("by_assembly", ["assemblyId"]),
 
   // AG Configuration for admin settings
   agConfigs: defineTable({
@@ -172,4 +177,37 @@ export default defineSchema({
     agFiliacao: v.optional(v.string()),
   }).index("by_assembly", ["assemblyId"])
     .index("by_assembly_and_type", ["assemblyId", "type"]),
+
+  // Sessions for plenárias and sessões
+  agSessions: defineTable({
+    assemblyId: v.optional(v.id("assemblies")), // Optional for avulsa sessions
+    name: v.string(), // User-defined session name
+    type: v.string(), // "plenaria" | "sessao" | "avulsa" 
+    status: v.string(), // "active" | "archived"
+    createdAt: v.number(),
+    createdBy: v.string(),
+    archivedAt: v.optional(v.number()),
+    archivedBy: v.optional(v.string()),
+  }).index("by_assembly", ["assemblyId"])
+    .index("by_assembly_and_status", ["assemblyId", "status"])
+    .index("by_assembly_and_type", ["assemblyId", "type"]),
+
+  // Session attendance records
+  agSessionAttendance: defineTable({
+    sessionId: v.id("agSessions"),
+    assemblyId: v.optional(v.id("assemblies")), // Optional for avulsa sessions
+    participantId: v.string(), // Matches registrationId for individual participants or comiteLocal for groups
+    participantType: v.string(), // "eb" | "cr" | "comite_local" | "individual"
+    participantName: v.string(),
+    participantRole: v.optional(v.string()), // for EBs and CRs
+    comiteLocal: v.optional(v.string()), // for group attendance - the comité name
+    attendance: v.string(), // "present" | "absent"
+    markedAt: v.number(),
+    markedBy: v.string(),
+    lastUpdated: v.number(),
+    lastUpdatedBy: v.string(),
+  }).index("by_session", ["sessionId"])
+    .index("by_assembly", ["assemblyId"])
+    .index("by_session_and_participant", ["sessionId", "participantId"])
+    .index("by_session_and_type", ["sessionId", "participantType"]),
 }); 

@@ -342,7 +342,7 @@ export default function AGRegistrationStep4Page() {
             };
 
             const result = await createRegistration(registrationData);
-            
+
             // Handle the new response format
             const actualRegistrationId = typeof result === 'string' ? result : result.registrationId;
             setResubmitRegistrationId(actualRegistrationId as string);
@@ -382,21 +382,21 @@ export default function AGRegistrationStep4Page() {
                     console.log('✅ Auto-approval email sent successfully');
                 } else {
                     // Send confirmation email for regular registrations
-                    await handleNewRegistration({
+                await handleNewRegistration({
                         registrationId: actualRegistrationId as string,
-                        participantName: step1Data!.nome,
-                        participantEmail: step1Data!.email,
-                        assemblyName: assembly.name,
-                        assemblyLocation: assembly.location,
-                        assemblyStartDate: new Date(assembly.startDate),
-                        assemblyEndDate: new Date(assembly.endDate),
-                        modalityName: selectedModalityData.name,
-                        paymentRequired: selectedModalityData.price > 0,
-                        paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
-                        isPaymentExempt: isPaymentExempt,
-                        paymentExemptReason: exemptionReason
-                    });
-                    console.log('✅ Confirmation email sent successfully');
+                    participantName: step1Data!.nome,
+                    participantEmail: step1Data!.email,
+                    assemblyName: assembly.name,
+                    assemblyLocation: assembly.location,
+                    assemblyStartDate: new Date(assembly.startDate),
+                    assemblyEndDate: new Date(assembly.endDate),
+                    modalityName: selectedModalityData.name,
+                    paymentRequired: selectedModalityData.price > 0,
+                    paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
+                    isPaymentExempt: isPaymentExempt,
+                    paymentExemptReason: exemptionReason
+                });
+                console.log('✅ Confirmation email sent successfully');
                 }
             } catch (emailError) {
                 console.error('⚠️ Failed to send email:', emailError);
