@@ -44,3 +44,5 @@ yarn-error.log*
 
 # idea files
 .idea
+
+old_chamada_ag.tsx

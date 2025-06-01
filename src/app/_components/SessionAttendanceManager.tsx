@@ -144,6 +144,7 @@ export default function SessionAttendanceManager({
     const [comitesLocais, setComitesLocais] = useState<ComiteLocal[]>([]);
     const [ebMembers, setEbMembers] = useState<EbMember[]>([]);
     const [crMembers, setCrMembers] = useState<CrMember[]>([]);
+    const [individualParticipants, setIndividualParticipants] = useState<any[]>([]);
 
     // Queries based on session type
     const sessionAttendance = useQuery(

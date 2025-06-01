@@ -226,6 +226,9 @@ export default function QrReaderPage() {
                 await markSessionAttendance({
                     sessionId: readerInfo.sessionId as any,
                     participantId: resolvedParticipant.participantId,
+                    participantName: resolvedParticipant.participantName || scannedData.participantName || "Unknown",
+                    participantType: resolvedParticipant.participantType || "participant",
+                    participantRole: resolvedParticipant.participantRole,
                     attendance: "present",
                     markedBy: `qr-reader-${readerInfo.name}`,
                 });
