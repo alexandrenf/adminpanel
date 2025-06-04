@@ -255,6 +255,7 @@ export default function AGRegistrationPage() {
                 { value: "comite_aspirante", label: "Comitê Aspirante" },
                 { value: "observador_externo", label: "Observador Externo" },
                 { value: "comite_local", label: "Comitê Local" },
+                { value: "cr", label: "CR (Coordenador Regional)" },
                 { value: "alumni", label: "Alumni" },
                 { value: "supco", label: "SupCo (Conselho Supervisor)" },
             ];

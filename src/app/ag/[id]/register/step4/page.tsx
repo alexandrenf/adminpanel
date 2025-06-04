@@ -289,63 +289,108 @@ export default function AGRegistrationStep4Page() {
         return true;
     }, [step1Data, step2Data, step3Data, selectedModalityData, isPaymentExempt, selectedFile, exemptionReason, toast]);
 
-    // Handle final submission
+    // Handle form submission
     const handleSubmit = useCallback(async () => {
-        if (!validateForm() || !session?.user?.id) return;
-        
+        if (!validateForm()) return;
+
         setIsSubmitting(true);
-        
         try {
-            // Create registration first
-            const registrationData = {
-                assemblyId: assemblyId as any,
-                modalityId: step1Data!.selectedModalityId as any,
-                userId: session.user.id,
-                personalInfo: {
-                    nome: step1Data!.nome,
-                    email: step1Data!.email,
-                    emailSolar: step1Data!.emailSolar,
-                    dataNascimento: step1Data!.dataNascimento,
-                    cpf: step1Data!.cpf,
-                    nomeCracha: step1Data!.nomeCracha,
-                    celular: step1Data!.celular,
-                    uf: step1Data!.uf,
-                    cidade: step1Data!.cidade,
-                    role: step1Data!.role,
-                    comiteLocal: step1Data!.comiteLocal,
-                    comiteAspirante: step1Data!.comiteAspirante,
-                    selectedEBId: step1Data!.selectedEBId,
-                    selectedCRId: step1Data!.selectedCRId,
-                    autorizacaoCompartilhamento: step1Data!.autorizacaoCompartilhamento,
-                },
-                additionalInfo: {
-                    experienciaAnterior: "", // Empty since removed
-                    motivacao: "Não especificado", // Default value since removed but still required by API
-                    expectativas: "", // Empty since removed
-                    dietaRestricoes: step2Data!.dietaRestricoes,
-                    alergias: step2Data!.alergias,
-                    medicamentos: step2Data!.medicamentos,
-                    necessidadesEspeciais: step2Data!.necessidadesEspeciais,
-                    restricaoQuarto: step2Data!.restricaoQuarto,
-                    pronomes: step2Data!.pronomes,
-                    contatoEmergenciaNome: step2Data!.contatoEmergenciaNome,
-                    contatoEmergenciaTelefone: step2Data!.contatoEmergenciaTelefone,
-                    outrasObservacoes: step2Data!.outrasObservacoes,
-                    participacaoComites: [], // Empty array since removed
-                    interesseVoluntariado: false, // Default since removed
-                },
-                paymentInfo: isPaymentExempt ? {
-                    isPaymentExempt: true,
-                    paymentExemptReason: exemptionReason,
-                } : undefined,
-                status: "pending" as const,
-            };
+            let result;
+            let actualRegistrationId;
 
-            const result = await createRegistration(registrationData);
+            if (isResubmitting && resubmitRegistrationId) {
+                // Handle resubmission
+                console.log('🔍 Handling resubmission for:', resubmitRegistrationId);
+                
+                result = await resubmitRegistration({
+                    registrationId: resubmitRegistrationId as any,
+                    updatedPersonalInfo: {
+                        nome: step1Data!.nome,
+                        email: step1Data!.email,
+                        emailSolar: step1Data!.emailSolar,
+                        dataNascimento: step1Data!.dataNascimento,
+                        cpf: step1Data!.cpf,
+                        nomeCracha: step1Data!.nomeCracha,
+                        celular: step1Data!.celular,
+                        uf: step1Data!.uf,
+                        cidade: step1Data!.cidade,
+                        role: step1Data!.role,
+                        comiteLocal: step1Data!.comiteLocal,
+                        comiteAspirante: step1Data!.comiteAspirante,
+                        selectedEBId: step1Data!.selectedEBId,
+                        selectedCRId: step1Data!.selectedCRId,
+                        autorizacaoCompartilhamento: step1Data!.autorizacaoCompartilhamento,
+                    },
+                    updatedAdditionalInfo: {
+                        experienciaAnterior: "", // Empty since removed
+                        motivacao: "Não especificado", // Default value since removed but still required by API
+                        expectativas: "", // Empty since removed
+                        dietaRestricoes: step2Data!.dietaRestricoes,
+                        alergias: step2Data!.alergias,
+                        medicamentos: step2Data!.medicamentos,
+                        necessidadesEspeciais: step2Data!.necessidadesEspeciais,
+                        restricaoQuarto: step2Data!.restricaoQuarto,
+                        pronomes: step2Data!.pronomes,
+                        contatoEmergenciaNome: step2Data!.contatoEmergenciaNome,
+                        contatoEmergenciaTelefone: step2Data!.contatoEmergenciaTelefone,
+                        outrasObservacoes: step2Data!.outrasObservacoes,
+                        participacaoComites: [], // Empty array since removed
+                        interesseVoluntariado: false, // Default since removed
+                    },
+                    resubmissionNote: "Resubmissão com dados atualizados via formulário completo",
+                });
 
-            // Handle the new response format
-            const actualRegistrationId = typeof result === 'string' ? result : result.registrationId;
-            setResubmitRegistrationId(actualRegistrationId as string);
+                actualRegistrationId = typeof result === 'string' ? result : result.registrationId;
+                console.log('✅ Resubmission completed:', actualRegistrationId);
+            } else {
+                // Handle new registration
+                const registrationData = {
+                    assemblyId: assemblyId as any,
+                    modalityId: step1Data!.selectedModalityId as any,
+                    userId: session!.user!.id,
+                    personalInfo: {
+                        nome: step1Data!.nome,
+                        email: step1Data!.email,
+                        emailSolar: step1Data!.emailSolar,
+                        dataNascimento: step1Data!.dataNascimento,
+                        cpf: step1Data!.cpf,
+                        nomeCracha: step1Data!.nomeCracha,
+                        celular: step1Data!.celular,
+                        uf: step1Data!.uf,
+                        cidade: step1Data!.cidade,
+                        role: step1Data!.role,
+                        comiteLocal: step1Data!.comiteLocal,
+                        comiteAspirante: step1Data!.comiteAspirante,
+                        selectedEBId: step1Data!.selectedEBId,
+                        selectedCRId: step1Data!.selectedCRId,
+                        autorizacaoCompartilhamento: step1Data!.autorizacaoCompartilhamento,
+                    },
+                    additionalInfo: {
+                        experienciaAnterior: "", // Empty since removed
+                        motivacao: "Não especificado", // Default value since removed but still required by API
+                        expectativas: "", // Empty since removed
+                        dietaRestricoes: step2Data!.dietaRestricoes,
+                        alergias: step2Data!.alergias,
+                        medicamentos: step2Data!.medicamentos,
+                        necessidadesEspeciais: step2Data!.necessidadesEspeciais,
+                        restricaoQuarto: step2Data!.restricaoQuarto,
+                        pronomes: step2Data!.pronomes,
+                        contatoEmergenciaNome: step2Data!.contatoEmergenciaNome,
+                        contatoEmergenciaTelefone: step2Data!.contatoEmergenciaTelefone,
+                        outrasObservacoes: step2Data!.outrasObservacoes,
+                        participacaoComites: [], // Empty array since removed
+                        interesseVoluntariado: false, // Default since removed
+                    },
+                    paymentInfo: isPaymentExempt ? {
+                        isPaymentExempt: true,
+                        paymentExemptReason: exemptionReason,
+                    } : undefined,
+                    status: "pending" as const,
+                };
+
+                result = await createRegistration(registrationData);
+                actualRegistrationId = typeof result === 'string' ? result : result.registrationId;
+            }
 
             // Send appropriate email based on whether it was auto-approved
             try {
@@ -359,7 +404,7 @@ export default function AGRegistrationStep4Page() {
                 const isAutoApproved = typeof result === 'object' && result.isAutoApproved;
                 
                 if (isAutoApproved) {
-                    // Send approval email for auto-approved registrations
+                    // Send approval email for auto-approved registrations/resubmissions
                     await handleRegistrationApproval({
                         registrationId: actualRegistrationId as string,
                         assemblyId: assemblyId as string,
@@ -370,7 +415,9 @@ export default function AGRegistrationStep4Page() {
                         assemblyStartDate: new Date(assembly.startDate),
                         assemblyEndDate: new Date(assembly.endDate),
                         modalityName: selectedModalityData.name,
-                        additionalInstructions: "Sua inscrição foi aprovada automaticamente. Bem-vindo(a)!",
+                        additionalInstructions: isResubmitting ? 
+                            "Sua resubmissão foi aprovada automaticamente. Bem-vindo(a)!" : 
+                            "Sua inscrição foi aprovada automaticamente. Bem-vindo(a)!",
                         paymentAmount: selectedModalityData.price > 0 ? 
                             new Intl.NumberFormat('pt-BR', {
                                 style: 'currency',
@@ -381,22 +428,22 @@ export default function AGRegistrationStep4Page() {
                     });
                     console.log('✅ Auto-approval email sent successfully');
                 } else {
-                    // Send confirmation email for regular registrations
-                await handleNewRegistration({
+                    // Send confirmation email for regular registrations/resubmissions
+                    await handleNewRegistration({
                         registrationId: actualRegistrationId as string,
-                    participantName: step1Data!.nome,
-                    participantEmail: step1Data!.email,
-                    assemblyName: assembly.name,
-                    assemblyLocation: assembly.location,
-                    assemblyStartDate: new Date(assembly.startDate),
-                    assemblyEndDate: new Date(assembly.endDate),
-                    modalityName: selectedModalityData.name,
-                    paymentRequired: selectedModalityData.price > 0,
-                    paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
-                    isPaymentExempt: isPaymentExempt,
-                    paymentExemptReason: exemptionReason
-                });
-                console.log('✅ Confirmation email sent successfully');
+                        participantName: step1Data!.nome,
+                        participantEmail: step1Data!.email,
+                        assemblyName: assembly.name,
+                        assemblyLocation: assembly.location,
+                        assemblyStartDate: new Date(assembly.startDate),
+                        assemblyEndDate: new Date(assembly.endDate),
+                        modalityName: selectedModalityData.name,
+                        paymentRequired: selectedModalityData.price > 0,
+                        paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
+                        isPaymentExempt: isPaymentExempt,
+                        paymentExemptReason: exemptionReason
+                    });
+                    console.log('✅ Confirmation email sent successfully');
                 }
             } catch (emailError) {
                 console.error('⚠️ Failed to send email:', emailError);
@@ -411,17 +458,17 @@ export default function AGRegistrationStep4Page() {
                 const uploadUrl = await generateUploadUrl();
                 
                 // Upload file to Convex
-                const result = await fetch(uploadUrl, {
+                const uploadResult = await fetch(uploadUrl, {
                     method: "POST",
                     headers: { "Content-Type": selectedFile.type },
                     body: selectedFile,
                 });
                 
-                if (!result.ok) {
+                if (!uploadResult.ok) {
                     throw new Error("Failed to upload file");
                 }
                 
-                const { storageId } = await result.json();
+                const { storageId } = await uploadResult.json();
                 
                 // Update registration with receipt
                 await updateRegistrationReceipt({
@@ -435,8 +482,10 @@ export default function AGRegistrationStep4Page() {
             }
             
             toast({
-                title: "✅ Inscrição Realizada com Sucesso!",
-                description: "Sua inscrição foi enviada e está sendo analisada.",
+                title: "✅ Sucesso!",
+                description: isResubmitting ? 
+                    "Inscrição resubmetida com sucesso!" : 
+                    "Inscrição realizada com sucesso!",
             });
             
             // Clear session storage
@@ -448,17 +497,19 @@ export default function AGRegistrationStep4Page() {
             router.push(`/ag/${assemblyId}/register/success/${actualRegistrationId}`);
             
         } catch (error) {
-            console.error("Error creating registration:", error);
+            console.error("Error with registration:", error);
             toast({
                 title: "❌ Erro",
-                description: "Erro ao finalizar inscrição. Tente novamente.",
+                description: isResubmitting ? 
+                    "Erro ao reenviar inscrição. Tente novamente." : 
+                    "Erro ao finalizar inscrição. Tente novamente.",
                 variant: "destructive",
             });
         } finally {
             setIsSubmitting(false);
             setIsUploading(false);
         }
-    }, [validateForm, session?.user?.id, assemblyId, step1Data, step2Data, step3Data, isPaymentExempt, exemptionReason, selectedFile, createRegistration, generateUploadUrl, updateRegistrationReceipt, toast, router]);
+    }, [validateForm, session?.user?.id, assemblyId, step1Data, step2Data, step3Data, isPaymentExempt, exemptionReason, selectedFile, isResubmitting, resubmitRegistrationId, createRegistration, resubmitRegistration, generateUploadUrl, updateRegistrationReceipt, toast, router, assembly, selectedModalityData]);
 
     // Load previous steps data from session storage
     useEffect(() => {
@@ -632,6 +683,24 @@ export default function AGRegistrationStep4Page() {
                             <span>Voltar</span>
                         </Button>
                     </div>
+
+                    {/* Resubmission Alert */}
+                    {isResubmitting && (
+                        <Alert className="border-orange-200 bg-orange-50">
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <AlertTitle className="text-orange-800">Reenvio de Inscrição</AlertTitle>
+                            <AlertDescription className="text-orange-700">
+                                <div className="space-y-2">
+                                    <p><strong>Motivo da rejeição:</strong> {resubmissionReason || "Não especificado"}</p>
+                                    <p>Você pode revisar e alterar qualquer informação antes de reenviar sua inscrição.</p>
+                                    <div className="flex items-center gap-2 text-sm mt-2">
+                                        <RefreshCw className="h-3 w-3" />
+                                        <span>Reenvio da Inscrição #{resubmitRegistrationId?.slice(-8)}</span>
+                                    </div>
+                                </div>
+                            </AlertDescription>
+                        </Alert>
+                    )}
 
                     {/* Modality Info */}
                     <Card className="shadow-lg border-0">
