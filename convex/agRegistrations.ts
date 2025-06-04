@@ -1024,6 +1024,7 @@ export const resubmit = mutation({
       cidade: args.updatedPersonalInfo.cidade,
       participantType: args.updatedPersonalInfo.role,
       participantRole: args.updatedPersonalInfo.role,
+      participantId: args.updatedPersonalInfo.selectedEBId || args.updatedPersonalInfo.selectedCRId || args.updatedPersonalInfo.comiteLocal || "",
       comiteLocal: args.updatedPersonalInfo.comiteLocal,
       comiteAspirante: args.updatedPersonalInfo.comiteAspirante,
       autorizacaoCompartilhamento: args.updatedPersonalInfo.autorizacaoCompartilhamento,
