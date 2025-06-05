@@ -656,4 +656,173 @@ export const getCRs = query({
       .filter(cr => cr.participantId && cr.participantId.length > 0)
       .sort((a, b) => a.role.localeCompare(b.role, 'pt-BR', { sensitivity: 'base' }));
   },
+});
+
+// Get comprehensive registration analytics for an assembly
+export const getRegistrationAnalytics = query({
+  args: { assemblyId: v.id("assemblies") },
+  handler: async (ctx, args) => {
+    // Get all participants for this assembly
+    const participants = await ctx.db
+      .query("agParticipants")
+      .withIndex("by_assembly")
+      .filter((q) => q.eq(q.field("assemblyId"), args.assemblyId))
+      .collect();
+
+    // Get all registrations for this assembly (only approved/pending ones)
+    const registrations = await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_assembly")
+      .filter((q) => q.eq(q.field("assemblyId"), args.assemblyId))
+      .collect();
+
+    // Filter to active registrations (not cancelled or rejected)
+    const activeRegistrations = registrations.filter(r => 
+      r.status !== "cancelled" && r.status !== "rejected"
+    );
+
+    // Separate participants by type
+    const comitesPlenos = participants.filter(p => 
+      p.type === "comite" && p.status === "Pleno"
+    );
+    const comitesNaoPlenos = participants.filter(p => 
+      p.type === "comite" && p.status === "Não-pleno"
+    );
+    const ebs = participants.filter(p => p.type === "eb");
+    const crs = participants.filter(p => p.type === "cr");
+
+    // Count registrations by participant type and specific participants
+    const registrationsByParticipantId = new Map();
+    const registrationsByRole = new Map();
+    
+    activeRegistrations.forEach(reg => {
+      // Count by participant ID (for specific EB/CR/Comite tracking)
+      if (reg.participantId) {
+        registrationsByParticipantId.set(reg.participantId, reg);
+      }
+      
+      // Count by role type
+      const role = reg.participantRole || reg.participantType;
+      registrationsByRole.set(role, (registrationsByRole.get(role) || 0) + 1);
+    });
+
+    // Calculate registration stats for each category
+    const comitePlenoStats = {
+      total: comitesPlenos.length,
+      registered: comitesPlenos.filter(p => registrationsByParticipantId.has(p.participantId)).length,
+      unregistered: comitesPlenos.filter(p => !registrationsByParticipantId.has(p.participantId)).length,
+      registrationRate: comitesPlenos.length > 0 ? 
+        (comitesPlenos.filter(p => registrationsByParticipantId.has(p.participantId)).length / comitesPlenos.length * 100) : 0,
+      details: comitesPlenos.map(p => ({
+        participantId: p.participantId,
+        name: p.name,
+        escola: p.escola,
+        cidade: p.cidade,
+        uf: p.uf,
+        isRegistered: registrationsByParticipantId.has(p.participantId),
+        registration: registrationsByParticipantId.get(p.participantId) || null
+      }))
+    };
+
+    const comiteNaoPlenoStats = {
+      total: comitesNaoPlenos.length,
+      registered: comitesNaoPlenos.filter(p => registrationsByParticipantId.has(p.participantId)).length,
+      unregistered: comitesNaoPlenos.filter(p => !registrationsByParticipantId.has(p.participantId)).length,
+      registrationRate: comitesNaoPlenos.length > 0 ? 
+        (comitesNaoPlenos.filter(p => registrationsByParticipantId.has(p.participantId)).length / comitesNaoPlenos.length * 100) : 0,
+      details: comitesNaoPlenos.map(p => ({
+        participantId: p.participantId,
+        name: p.name,
+        escola: p.escola,
+        cidade: p.cidade,
+        uf: p.uf,
+        isRegistered: registrationsByParticipantId.has(p.participantId),
+        registration: registrationsByParticipantId.get(p.participantId) || null
+      }))
+    };
+
+    const ebStats = {
+      total: ebs.length,
+      registered: ebs.filter(p => registrationsByParticipantId.has(p.participantId)).length,
+      unregistered: ebs.filter(p => !registrationsByParticipantId.has(p.participantId)).length,
+      registrationRate: ebs.length > 0 ? 
+        (ebs.filter(p => registrationsByParticipantId.has(p.participantId)).length / ebs.length * 100) : 0,
+      details: ebs.map(p => ({
+        participantId: p.participantId,
+        name: p.name,
+        role: p.role,
+        isRegistered: registrationsByParticipantId.has(p.participantId),
+        registration: registrationsByParticipantId.get(p.participantId) || null
+      }))
+    };
+
+    const crStats = {
+      total: crs.length,
+      registered: crs.filter(p => registrationsByParticipantId.has(p.participantId)).length,
+      unregistered: crs.filter(p => !registrationsByParticipantId.has(p.participantId)).length,
+      registrationRate: crs.length > 0 ? 
+        (crs.filter(p => registrationsByParticipantId.has(p.participantId)).length / crs.length * 100) : 0,
+      details: crs.map(p => ({
+        participantId: p.participantId,
+        name: p.name,
+        role: p.role,
+        isRegistered: registrationsByParticipantId.has(p.participantId),
+        registration: registrationsByParticipantId.get(p.participantId) || null
+      }))
+    };
+
+    // Calculate "other" registrations (not in predefined categories)
+    const allPredefinedParticipantIds = new Set([
+      ...comitesPlenos.map(p => p.participantId),
+      ...comitesNaoPlenos.map(p => p.participantId),
+      ...ebs.map(p => p.participantId),
+      ...crs.map(p => p.participantId)
+    ]);
+
+    const otherRegistrations = activeRegistrations.filter(reg => 
+      !allPredefinedParticipantIds.has(reg.participantId)
+    );
+
+    // Group other registrations by role
+    const otherByRole: Record<string, any[]> = {};
+    otherRegistrations.forEach(reg => {
+      const role = reg.participantRole || reg.participantType || 'unknown';
+      if (!otherByRole[role]) {
+        otherByRole[role] = [];
+      }
+      otherByRole[role].push(reg);
+    });
+
+    const otherStats = {
+      total: otherRegistrations.length,
+      byRole: Object.keys(otherByRole).map(role => ({
+        role,
+        count: otherByRole[role]?.length || 0,
+        registrations: otherByRole[role] || []
+      })),
+      details: otherRegistrations
+    };
+
+    // Overall summary
+    const totalPredefined = comitesPlenos.length + comitesNaoPlenos.length + ebs.length + crs.length;
+    const totalRegisteredPredefined = comitePlenoStats.registered + comiteNaoPlenoStats.registered + 
+                                     ebStats.registered + crStats.registered;
+
+    return {
+      assemblyId: args.assemblyId,
+      summary: {
+        totalPredefinedParticipants: totalPredefined,
+        totalRegisteredPredefined: totalRegisteredPredefined,
+        totalOtherRegistrations: otherStats.total,
+        totalActiveRegistrations: activeRegistrations.length,
+        overallRegistrationRate: totalPredefined > 0 ? (totalRegisteredPredefined / totalPredefined * 100) : 0
+      },
+      comitesPlenos: comitePlenoStats,
+      comitesNaoPlenos: comiteNaoPlenoStats,
+      ebs: ebStats,
+      crs: crStats,
+      others: otherStats,
+      lastUpdated: Date.now()
+    };
+  },
 }); 

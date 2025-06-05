@@ -1285,6 +1285,14 @@ export default function AGPage() {
                                 <Plus className="w-4 h-4 mr-2" />
                                 Nova Assembleia
                             </Button>
+                            <Button 
+                                onClick={() => router.push('/ag/analytics')}
+                                variant="outline"
+                                className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                            >
+                                <BarChart3 className="w-4 h-4 mr-2" />
+                                Dashboard de Inscrições
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
