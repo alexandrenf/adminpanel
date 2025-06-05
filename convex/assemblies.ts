@@ -27,6 +27,29 @@ export const getActive = query({
   },
 });
 
+// Get next upcoming assembly
+export const getNextUpcoming = query({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    
+    // Get all active assemblies that haven't started yet
+    const upcomingAssemblies = await ctx.db
+      .query("assemblies")
+      .withIndex("by_status")
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .collect();
+    
+    // Filter to only future assemblies and sort by start date
+    const futureAssemblies = upcomingAssemblies
+      .filter(assembly => assembly.startDate > now)
+      .sort((a, b) => a.startDate - b.startDate);
+    
+    // Return the earliest upcoming assembly
+    return futureAssemblies.length > 0 ? futureAssemblies[0] : null;
+  },
+});
+
 // Get assembly by ID
 export const getById = query({
   args: { id: v.id("assemblies") },
