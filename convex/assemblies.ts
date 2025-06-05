@@ -819,32 +819,62 @@ export const getRegistrationAnalytics = query({
 
     const ebStats = {
       total: ebs.length,
-      registered: ebs.filter(p => registrationsByParticipantId.has(p.participantId)).length,
-      unregistered: ebs.filter(p => !registrationsByParticipantId.has(p.participantId)).length,
+      registered: ebs.filter(p => {
+        // Only check for EB registrations (not other types with same participantId)
+        const ebRegistrations = registrationsByParticipantId.get(p.participantId) || [];
+        return ebRegistrations.some((reg: any) => reg.participantType === 'eb');
+      }).length,
+      unregistered: ebs.filter(p => {
+        const ebRegistrations = registrationsByParticipantId.get(p.participantId) || [];
+        return !ebRegistrations.some((reg: any) => reg.participantType === 'eb');
+      }).length,
       registrationRate: ebs.length > 0 ? 
-        (ebs.filter(p => registrationsByParticipantId.has(p.participantId)).length / ebs.length * 100) : 0,
-      details: ebs.map(p => ({
-        participantId: p.participantId,
-        name: p.name,
-        role: p.role,
-        isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null
-      }))
+        (ebs.filter(p => {
+          const ebRegistrations = registrationsByParticipantId.get(p.participantId) || [];
+          return ebRegistrations.some((reg: any) => reg.participantType === 'eb');
+        }).length / ebs.length * 100) : 0,
+      details: ebs.map(p => {
+        const ebRegistrations = registrationsByParticipantId.get(p.participantId) || [];
+        const isRegistered = ebRegistrations.some((reg: any) => reg.participantType === 'eb');
+        const ebRegistration = ebRegistrations.find((reg: any) => reg.participantType === 'eb');
+        return {
+          participantId: p.participantId,
+          name: p.name,
+          role: p.role,
+          isRegistered: isRegistered,
+          registration: ebRegistration || null
+        };
+      })
     };
 
     const crStats = {
       total: crs.length,
-      registered: crs.filter(p => registrationsByParticipantId.has(p.participantId)).length,
-      unregistered: crs.filter(p => !registrationsByParticipantId.has(p.participantId)).length,
+      registered: crs.filter(p => {
+        // Only check for CR registrations (not other types with same participantId)
+        const crRegistrations = registrationsByParticipantId.get(p.participantId) || [];
+        return crRegistrations.some((reg: any) => reg.participantType === 'cr');
+      }).length,
+      unregistered: crs.filter(p => {
+        const crRegistrations = registrationsByParticipantId.get(p.participantId) || [];
+        return !crRegistrations.some((reg: any) => reg.participantType === 'cr');
+      }).length,
       registrationRate: crs.length > 0 ? 
-        (crs.filter(p => registrationsByParticipantId.has(p.participantId)).length / crs.length * 100) : 0,
-      details: crs.map(p => ({
-        participantId: p.participantId,
-        name: p.name,
-        role: p.role,
-        isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null
-      }))
+        (crs.filter(p => {
+          const crRegistrations = registrationsByParticipantId.get(p.participantId) || [];
+          return crRegistrations.some((reg: any) => reg.participantType === 'cr');
+        }).length / crs.length * 100) : 0,
+      details: crs.map(p => {
+        const crRegistrations = registrationsByParticipantId.get(p.participantId) || [];
+        const isRegistered = crRegistrations.some((reg: any) => reg.participantType === 'cr');
+        const crRegistration = crRegistrations.find((reg: any) => reg.participantType === 'cr');
+        return {
+          participantId: p.participantId,
+          name: p.name,
+          role: p.role,
+          isRegistered: isRegistered,
+          registration: crRegistration || null
+        };
+      })
     };
 
     // Calculate "other" registrations (not in predefined categories)
