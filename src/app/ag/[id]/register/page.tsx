@@ -1271,7 +1271,10 @@ export default function AGRegistrationPage() {
                                         />
                                         <div className="grid gap-1.5 leading-none">
                                             <Label htmlFor="autorizacao" className="text-sm font-medium leading-relaxed">
-                                                Autorizo o compartilhamento de meus dados (nome completo e email) para os patrocinadores do evento. *
+                                                {assembly.type === "AGE" 
+                                                    ? "Autorizo o processamento dos meus dados para fins de inscrição e monitorização do evento. *"
+                                                    : "Autorizo o compartilhamento de meus dados (nome completo e email) para os patrocinadores do evento. *"
+                                                }
                                             </Label>
                                             <p className="text-xs text-gray-600">
                                                 Esta autorização é necessária para a participação no evento.
