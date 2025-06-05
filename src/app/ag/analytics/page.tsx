@@ -456,14 +456,19 @@ export default function AnalyticsPage() {
                                                                     {detail.escola && (
                                                                         <p className="text-sm text-gray-600">{detail.escola}</p>
                                                                     )}
-                                                                    {detail.role && (
-                                                                        <p className="text-sm text-gray-600">{detail.role}</p>
-                                                                    )}
-                                                                    {(detail.cidade || detail.uf) && (
-                                                                        <p className="text-xs text-gray-500">
-                                                                            {detail.cidade}{detail.cidade && detail.uf ? ', ' : ''}{detail.uf}
-                                                                        </p>
-                                                                    )}
+                                                                                                                                         {detail.role && (
+                                                                         <p className="text-sm text-gray-600">{detail.role}</p>
+                                                                     )}
+                                                                     {(detail.cidade || detail.uf) && (
+                                                                         <p className="text-xs text-gray-500">
+                                                                             {detail.cidade}{detail.cidade && detail.uf ? ', ' : ''}{detail.uf}
+                                                                         </p>
+                                                                     )}
+                                                                     {detail.registrationCount && detail.registrationCount > 0 && (
+                                                                         <p className="text-xs text-blue-600 font-medium">
+                                                                             {detail.registrationCount} {detail.registrationCount === 1 ? 'pessoa inscrita' : 'pessoas inscritas'}
+                                                                         </p>
+                                                                     )}
                                                                 </div>
                                                                 <div className="flex items-center space-x-2">
                                                                     {detail.isRegistered ? (
