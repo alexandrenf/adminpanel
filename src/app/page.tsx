@@ -139,16 +139,16 @@ export default function Home() {
                         Próxima Assembleia Geral
                       </h3>
                       {nextAssembly ? (
-                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
-                          <div className="flex items-start space-x-4">
-                            <div className="flex-shrink-0">
-                              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                <Calendar className="w-6 h-6 text-blue-600" />
-                              </div>
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+                        <div className="flex items-start space-x-4">
+                          <div className="flex-shrink-0">
+                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                              <Calendar className="w-6 h-6 text-blue-600" />
                             </div>
-                            <div className="flex-1">
+                          </div>
+                          <div className="flex-1">
                               <h4 className="font-semibold text-gray-900 mb-2">{nextAssembly.name}</h4>
-                              <div className="space-y-2">
+                            <div className="space-y-2">
                                 <div className="flex items-center space-x-2 text-sm text-gray-700">
                                   <Clock className="w-4 h-4 text-blue-600" />
                                   <span>
@@ -167,31 +167,31 @@ export default function Home() {
                                     <span className="font-medium">Tipo:</span> {nextAssembly.type === "AG" ? "Presencial" : "Online"}
                                   </span>
                                 </div>
-                                <p className="text-sm text-gray-700">
-                                  <span className="font-medium">Status:</span>{" "}
+                              <p className="text-sm text-gray-700">
+                                <span className="font-medium">Status:</span>{" "}
                                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                     nextAssembly.registrationOpen 
                                       ? "bg-green-100 text-green-800" 
                                       : "bg-red-100 text-red-800"
                                   }`}>
                                     {nextAssembly.registrationOpen ? "Inscrições Abertas" : "Inscrições Fechadas"}
-                                  </span>
-                                </p>
+                                </span>
+                              </p>
                                 {nextAssembly.description && (
                                   <p className="text-sm text-gray-600 mt-2">
                                     {nextAssembly.description}
                                   </p>
                                 )}
-                              </div>
-                              <div className="mt-4">
-                                <Link href="/ag" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+                            </div>
+                            <div className="mt-4">
+                              <Link href="/ag" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
                                   {nextAssembly.registrationOpen ? "Inscrever-se agora" : "Ver detalhes"}
-                                  <ArrowRight className="w-4 h-4 ml-1" />
-                                </Link>
-                              </div>
+                                <ArrowRight className="w-4 h-4 ml-1" />
+                              </Link>
                             </div>
                           </div>
                         </div>
+                      </div>
                       ) : (
                         <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-2xl p-6 border border-gray-200">
                           <div className="text-center">
