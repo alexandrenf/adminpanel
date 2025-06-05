@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -44,10 +45,14 @@ export default function Home() {
             {!session && (
             <div className="flex items-center justify-center">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-white/10 backdrop-blur-sm rounded-xl">
-                  <Shield className="w-8 h-8 text-white" />
-                </div>
-                <span className="text-2xl font-bold text-white">IFMSA Brazil</span>
+                <Image
+                  src="/logo.svg"
+                  alt="IFMSA Brazil Logo"
+                  width={320}
+                  height={128}
+                  className="h-24 w-auto"
+                  priority
+                />
               </div>
             </div>
             )}

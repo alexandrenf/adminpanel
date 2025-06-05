@@ -2,6 +2,7 @@
 
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "../../components/ui/button";
@@ -109,10 +110,15 @@ const Navbar: React.FC = () => {
                 <div className="flex justify-between items-center h-16">
                     {/* Logo */}
                     <div className="flex-shrink-0 flex items-center">
-                        <Link href="/" className="flex items-center space-x-3 group">
-                            <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
-                                {isIfmsaEmail === true ? "Admin Panel" : "IFMSA Brazil"}
-                            </span>
+                        <Link href="/" className="flex items-center">
+                            <Image
+                                src="/logonavbar.svg"
+                                alt="IFMSA Brazil Logo"
+                                width={180}
+                                height={72}
+                                className="h-12 w-auto"
+                                priority
+                            />
                         </Link>
                     </div>
 
