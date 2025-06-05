@@ -9,6 +9,7 @@ import Loading from "~/app/_components/Loading";
 import { Providers } from "./_components/Providers";
 import { Toaster } from "../components/ui/toaster";
 import Footer from "./_components/Footer";
+import { Analytics } from "@vercel/analytics/next"
 
 export const metadata = {
   title: "Portal IFMSA Brazil",
@@ -42,6 +43,7 @@ export default async function RootLayout({
           <div className="flex-grow">
             <Suspense fallback={<Loading />}>
               {children}
+              <Analytics />
             </Suspense>
           </div>
           <Footer />
