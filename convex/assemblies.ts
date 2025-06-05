@@ -706,38 +706,66 @@ export const getRegistrationAnalytics = query({
       registrationsByRole.set(role, (registrationsByRole.get(role) || 0) + 1);
     });
 
+    // For comitês locais, we need to count unique comitês, not individual registrations
+    // Group comitês by participantId (which represents the comitê local)
+    const uniqueComitesPlenos = new Map();
+    comitesPlenos.forEach(p => {
+      if (!uniqueComitesPlenos.has(p.participantId)) {
+        uniqueComitesPlenos.set(p.participantId, p);
+      }
+    });
+
+    const uniqueComitesNaoPlenos = new Map();
+    comitesNaoPlenos.forEach(p => {
+      if (!uniqueComitesNaoPlenos.has(p.participantId)) {
+        uniqueComitesNaoPlenos.set(p.participantId, p);
+      }
+    });
+
+    // Check which comitês have at least one registration
+    const registeredComitesPlenos = Array.from(uniqueComitesPlenos.values()).filter(p => 
+      registrationsByParticipantId.has(p.participantId)
+    );
+    const registeredComitesNaoPlenos = Array.from(uniqueComitesNaoPlenos.values()).filter(p => 
+      registrationsByParticipantId.has(p.participantId)
+    );
+
     // Calculate registration stats for each category
     const comitePlenoStats = {
-      total: comitesPlenos.length,
-      registered: comitesPlenos.filter(p => registrationsByParticipantId.has(p.participantId)).length,
-      unregistered: comitesPlenos.filter(p => !registrationsByParticipantId.has(p.participantId)).length,
-      registrationRate: comitesPlenos.length > 0 ? 
-        (comitesPlenos.filter(p => registrationsByParticipantId.has(p.participantId)).length / comitesPlenos.length * 100) : 0,
-      details: comitesPlenos.map(p => ({
+      total: uniqueComitesPlenos.size,
+      registered: registeredComitesPlenos.length,
+      unregistered: uniqueComitesPlenos.size - registeredComitesPlenos.length,
+      registrationRate: uniqueComitesPlenos.size > 0 ? 
+        (registeredComitesPlenos.length / uniqueComitesPlenos.size * 100) : 0,
+      details: Array.from(uniqueComitesPlenos.values()).map(p => ({
         participantId: p.participantId,
         name: p.name,
         escola: p.escola,
         cidade: p.cidade,
         uf: p.uf,
         isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.get(p.participantId) || null
+        registration: registrationsByParticipantId.get(p.participantId) || null,
+        // Add count of registrations from this comitê
+        registrationCount: activeRegistrations.filter(reg => reg.participantId === p.participantId).length
       }))
     };
 
     const comiteNaoPlenoStats = {
-      total: comitesNaoPlenos.length,
-      registered: comitesNaoPlenos.filter(p => registrationsByParticipantId.has(p.participantId)).length,
-      unregistered: comitesNaoPlenos.filter(p => !registrationsByParticipantId.has(p.participantId)).length,
-      registrationRate: comitesNaoPlenos.length > 0 ? 
-        (comitesNaoPlenos.filter(p => registrationsByParticipantId.has(p.participantId)).length / comitesNaoPlenos.length * 100) : 0,
-      details: comitesNaoPlenos.map(p => ({
+      total: uniqueComitesNaoPlenos.size,
+      registered: registeredComitesNaoPlenos.length,
+      unregistered: uniqueComitesNaoPlenos.size - registeredComitesNaoPlenos.length,
+      registrationRate: uniqueComitesNaoPlenos.size > 0 ? 
+        (registeredComitesNaoPlenos.length / uniqueComitesNaoPlenos.size * 100) : 0,
+      details: Array.from(uniqueComitesNaoPlenos.values()).map(p => ({
         participantId: p.participantId,
         name: p.name,
         escola: p.escola,
         cidade: p.cidade,
         uf: p.uf,
         isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.get(p.participantId) || null
+        registration: registrationsByParticipantId.get(p.participantId) || null,
+        // Add count of registrations from this comitê
+        registrationCount: activeRegistrations.filter(reg => reg.participantId === p.participantId).length
       }))
     };
 
@@ -804,7 +832,7 @@ export const getRegistrationAnalytics = query({
     };
 
     // Overall summary
-    const totalPredefined = comitesPlenos.length + comitesNaoPlenos.length + ebs.length + crs.length;
+    const totalPredefined = uniqueComitesPlenos.size + uniqueComitesNaoPlenos.size + ebs.length + crs.length;
     const totalRegisteredPredefined = comitePlenoStats.registered + comiteNaoPlenoStats.registered + 
                                      ebStats.registered + crStats.registered;
 
