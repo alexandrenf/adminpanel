@@ -95,7 +95,7 @@ export async function handleRegistrationApproval(registrationData: {
     assemblyDates: assemblyDates,
     modalityName: registrationData.modalityName,
     additionalInstructions: registrationData.additionalInstructions,
-    qrCodeUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.assemblyId}/qr-code?registration=${registrationData.registrationId}`,
+    qrCodeUrl: `https://admin.ifmsabrazil.org/ag/${registrationData.assemblyId}/qr-code?registration=${registrationData.registrationId}`,
     paymentAmount: registrationData.paymentAmount,
     isPaymentExempt: registrationData.isPaymentExempt,
     paymentExemptReason: registrationData.paymentExemptReason,
