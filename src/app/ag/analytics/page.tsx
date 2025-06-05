@@ -73,9 +73,9 @@ export default function AnalyticsPage() {
     useEffect(() => {
         if (assemblies && assemblies.length > 0 && !selectedAssemblyId) {
             const activeAssemblies = assemblies.filter(a => a.status === "active");
-            if (activeAssemblies.length > 0) {
+            if (activeAssemblies.length > 0 && activeAssemblies[0]) {
                 setSelectedAssemblyId(activeAssemblies[0]._id);
-            } else {
+            } else if (assemblies[0]) {
                 setSelectedAssemblyId(assemblies[0]._id);
             }
         }
