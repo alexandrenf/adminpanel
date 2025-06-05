@@ -178,7 +178,10 @@ export default function AGRegistrationPage() {
         };
     }, [session?.user?.email, isResubmission, existingRegistrationData]);
 
-    const [formData, setFormData] = useState<RegistrationFormData>(initialFormData);
+    const [formData, setFormData] = useState<RegistrationFormData>(() => {
+        console.log('🔍 Frontend: Initializing form data:', initialFormData);
+        return initialFormData;
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [existingRegistration, setExistingRegistration] = useState<any>(null);
     const [comiteLocalOpen, setComiteLocalOpen] = useState(false);
@@ -192,40 +195,62 @@ export default function AGRegistrationPage() {
 
     // Handle input changes
     const handleInputChange = useCallback((field: keyof RegistrationFormData, value: string | boolean) => {
-        // Debug all field changes that matter for EB selection
-        if (['role', 'selectedEBId', 'selectedCRId', 'comiteLocal'].includes(field)) {
-            console.log(`🔍 Frontend: Changing ${field} to:`, value, 'type:', typeof value);
-        }
-        
-        // Clear related fields when role changes
-        if (field === 'role') {
-            console.log('🔍 Frontend: Role changing to:', value, '- clearing related fields');
-            setFormData(prev => {
-                const newData = {
-                    ...prev,
-                    role: value as string,
-                    comiteLocal: undefined,
-                    comiteAspirante: undefined,
-                    selectedEBId: undefined,
-                    selectedCRId: undefined,
-                };
-                console.log('🔍 Frontend: Form data after role change:', newData);
-                return newData;
-            });
-            return;
-        }
-        
-        setFormData(prev => {
-            const newData = { ...prev, [field]: value };
-            
-            // Debug the complete form data when important fields change
-            if (['selectedEBId', 'selectedCRId', 'comiteLocal'].includes(field)) {
-                console.log(`🔍 Frontend: Complete form data after ${field} change:`, newData);
+        try {
+            // Debug all field changes that matter for EB selection
+            if (['role', 'selectedEBId', 'selectedCRId', 'comiteLocal', 'uf'].includes(field)) {
+                console.log(`🔍 Frontend: Changing ${field} to:`, value, 'type:', typeof value);
             }
             
-            return newData;
-        });
-    }, []);
+            // Clear related fields when role changes
+            if (field === 'role') {
+                console.log('🔍 Frontend: Role changing to:', value, '- clearing related fields');
+                setFormData(prev => {
+                    const newData = {
+                        ...prev,
+                        role: value as string,
+                        comiteLocal: undefined,
+                        comiteAspirante: undefined,
+                        selectedEBId: undefined,
+                        selectedCRId: undefined,
+                    };
+                    console.log('🔍 Frontend: Form data after role change:', newData);
+                    return newData;
+                });
+                return;
+            }
+            
+            // Special handling for UF field to ensure it's a valid string
+            if (field === 'uf') {
+                const ufValue = typeof value === 'string' ? value : String(value);
+                console.log(`🔍 Frontend: Setting UF to: "${ufValue}"`);
+                
+                setFormData(prev => {
+                    const newData = { ...prev, uf: ufValue };
+                    console.log(`🔍 Frontend: Form data after UF change:`, newData);
+                    return newData;
+                });
+                return;
+            }
+            
+            setFormData(prev => {
+                const newData = { ...prev, [field]: value };
+                
+                // Debug the complete form data when important fields change
+                if (['selectedEBId', 'selectedCRId', 'comiteLocal'].includes(field)) {
+                    console.log(`🔍 Frontend: Complete form data after ${field} change:`, newData);
+                }
+                
+                return newData;
+            });
+        } catch (error) {
+            console.error(`🚨 Frontend: Error in handleInputChange for field ${field}:`, error);
+            toast({
+                title: "❌ Erro",
+                description: `Erro ao atualizar campo ${field}. Tente novamente.`,
+                variant: "destructive",
+            });
+        }
+    }, [toast]);
 
     // Format CPF input
     const formatCPF = useCallback((value: string) => {
@@ -627,10 +652,11 @@ export default function AGRegistrationPage() {
     useEffect(() => {
         console.log('🔍 Frontend: FormData changed:');
         console.log('🔍 Frontend: role:', formData.role);
+        console.log('🔍 Frontend: uf:', formData.uf, 'type:', typeof formData.uf);
         console.log('🔍 Frontend: selectedEBId:', formData.selectedEBId, 'type:', typeof formData.selectedEBId);
         console.log('🔍 Frontend: selectedCRId:', formData.selectedCRId, 'type:', typeof formData.selectedCRId);
         console.log('🔍 Frontend: comiteLocal:', formData.comiteLocal, 'type:', typeof formData.comiteLocal);
-    }, [formData.role, formData.selectedEBId, formData.selectedCRId, formData.comiteLocal]);
+    }, [formData.role, formData.uf, formData.selectedEBId, formData.selectedCRId, formData.comiteLocal]);
 
     // Update form data when existing registration data loads
     useEffect(() => {
@@ -952,16 +978,51 @@ export default function AGRegistrationPage() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <Label htmlFor="uf">UF *</Label>
-                                        <Select value={formData.uf} onValueChange={(value) => handleInputChange('uf', value)}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione o estado" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {BRAZILIAN_STATES.map((state) => (
-                                                    <SelectItem key={state} value={state}>{state}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <div className="relative">
+                                            <Select 
+                                                value={formData.uf || ""} 
+                                                onValueChange={(value) => {
+                                                    try {
+                                                        console.log(`🔍 Frontend: UF Select onValueChange called with:`, value);
+                                                        if (typeof value === 'string' && BRAZILIAN_STATES.includes(value)) {
+                                                            handleInputChange('uf', value);
+                                                        } else {
+                                                            console.error(`🚨 Frontend: Invalid UF value:`, value);
+                                                            toast({
+                                                                title: "❌ Erro",
+                                                                description: "Estado inválido selecionado.",
+                                                                variant: "destructive",
+                                                            });
+                                                        }
+                                                    } catch (error) {
+                                                        console.error(`🚨 Frontend: Error in UF Select onValueChange:`, error);
+                                                        toast({
+                                                            title: "❌ Erro",
+                                                            description: "Erro ao selecionar estado. Tente novamente.",
+                                                            variant: "destructive",
+                                                        });
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecione o estado" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {BRAZILIAN_STATES.map((state) => {
+                                                        try {
+                                                            return (
+                                                                <SelectItem key={state} value={state}>
+                                                                    {state}
+                                                                </SelectItem>
+                                                            );
+                                                        } catch (error) {
+                                                            console.error(`🚨 Frontend: Error rendering state ${state}:`, error);
+                                                            return null;
+                                                        }
+                                                    })}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                     
                                     <div>
