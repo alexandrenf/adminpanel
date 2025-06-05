@@ -741,8 +741,12 @@ export const getRegistrationAnalytics = query({
     
     activeRegistrations.forEach(reg => {
       // Count by participant ID (for specific EB/CR/Comite tracking)
+      // Store array of registrations per participantId to handle multiple registrations
       if (reg.participantId) {
-        registrationsByParticipantId.set(reg.participantId, reg);
+        if (!registrationsByParticipantId.has(reg.participantId)) {
+          registrationsByParticipantId.set(reg.participantId, []);
+        }
+        registrationsByParticipantId.get(reg.participantId).push(reg);
       }
       
       // Count by role type
@@ -788,9 +792,9 @@ export const getRegistrationAnalytics = query({
         cidade: p.cidade,
         uf: p.uf,
         isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.get(p.participantId) || null,
+        registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null,
         // Add count of registrations from this comitê
-        registrationCount: activeRegistrations.filter(reg => reg.participantId === p.participantId).length
+        registrationCount: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId).length : 0
       }))
     };
 
@@ -807,9 +811,9 @@ export const getRegistrationAnalytics = query({
         cidade: p.cidade,
         uf: p.uf,
         isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.get(p.participantId) || null,
+        registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null,
         // Add count of registrations from this comitê
-        registrationCount: activeRegistrations.filter(reg => reg.participantId === p.participantId).length
+        registrationCount: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId).length : 0
       }))
     };
 
@@ -824,7 +828,7 @@ export const getRegistrationAnalytics = query({
         name: p.name,
         role: p.role,
         isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.get(p.participantId) || null
+        registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null
       }))
     };
 
@@ -839,7 +843,7 @@ export const getRegistrationAnalytics = query({
         name: p.name,
         role: p.role,
         isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.get(p.participantId) || null
+        registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null
       }))
     };
 
@@ -875,6 +879,11 @@ export const getRegistrationAnalytics = query({
       details: otherRegistrations
     };
 
+    // Calculate actual registration counts (not just unique participants who registered)
+    const predefinedRegistrationCount = activeRegistrations.filter(reg => 
+      allPredefinedParticipantIds.has(reg.participantId)
+    ).length;
+
     // Overall summary
     const totalPredefined = uniqueComitesPlenos.size + uniqueComitesNaoPlenos.size + ebs.length + crs.length;
     const totalRegisteredPredefined = comitePlenoStats.registered + comiteNaoPlenoStats.registered + 
@@ -885,9 +894,16 @@ export const getRegistrationAnalytics = query({
       summary: {
         totalPredefinedParticipants: totalPredefined,
         totalRegisteredPredefined: totalRegisteredPredefined,
+        totalPredefinedRegistrations: predefinedRegistrationCount, // Actual count of registrations
         totalOtherRegistrations: otherStats.total,
         totalActiveRegistrations: activeRegistrations.length,
-        overallRegistrationRate: totalPredefined > 0 ? (totalRegisteredPredefined / totalPredefined * 100) : 0
+        overallRegistrationRate: totalPredefined > 0 ? (totalRegisteredPredefined / totalPredefined * 100) : 0,
+        // Add validation that totals match
+        totalValidation: {
+          expected: predefinedRegistrationCount + otherStats.total,
+          actual: activeRegistrations.length,
+          isValid: (predefinedRegistrationCount + otherStats.total) === activeRegistrations.length
+        }
       },
       comitesPlenos: comitePlenoStats,
       comitesNaoPlenos: comiteNaoPlenoStats,
