@@ -675,8 +675,23 @@ export const createFromForm = mutation({
         // This provides flexibility for comitês locais that might participate in multiple assemblies
       } else if (args.personalInfo.role === 'comite_local' && !args.personalInfo.comiteLocal) {
         throw new Error("Please select your Comitê Local to register");
-      } else {
-        // For other participant types, provide a more informative error
+      } 
+      
+      // For SupCo, allow registration without requiring them to be in agParticipants
+      // SupCo members don't need to select a specific position like EB or CR
+      else if (args.personalInfo.role === 'supco') {
+        console.log(`SupCo registration allowed for user: ${args.userId}`);
+        // SupCo can register directly without additional checks
+      }
+      
+      // For other participant types that don't require specific selections, allow registration
+      else if (['comite_aspirante', 'observador_externo', 'alumni'].includes(args.personalInfo.role)) {
+        console.log(`${args.personalInfo.role} registration allowed for user: ${args.userId}`);
+        // These participant types can register directly without additional checks
+      } 
+      
+      else {
+        // For any other unknown participant types, provide an error
         const participantTypeLabel = {
           'comite_aspirante': 'Comitê Aspirante',
           'supco': 'Conselho Supervisor',
