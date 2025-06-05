@@ -5,13 +5,27 @@ import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { Shield, Users, Settings, LogIn, LogOut, Calendar, ArrowRight } from "lucide-react";
+import { Shield, Users, Settings, LogIn, LogOut, Calendar, ArrowRight, MapPin, Clock } from "lucide-react";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { api as convexApi } from "../../convex/_generated/api";
+
+// Utility function to format dates without timezone conversion
+const formatDateWithoutTimezone = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+};
 
 export default function Home() {
   const { data: session } = useSession();
   const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
+  
+  // Query for the next upcoming assembly
+  const nextAssembly = useQuery(convexApi.assemblies?.getNextUpcoming);
 
   useEffect(() => {
     const checkEmail = async () => {
@@ -124,38 +138,77 @@ export default function Home() {
                       <h3 className="text-lg font-semibold text-gray-900 mb-6 text-center">
                         Próxima Assembleia Geral
                       </h3>
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
-                        <div className="flex items-start space-x-4">
-                          <div className="flex-shrink-0">
-                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                              <Calendar className="w-6 h-6 text-blue-600" />
+                      {nextAssembly ? (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+                          <div className="flex items-start space-x-4">
+                            <div className="flex-shrink-0">
+                              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                                <Calendar className="w-6 h-6 text-blue-600" />
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-gray-900 mb-2">AG 2024.2</h4>
-                            <div className="space-y-2">
-                              <p className="text-sm text-gray-700">
-                                <span className="font-medium">Data:</span> 15-20 de Julho, 2024
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <span className="font-medium">Local:</span> São Paulo, SP
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <span className="font-medium">Status:</span>{" "}
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  Inscrições Abertas
-                                </span>
-                              </p>
-                            </div>
-                            <div className="mt-4">
-                              <Link href="/ag" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
-                                Inscrever-se agora
-                                <ArrowRight className="w-4 h-4 ml-1" />
-                              </Link>
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900 mb-2">{nextAssembly.name}</h4>
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2 text-sm text-gray-700">
+                                  <Clock className="w-4 h-4 text-blue-600" />
+                                  <span>
+                                    <span className="font-medium">Data:</span> {formatDateWithoutTimezone(nextAssembly.startDate)} - {formatDateWithoutTimezone(nextAssembly.endDate)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-2 text-sm text-gray-700">
+                                  <MapPin className="w-4 h-4 text-blue-600" />
+                                  <span>
+                                    <span className="font-medium">Local:</span> {nextAssembly.location}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-2 text-sm text-gray-700">
+                                  <Users className="w-4 h-4 text-blue-600" />
+                                  <span>
+                                    <span className="font-medium">Tipo:</span> {nextAssembly.type === "AG" ? "Presencial" : "Online"}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-700">
+                                  <span className="font-medium">Status:</span>{" "}
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    nextAssembly.registrationOpen 
+                                      ? "bg-green-100 text-green-800" 
+                                      : "bg-red-100 text-red-800"
+                                  }`}>
+                                    {nextAssembly.registrationOpen ? "Inscrições Abertas" : "Inscrições Fechadas"}
+                                  </span>
+                                </p>
+                                {nextAssembly.description && (
+                                  <p className="text-sm text-gray-600 mt-2">
+                                    {nextAssembly.description}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="mt-4">
+                                <Link href="/ag" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+                                  {nextAssembly.registrationOpen ? "Inscrever-se agora" : "Ver detalhes"}
+                                  <ArrowRight className="w-4 h-4 ml-1" />
+                                </Link>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-2xl p-6 border border-gray-200">
+                          <div className="text-center">
+                            <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                              <Calendar className="w-6 h-6 text-gray-500" />
+                            </div>
+                            <h4 className="font-semibold text-gray-900 mb-2">Nenhuma AG Programada</h4>
+                            <p className="text-sm text-gray-600 mb-4">
+                              Não há assembleias gerais programadas no momento.
+                            </p>
+                            <Link href="/ag" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+                              Ver todas as assembleias
+                              <ArrowRight className="w-4 h-4 ml-1" />
+                            </Link>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

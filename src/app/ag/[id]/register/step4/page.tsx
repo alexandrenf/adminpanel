@@ -11,6 +11,13 @@ import { Badge } from "../../../../../components/ui/badge";
 import { Textarea } from "../../../../../components/ui/textarea";
 import { Checkbox } from "../../../../../components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "../../../../../components/ui/alert";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "../../../../../components/ui/select";
 import { 
     CreditCard, 
     Upload, 
@@ -292,7 +299,7 @@ export default function AGRegistrationStep4Page() {
     // Handle form submission
     const handleSubmit = useCallback(async () => {
         if (!validateForm()) return;
-
+        
         setIsSubmitting(true);
         try {
             let result;
@@ -344,49 +351,49 @@ export default function AGRegistrationStep4Page() {
                 console.log('✅ Resubmission completed:', actualRegistrationId);
             } else {
                 // Handle new registration
-                const registrationData = {
-                    assemblyId: assemblyId as any,
-                    modalityId: step1Data!.selectedModalityId as any,
+            const registrationData = {
+                assemblyId: assemblyId as any,
+                modalityId: step1Data!.selectedModalityId as any,
                     userId: session!.user!.id,
-                    personalInfo: {
-                        nome: step1Data!.nome,
-                        email: step1Data!.email,
-                        emailSolar: step1Data!.emailSolar,
-                        dataNascimento: step1Data!.dataNascimento,
-                        cpf: step1Data!.cpf,
-                        nomeCracha: step1Data!.nomeCracha,
-                        celular: step1Data!.celular,
-                        uf: step1Data!.uf,
-                        cidade: step1Data!.cidade,
-                        role: step1Data!.role,
-                        comiteLocal: step1Data!.comiteLocal,
-                        comiteAspirante: step1Data!.comiteAspirante,
-                        selectedEBId: step1Data!.selectedEBId,
-                        selectedCRId: step1Data!.selectedCRId,
-                        autorizacaoCompartilhamento: step1Data!.autorizacaoCompartilhamento,
-                    },
-                    additionalInfo: {
-                        experienciaAnterior: "", // Empty since removed
-                        motivacao: "Não especificado", // Default value since removed but still required by API
-                        expectativas: "", // Empty since removed
-                        dietaRestricoes: step2Data!.dietaRestricoes,
-                        alergias: step2Data!.alergias,
-                        medicamentos: step2Data!.medicamentos,
-                        necessidadesEspeciais: step2Data!.necessidadesEspeciais,
-                        restricaoQuarto: step2Data!.restricaoQuarto,
-                        pronomes: step2Data!.pronomes,
-                        contatoEmergenciaNome: step2Data!.contatoEmergenciaNome,
-                        contatoEmergenciaTelefone: step2Data!.contatoEmergenciaTelefone,
-                        outrasObservacoes: step2Data!.outrasObservacoes,
-                        participacaoComites: [], // Empty array since removed
-                        interesseVoluntariado: false, // Default since removed
-                    },
-                    paymentInfo: isPaymentExempt ? {
-                        isPaymentExempt: true,
-                        paymentExemptReason: exemptionReason,
-                    } : undefined,
-                    status: "pending" as const,
-                };
+                personalInfo: {
+                    nome: step1Data!.nome,
+                    email: step1Data!.email,
+                    emailSolar: step1Data!.emailSolar,
+                    dataNascimento: step1Data!.dataNascimento,
+                    cpf: step1Data!.cpf,
+                    nomeCracha: step1Data!.nomeCracha,
+                    celular: step1Data!.celular,
+                    uf: step1Data!.uf,
+                    cidade: step1Data!.cidade,
+                    role: step1Data!.role,
+                    comiteLocal: step1Data!.comiteLocal,
+                    comiteAspirante: step1Data!.comiteAspirante,
+                    selectedEBId: step1Data!.selectedEBId,
+                    selectedCRId: step1Data!.selectedCRId,
+                    autorizacaoCompartilhamento: step1Data!.autorizacaoCompartilhamento,
+                },
+                additionalInfo: {
+                    experienciaAnterior: "", // Empty since removed
+                    motivacao: "Não especificado", // Default value since removed but still required by API
+                    expectativas: "", // Empty since removed
+                    dietaRestricoes: step2Data!.dietaRestricoes,
+                    alergias: step2Data!.alergias,
+                    medicamentos: step2Data!.medicamentos,
+                    necessidadesEspeciais: step2Data!.necessidadesEspeciais,
+                    restricaoQuarto: step2Data!.restricaoQuarto,
+                    pronomes: step2Data!.pronomes,
+                    contatoEmergenciaNome: step2Data!.contatoEmergenciaNome,
+                    contatoEmergenciaTelefone: step2Data!.contatoEmergenciaTelefone,
+                    outrasObservacoes: step2Data!.outrasObservacoes,
+                    participacaoComites: [], // Empty array since removed
+                    interesseVoluntariado: false, // Default since removed
+                },
+                paymentInfo: isPaymentExempt ? {
+                    isPaymentExempt: true,
+                    paymentExemptReason: exemptionReason,
+                } : undefined,
+                status: "pending" as const,
+            };
 
                 result = await createRegistration(registrationData);
                 actualRegistrationId = typeof result === 'string' ? result : result.registrationId;
@@ -429,21 +436,21 @@ export default function AGRegistrationStep4Page() {
                     console.log('✅ Auto-approval email sent successfully');
                 } else {
                     // Send confirmation email for regular registrations/resubmissions
-                    await handleNewRegistration({
+                await handleNewRegistration({
                         registrationId: actualRegistrationId as string,
-                        participantName: step1Data!.nome,
-                        participantEmail: step1Data!.email,
-                        assemblyName: assembly.name,
-                        assemblyLocation: assembly.location,
-                        assemblyStartDate: new Date(assembly.startDate),
-                        assemblyEndDate: new Date(assembly.endDate),
-                        modalityName: selectedModalityData.name,
-                        paymentRequired: selectedModalityData.price > 0,
-                        paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
-                        isPaymentExempt: isPaymentExempt,
-                        paymentExemptReason: exemptionReason
-                    });
-                    console.log('✅ Confirmation email sent successfully');
+                    participantName: step1Data!.nome,
+                    participantEmail: step1Data!.email,
+                    assemblyName: assembly.name,
+                    assemblyLocation: assembly.location,
+                    assemblyStartDate: new Date(assembly.startDate),
+                    assemblyEndDate: new Date(assembly.endDate),
+                    modalityName: selectedModalityData.name,
+                    paymentRequired: selectedModalityData.price > 0,
+                    paymentAmount: selectedModalityData.price > 0 ? selectedModalityData.price / 100 : undefined,
+                    isPaymentExempt: isPaymentExempt,
+                    paymentExemptReason: exemptionReason
+                });
+                console.log('✅ Confirmation email sent successfully');
                 }
             } catch (emailError) {
                 console.error('⚠️ Failed to send email:', emailError);
@@ -743,10 +750,21 @@ export default function AGRegistrationStep4Page() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="space-y-4">
+                                    <div className="space-y-6">
+                                        {/* General Payment Info */}
+                                        {agConfig?.paymentInfo && (
+                                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <h3 className="font-semibold text-blue-900 mb-3">ℹ️ Informações Gerais</h3>
+                                                <div className="whitespace-pre-line text-sm text-blue-800">
+                                                    {agConfig.paymentInfo}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* PIX Payment */}
                                         {agConfig?.pixKey && (
                                             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                                <h3 className="font-semibold text-green-900 mb-3">Dados para Pagamento via PIX</h3>
+                                                <h3 className="font-semibold text-green-900 mb-3">💳 Pagamento via PIX (Recomendado)</h3>
                                                 <div className="space-y-2">
                                                     <div className="flex items-center justify-between">
                                                         <span className="font-medium">Chave PIX:</span>
@@ -779,9 +797,29 @@ export default function AGRegistrationStep4Page() {
                                                 </div>
                                             </div>
                                         )}
+
+                                        {/* Bank Transfer Details */}
+                                        {agConfig?.bankDetails && (
+                                            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                                                <h3 className="font-semibold text-purple-900 mb-3">🏦 Dados Bancários</h3>
+                                                <div className="whitespace-pre-line text-sm text-purple-800">
+                                                    {agConfig.bankDetails}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Payment Instructions */}
+                                        {agConfig?.paymentInstructions && (
+                                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                                <h3 className="font-semibold text-amber-900 mb-3">📋 Instruções Detalhadas</h3>
+                                                <div className="whitespace-pre-line text-sm text-amber-800">
+                                                    {agConfig.paymentInstructions}
+                                                </div>
+                                            </div>
+                                        )}
                                         
                                         {/* Payment Exemption Option */}
-                                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                                             <div className="flex items-start space-x-3">
                                                 <Checkbox
                                                     id="isPaymentExempt"
@@ -792,19 +830,31 @@ export default function AGRegistrationStep4Page() {
                                                     <Label htmlFor="isPaymentExempt" className="font-medium">
                                                         Solicitar Isenção de Pagamento
                                                     </Label>
-                                                    <p className="text-sm text-amber-700 mt-1">
+                                                    <p className="text-sm text-gray-600 mt-1">
                                                         Marque esta opção se você possui direito à isenção de pagamento.
                                                     </p>
                                                     {isPaymentExempt && (
                                                         <div className="mt-3">
                                                             <Label htmlFor="exemptionReason">Motivo da Isenção *</Label>
-                                                            <Textarea
-                                                                id="exemptionReason"
-                                                                value={exemptionReason}
-                                                                onChange={(e) => setExemptionReason(e.target.value)}
-                                                                placeholder="Explique o motivo da solicitação de isenção..."
-                                                                rows={3}
-                                                            />
+                                                            <Select value={exemptionReason} onValueChange={setExemptionReason}>
+                                                                <SelectTrigger className="mt-1">
+                                                                    <SelectValue placeholder="Selecione o motivo da isenção..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="diretoria_executiva">
+                                                                        Faço parte da diretoria executiva em um cargo nacional (EB)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="coordenador_regional">
+                                                                        Sou um Coordenador Regional
+                                                                    </SelectItem>
+                                                                    <SelectItem value="edital_vulnerabilidade">
+                                                                        Fui selecionado pelo edital de vulnerabilidade
+                                                                    </SelectItem>
+                                                                    <SelectItem value="CRED">
+                                                                        Sou Co-Presidente da CRED
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
                                                         </div>
                                                     )}
                                                 </div>
