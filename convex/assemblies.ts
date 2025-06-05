@@ -681,15 +681,59 @@ export const getRegistrationAnalytics = query({
       r.status !== "cancelled" && r.status !== "rejected"
     );
 
-    // Separate participants by type
+    // Separate participants by type - for comitês, use assembly-specific data
     const comitesPlenos = participants.filter(p => 
       p.type === "comite" && p.status === "Pleno"
     );
     const comitesNaoPlenos = participants.filter(p => 
       p.type === "comite" && p.status === "Não-pleno"
     );
-    const ebs = participants.filter(p => p.type === "eb");
-    const crs = participants.filter(p => p.type === "cr");
+    
+    // For EBs and CRs, use global data to match what's available for registration
+    // Get all EB participants from all assemblies
+    const allEbParticipants = await ctx.db
+      .query("agParticipants")
+      .filter((q) => q.eq(q.field("type"), "eb"))
+      .collect();
+    
+    // Get all CR participants from all assemblies  
+    const allCrParticipants = await ctx.db
+      .query("agParticipants")
+      .filter((q) => q.eq(q.field("type"), "cr"))
+      .collect();
+
+    // Create deduplicated maps for EBs and CRs (same logic as getEBs/getCRs)
+    const ebMap = new Map();
+    allEbParticipants.forEach(participant => {
+      if (participant.participantId && participant.participantId.trim()) {
+        const key = participant.participantId.trim();
+        if (!ebMap.has(key)) {
+          ebMap.set(key, {
+            participantId: participant.participantId.trim(),
+            name: participant.name?.trim() || '',
+            role: participant.role?.trim() || '',
+          });
+        }
+      }
+    });
+
+    const crMap = new Map();
+    allCrParticipants.forEach(participant => {
+      if (participant.participantId && participant.participantId.trim()) {
+        const key = participant.participantId.trim();
+        if (!crMap.has(key)) {
+          crMap.set(key, {
+            participantId: participant.participantId.trim(),
+            name: participant.name?.trim() || '',
+            role: participant.role?.trim() || '',
+          });
+        }
+      }
+    });
+
+    // Convert maps to arrays (this matches the data structure from getEBs/getCRs)
+    const ebs = Array.from(ebMap.values()).filter(eb => eb.participantId && eb.participantId.length > 0);
+    const crs = Array.from(crMap.values()).filter(cr => cr.participantId && cr.participantId.length > 0);
 
     // Count registrations by participant type and specific participants
     const registrationsByParticipantId = new Map();
