@@ -11,10 +11,11 @@ import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../../convex/_generated/api";
 
 // Utility function to format dates without timezone conversion
-const formatDateWithoutTimezone = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+const formatDateWithoutTimezone = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
     return `${day}/${month}/${year}`;
 };
 
@@ -171,8 +172,8 @@ export default function QRCodePage() {
 
         // Assembly dates
         ctx.font = '24px Arial';
-        const startDate = formatDateWithoutTimezone(new Date(finalAssembly.startDate));
-        const endDate = formatDateWithoutTimezone(new Date(finalAssembly.endDate));
+        const startDate = formatDateWithoutTimezone(finalAssembly.startDate);
+        const endDate = formatDateWithoutTimezone(finalAssembly.endDate);
         ctx.fillText(`${startDate} - ${endDate}`, canvas.width / 2, 100);
 
         // Assembly location
@@ -335,7 +336,7 @@ export default function QRCodePage() {
                         <div className="text-center">
                             <CardTitle className="text-2xl mb-2">{finalAssembly.name}</CardTitle>
                             <p className="text-blue-100">
-                                {formatDateWithoutTimezone(new Date(finalAssembly.startDate))} - {formatDateWithoutTimezone(new Date(finalAssembly.endDate))}
+                                {formatDateWithoutTimezone(finalAssembly.startDate)} - {formatDateWithoutTimezone(finalAssembly.endDate)}
                             </p>
                             <p className="text-blue-100 text-sm">{finalAssembly.location}</p>
                         </div>
@@ -434,7 +435,7 @@ export default function QRCodePage() {
                                 <div>
                                     <p className="font-semibold">Data</p>
                                     <p className="text-sm text-gray-600">
-                                        {formatDateWithoutTimezone(new Date(finalAssembly.startDate))} - {formatDateWithoutTimezone(new Date(finalAssembly.endDate))}
+                                        {formatDateWithoutTimezone(finalAssembly.startDate)} - {formatDateWithoutTimezone(finalAssembly.endDate)}
                                     </p>
                                 </div>
                             </div>
