@@ -8,6 +8,7 @@ import Navbar from "./_components/Navbar";
 import Loading from "~/app/_components/Loading";
 import { Providers } from "./_components/Providers";
 import { Toaster } from "../components/ui/toaster";
+import Footer from "./_components/Footer";
 
 export const metadata = {
   title: "Portal IFMSA Brazil",
@@ -35,12 +36,15 @@ export default async function RootLayout({
   
   return (
     <html lang="en" className={`${GeistSans.variable}`}>
-      <body>
+      <body className="min-h-screen flex flex-col">
         <Providers session={session}>
           <Navbar />
-          <Suspense fallback={<Loading />}>
-            {children}
-          </Suspense>
+          <div className="flex-grow">
+            <Suspense fallback={<Loading />}>
+              {children}
+            </Suspense>
+          </div>
+          <Footer />
           <Toaster />
         </Providers>
       </body>

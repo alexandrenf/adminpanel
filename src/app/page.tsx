@@ -40,7 +40,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
+    <main className="flex-grow bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
       {/* Background decorative elements */}
       <div className="absolute inset-0 opacity-20">
         <div className="w-full h-full" style={{
@@ -274,14 +274,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Footer */}
-        <footer className="py-6">
-          <div className="container mx-auto px-6 text-center">
-            <p className="text-white/70 text-sm">
-              © 2024 IFMSA Brazil - Portal de Administrador
-            </p>
-          </div>
-        </footer>
       </div>
     </main>
   );
