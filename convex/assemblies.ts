@@ -234,6 +234,29 @@ export const deleteWithRelatedData = mutation({
       await ctx.db.delete(participant._id);
     }
 
+    // Delete all sessions and their attendance records for this assembly
+    const sessions = await ctx.db
+      .query("agSessions")
+      .withIndex("by_assembly")
+      .filter((q) => q.eq(q.field("assemblyId"), args.id))
+      .collect();
+
+    // Delete all attendance records for these sessions
+    for (const session of sessions) {
+      const attendanceRecords = await ctx.db
+        .query("agSessionAttendance")
+        .withIndex("by_session")
+        .filter((q) => q.eq(q.field("sessionId"), session._id))
+        .collect();
+
+      for (const record of attendanceRecords) {
+        await ctx.db.delete(record._id);
+      }
+
+      // Delete the session itself
+      await ctx.db.delete(session._id);
+    }
+
     // Finally, delete the assembly itself
     await ctx.db.delete(args.id);
 
@@ -243,6 +266,7 @@ export const deleteWithRelatedData = mutation({
       deletedModalities: modalities.length,
       deletedParticipants: participants.length,
       deletedFiles: registrationsWithReceipts.length,
+      deletedSessions: sessions.length,
       message: `Assembly "${assembly.name}" and all related data have been permanently deleted.`
     };
   },
