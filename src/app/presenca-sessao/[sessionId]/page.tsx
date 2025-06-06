@@ -85,9 +85,14 @@ export default function SelfAttendancePage() {
 
     useEffect(() => {
         if (sessionData && session?.user?.id) {
+            // Determine participant ID using the same logic as marking attendance
+            const participantId = sessionData.type === "sessao" && userRegistration 
+                ? userRegistration._id 
+                : session.user.id;
+
             // Check if user has already marked attendance with status "present"
             const userAttendance = sessionData.attendanceRecords?.find(
-                (record: any) => record.participantId === (userRegistration?._id || session.user.id) 
+                (record: any) => record.participantId === participantId 
                     && record.attendance === "present"
             );
             setHasMarkedAttendance(!!userAttendance);
