@@ -10,6 +10,8 @@ import { Providers } from "./_components/Providers";
 import { Toaster } from "../components/ui/toaster";
 import Footer from "./_components/Footer";
 import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
+
 
 export const metadata = {
   title: "Portal IFMSA Brazil",
@@ -44,6 +46,7 @@ export default async function RootLayout({
             <Suspense fallback={<Loading />}>
               {children}
               <Analytics />
+              <SpeedInsights />
             </Suspense>
           </div>
           <Footer />
