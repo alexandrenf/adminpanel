@@ -1,3 +1,5 @@
 {
-  "agentCanUpdateSnapshot": true
+  "agentCanUpdateSnapshot": true,
+  "install": "bun install",
+  "start": "bun run dev"
 }

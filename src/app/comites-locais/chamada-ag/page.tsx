@@ -61,6 +61,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import SessionAttendanceManager from "~/app/_components/SessionAttendanceManager";
+import UserAttendanceDashboard from "~/app/_components/UserAttendanceDashboard";
 
 type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
@@ -1794,6 +1795,157 @@ export default function ChamadaAGPage() {
                         </div>
                     </div>
 
+                    {/* Session Selection Panel */}
+                    {!currentSessionId && (
+                        <Card className="shadow-lg border-0 border-l-4 border-l-blue-500">
+                            <CardHeader>
+                                <CardTitle className="flex items-center space-x-2">
+                                    <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                                    <span>Iniciar Nova Sessão</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {/* Assembly Selection */}
+                                <div>
+                                    <Label htmlFor="assembly-select" className="text-base font-semibold">
+                                        Selecione uma Assembleia
+                                    </Label>
+                                    <select
+                                        id="assembly-select"
+                                        value={selectedAssemblyId}
+                                        onChange={(e) => setSelectedAssemblyId(e.target.value)}
+                                        className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">Selecione uma assembleia...</option>
+                                        {assemblies?.map((assembly) => (
+                                            <option key={assembly._id} value={assembly._id}>
+                                                {assembly.name} - {assembly.location}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Active Sessions for Selected Assembly */}
+                                {selectedAssemblyId && activeSessions && activeSessions.length > 0 && (
+                                    <div>
+                                        <Label className="text-base font-semibold">
+                                            Sessões Ativas Disponíveis
+                                        </Label>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                                            {activeSessions.map((session) => (
+                                                <Card 
+                                                    key={session._id} 
+                                                    className="cursor-pointer hover:bg-blue-50 border-blue-200 transition-colors"
+                                                    onClick={() => {
+                                                        setCurrentSessionId(session._id);
+                                                        setCurrentSessionType(session.type as "plenaria" | "sessao");
+                                                        toast({
+                                                            title: "✅ Sessão Selecionada",
+                                                            description: `Entrando na ${session.type === "plenaria" ? "plenária" : "sessão"}: ${session.name}`,
+                                                        });
+                                                    }}
+                                                >
+                                                    <CardContent className="pt-4">
+                                                        <div className="flex items-center space-x-3">
+                                                            {session.type === "plenaria" ? (
+                                                                <Users className="w-5 h-5 text-purple-600" />
+                                                            ) : (
+                                                                <Building className="w-5 h-5 text-blue-600" />
+                                                            )}
+                                                            <div>
+                                                                <h4 className="font-medium text-gray-900">{session.name}</h4>
+                                                                <p className="text-sm text-gray-600">
+                                                                    {session.type === "plenaria" ? "Plenária" : "Sessão"} • 
+                                                                    Criada {new Date(session.createdAt).toLocaleDateString('pt-BR')}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Create New Session Options */}
+                                <div>
+                                    <Label className="text-base font-semibold">
+                                        Ou Criar Nova Sessão
+                                    </Label>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+                                        <Button
+                                            onClick={handleNovaChamada}
+                                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 p-4 h-auto"
+                                        >
+                                            <div className="flex flex-col items-center space-y-2">
+                                                <ClipboardCheck className="w-6 h-6" />
+                                                <span>Chamada Avulsa</span>
+                                                <span className="text-xs opacity-90">Geral independente</span>
+                                            </div>
+                                        </Button>
+                                        
+                                        <Button
+                                            onClick={() => {
+                                                if (!selectedAssemblyId) {
+                                                    toast({
+                                                        title: "❌ Erro",
+                                                        description: "Selecione uma assembleia primeiro.",
+                                                        variant: "destructive",
+                                                    });
+                                                    return;
+                                                }
+                                                setIsSessionDialogOpen(true);
+                                                setChamadaType("plenaria");
+                                            }}
+                                            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 p-4 h-auto"
+                                            disabled={!selectedAssemblyId}
+                                        >
+                                            <div className="flex flex-col items-center space-y-2">
+                                                <Users className="w-6 h-6" />
+                                                <span>Nova Plenária</span>
+                                                <span className="text-xs opacity-90">EBs, CRs e Comitês</span>
+                                            </div>
+                                        </Button>
+                                        
+                                        <Button
+                                            onClick={() => {
+                                                if (!selectedAssemblyId) {
+                                                    toast({
+                                                        title: "❌ Erro",
+                                                        description: "Selecione uma assembleia primeiro.",
+                                                        variant: "destructive",
+                                                    });
+                                                    return;
+                                                }
+                                                setIsSessionDialogOpen(true);
+                                                setChamadaType("sessao");
+                                            }}
+                                            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 p-4 h-auto"
+                                            disabled={!selectedAssemblyId}
+                                        >
+                                            <div className="flex flex-col items-center space-y-2">
+                                                <Building className="w-6 h-6" />
+                                                <span>Nova Sessão</span>
+                                                <span className="text-xs opacity-90">Participantes específicos</span>
+                                            </div>
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Instructions */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <h4 className="font-semibold text-blue-900 mb-2">💡 Como usar:</h4>
+                                    <ul className="text-sm text-blue-800 space-y-1">
+                                        <li>• <strong>Sessões Ativas:</strong> Clique para entrar em uma sessão já criada</li>
+                                        <li>• <strong>Chamada Avulsa:</strong> Para controle geral de presença (independente de AG)</li>
+                                        <li>• <strong>Plenária:</strong> Sessão oficial com todos os tipos de participantes</li>
+                                        <li>• <strong>Sessão:</strong> Para participantes que se inscreveram na AG específica</li>
+                                    </ul>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {/* Action Buttons */}
                     <Card className="shadow-lg border-0">
                         <CardContent className="p-6">
@@ -2156,6 +2308,26 @@ export default function ChamadaAGPage() {
                                 )}
                             </CardContent>
                         </Card>
+                    )}
+
+                    {/* User Attendance Dashboard */}
+                    {currentSessionId && selectedAssemblyId && (
+                        <div className="space-y-6">
+                            <Card className="shadow-lg border-0 border-l-4 border-l-green-500">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center space-x-2">
+                                        <BarChart3 className="w-5 h-5 text-green-600" />
+                                        <span>Meu Dashboard de Presença</span>
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <UserAttendanceDashboard 
+                                        assemblyId={selectedAssemblyId}
+                                        userId={session?.user?.id}
+                                    />
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
 
                     {/* Manual Attendance Management for Current Session */}

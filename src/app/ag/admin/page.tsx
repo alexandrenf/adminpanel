@@ -468,6 +468,15 @@ export default function AGAdminPage() {
     const deleteSession = useMutation(convexApi.agSessions?.deleteSession);
     const reopenSession = useMutation(convexApi.agSessions?.reopenSession);
     const archiveSession = useMutation(convexApi.agSessions?.archiveSession);
+    const createSessionMutation = useMutation(convexApi.agSessions?.createSession);
+
+    // Session creation state
+    const [sessionCreationDialogOpen, setSessionCreationDialogOpen] = useState(false);
+    const [newSessionData, setNewSessionData] = useState({
+        name: "",
+        type: "plenaria" as "plenaria" | "sessao",
+    });
+    const [isCreatingSession, setIsCreatingSession] = useState(false);
 
     // Check IFMSA email on session change
     useEffect(() => {
@@ -911,6 +920,45 @@ export default function AGAdminPage() {
         return baseType;
     };
 
+    // Session management handlers
+    const handleCreateSession = useCallback(async () => {
+        if (!userSession?.user?.id || !selectedAssemblyId || !newSessionData.name.trim()) {
+            toast({
+                title: "❌ Erro",
+                description: "Preencha todos os campos obrigatórios.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setIsCreatingSession(true);
+        try {
+            await createSessionMutation({
+                assemblyId: selectedAssemblyId as any,
+                name: newSessionData.name.trim(),
+                type: newSessionData.type,
+                createdBy: userSession.user.id,
+            });
+            
+            toast({
+                title: "✅ Sessão Criada",
+                description: `${newSessionData.type === "plenaria" ? "Plenária" : "Sessão"} "${newSessionData.name}" criada com sucesso.`,
+            });
+            
+            setSessionCreationDialogOpen(false);
+            setNewSessionData({ name: "", type: "plenaria" });
+        } catch (error) {
+            console.error("Error creating session:", error);
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao criar sessão. Tente novamente.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsCreatingSession(false);
+        }
+    }, [userSession?.user?.id, selectedAssemblyId, newSessionData, createSessionMutation, toast]);
+
     if (!userSession) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
@@ -966,7 +1014,7 @@ export default function AGAdminPage() {
                     </div>
 
                     <Tabs defaultValue="config" className="space-y-6">
-                        <TabsList className="grid w-full grid-cols-5">
+                        <TabsList className="grid w-full grid-cols-6">
                             <TabsTrigger value="config" className="flex items-center space-x-2">
                                 <Settings className="w-4 h-4" />
                                 <span>Configurações</span>
@@ -1241,12 +1289,22 @@ export default function AGAdminPage() {
                                                 onChange={(e) => setSelectedAssemblyId(e.target.value)}
                                                 className="px-3 py-2 border border-gray-300 rounded-md"
                                             >
+                                                <option value="">Selecione uma assembleia...</option>
                                                 {assemblies?.map((assembly) => (
                                                     <option key={assembly._id} value={assembly._id}>
                                                         {assembly.name}
                                                     </option>
                                                 ))}
                                             </select>
+                                            {selectedAssemblyId && (
+                                                <Button 
+                                                    onClick={() => setSessionCreationDialogOpen(true)}
+                                                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                                                >
+                                                    <Plus className="w-4 h-4 mr-2" />
+                                                    Nova Sessão
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                 </CardHeader>
@@ -2149,6 +2207,105 @@ export default function AGAdminPage() {
                                 >
                                     <Trash2 className="w-4 h-4 mr-2" />
                                     Deletar {selectedRegistrations.length} Inscrições
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                    
+                    {/* Session Creation Dialog */}
+                    <Dialog open={sessionCreationDialogOpen} onOpenChange={setSessionCreationDialogOpen}>
+                        <DialogContent className="sm:max-w-[500px]">
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center space-x-2">
+                                    <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                                    <span>Nova Sessão</span>
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Crie uma nova sessão ou plenária para esta assembleia.
+                                </DialogDescription>
+                            </DialogHeader>
+                            
+                            <div className="space-y-6">
+                                <div>
+                                    <Label className="text-base font-semibold">Tipo de Sessão</Label>
+                                    <div className="grid grid-cols-1 gap-3 mt-3">
+                                        <div 
+                                            className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                                                newSessionData.type === "plenaria" 
+                                                    ? "border-purple-500 bg-purple-50" 
+                                                    : "border-gray-200 hover:border-gray-300"
+                                            }`}
+                                            onClick={() => setNewSessionData(prev => ({ ...prev, type: "plenaria" }))}
+                                        >
+                                            <div className="flex items-center space-x-3">
+                                                <Users className="w-5 h-5 text-purple-600" />
+                                                <div>
+                                                    <h3 className="font-semibold text-gray-900">Plenária</h3>
+                                                    <p className="text-sm text-gray-600">Sessão plenária oficial com EBs, CRs e Comitês</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div 
+                                            className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                                                newSessionData.type === "sessao" 
+                                                    ? "border-blue-500 bg-blue-50" 
+                                                    : "border-gray-200 hover:border-gray-300"
+                                            }`}
+                                            onClick={() => setNewSessionData(prev => ({ ...prev, type: "sessao" }))}
+                                        >
+                                            <div className="flex items-center space-x-3">
+                                                <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                                                <div>
+                                                    <h3 className="font-semibold text-gray-900">Sessão</h3>
+                                                    <p className="text-sm text-gray-600">Sessão específica com participantes inscritos</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <Label htmlFor="session-name">Nome da {newSessionData.type === "plenaria" ? "Plenária" : "Sessão"}</Label>
+                                    <Input
+                                        id="session-name"
+                                        value={newSessionData.name}
+                                        onChange={(e) => setNewSessionData(prev => ({ ...prev, name: e.target.value }))}
+                                        placeholder={
+                                            newSessionData.type === "plenaria" 
+                                                ? "Ex: Plenária de Abertura" 
+                                                : "Ex: Sessão Administrativa"
+                                        }
+                                        className="mt-2"
+                                    />
+                                </div>
+                            </div>
+
+                            <DialogFooter>
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => {
+                                        setSessionCreationDialogOpen(false);
+                                        setNewSessionData({ name: "", type: "plenaria" });
+                                    }}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button 
+                                    onClick={handleCreateSession}
+                                    disabled={!newSessionData.name.trim() || isCreatingSession}
+                                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                                >
+                                    {isCreatingSession ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            Criando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Plus className="w-4 h-4 mr-2" />
+                                            Criar {newSessionData.type === "plenaria" ? "Plenária" : "Sessão"}
+                                        </>
+                                    )}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
