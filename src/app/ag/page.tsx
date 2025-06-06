@@ -32,7 +32,6 @@ import {
     UserCheck,
     QrCode
 } from "lucide-react";
-import UserAttendanceDashboard from "~/app/_components/UserAttendanceDashboard";
 import { useQuery, useMutation } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../convex/_generated/api";
@@ -1089,6 +1088,13 @@ export default function AGPage() {
                                 <QrCode className="w-4 h-4 mr-2" />
                                 Ver Crachá Digital
                             </Button>
+                            <Button 
+                                className="w-full bg-emerald-600 hover:bg-emerald-600 text-white"
+                                onClick={() => router.push(`/ag/${assembly._id}/attendance`)}
+                            >
+                                <BarChart3 className="w-4 h-4 mr-2" />
+                                Ver Dashboard de Presença
+                            </Button>
                             {userRegistration?.receiptStorageId && receiptFileUrl && (
                                 <Button 
                                     className="w-full bg-gray-500 hover:bg-gray-600"
@@ -1324,60 +1330,8 @@ export default function AGPage() {
 
     // User View Component  
     function UserView() {
-        const [selectedAssemblyForDashboard, setSelectedAssemblyForDashboard] = useState<string>("");
-        
-        // Set default selected assembly when assemblies load
-        useEffect(() => {
-            if (assemblies && assemblies.length > 0 && !selectedAssemblyForDashboard && assemblies[0]) {
-                setSelectedAssemblyForDashboard(assemblies[0]._id);
-            }
-        }, [assemblies, selectedAssemblyForDashboard]);
-
         return (
             <div className="space-y-6">
-                {/* User Attendance Dashboard */}
-                {session?.user?.id && assemblies && assemblies.length > 0 && (
-                    <Card className="shadow-lg border-0 border-l-4 border-l-green-500">
-                        <CardHeader>
-                            <CardTitle className="flex items-center justify-between">
-                                <div className="flex items-center space-x-2">
-                                    <BarChart3 className="w-5 h-5 text-green-600" />
-                                    <span>Meu Dashboard de Presença</span>
-                                </div>
-                                {assemblies.length > 1 && (
-                                    <Select 
-                                        value={selectedAssemblyForDashboard} 
-                                        onValueChange={setSelectedAssemblyForDashboard}
-                                    >
-                                        <SelectTrigger className="w-64">
-                                            <SelectValue placeholder="Selecione uma assembleia" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {assemblies.map((assembly) => (
-                                                <SelectItem key={assembly._id} value={assembly._id}>
-                                                    {assembly.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {selectedAssemblyForDashboard ? (
-                                <UserAttendanceDashboard 
-                                    assemblyId={selectedAssemblyForDashboard}
-                                    userId={session.user.id}
-                                />
-                            ) : (
-                                <div className="text-center py-8 text-gray-500">
-                                    Selecione uma assembleia para ver suas estatísticas de presença
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
-
                 {/* Available Assemblies */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     {activeAssemblies?.map((assembly) => (
