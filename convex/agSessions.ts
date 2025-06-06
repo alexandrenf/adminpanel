@@ -441,13 +441,17 @@ export const getUserAttendanceStats = query({
     for (const session of sessions) {
       const sessionRecords = attendanceBySession.get(session._id) || [];
       
-      // Find the first matching attendance record for either:
-      // 1. Any of the user's registrations
-      // 2. The user's NextAuth ID (when participantType is "user")
-      const attendanceRecord = sessionRecords.find((record: { participantId: string; participantType: string }) => 
-        registrationIds.has(record.participantId) || 
-        (record.participantType === "user" && record.participantId === args.userId)
+      // First, try to find a record matching any of the user's registrations
+      let attendanceRecord = sessionRecords.find((record: { participantId: string; participantType: string }) => 
+        registrationIds.has(record.participantId)
       );
+
+      // If no registration-based record is found, look for a user-based record
+      if (!attendanceRecord) {
+        attendanceRecord = sessionRecords.find((record: { participantId: string; participantType: string }) => 
+          record.participantType === "user" && record.participantId === args.userId
+        );
+      }
 
       if (attendanceRecord) {
         totalSessions++;
