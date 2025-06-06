@@ -34,6 +34,30 @@ export const getByParticipant = query({
   },
 });
 
+// Get user's registration for a specific assembly
+export const getUserRegistrationForAssembly = query({
+  args: { 
+    userId: v.string(),
+    assemblyId: v.optional(v.id("assemblies")),
+  },
+  handler: async (ctx, args) => {
+    if (!args.assemblyId) {
+      return null;
+    }
+
+    return await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_assembly")
+      .filter((q) => 
+        q.and(
+          q.eq(q.field("assemblyId"), args.assemblyId),
+          q.eq(q.field("registeredBy"), args.userId)
+        )
+      )
+      .first();
+  },
+});
+
 // Check if participant is already registered for an assembly
 export const isRegistered = query({
   args: { 

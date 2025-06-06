@@ -1088,6 +1088,13 @@ export default function AGPage() {
                                 <QrCode className="w-4 h-4 mr-2" />
                                 Ver Crachá Digital
                             </Button>
+                            <Button 
+                                className="w-full bg-emerald-600 hover:bg-emerald-600 text-white"
+                                onClick={() => router.push(`/ag/${assembly._id}/attendance`)}
+                            >
+                                <BarChart3 className="w-4 h-4 mr-2" />
+                                Ver Dashboard de Presença
+                            </Button>
                             {userRegistration?.receiptStorageId && receiptFileUrl && (
                                 <Button 
                                     className="w-full bg-gray-500 hover:bg-gray-600"
