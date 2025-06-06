@@ -309,6 +309,91 @@ export const getSessionAttendance = query({
   },
 });
 
+// Get a single session with attendance records
+export const getSession = query({
+  args: { sessionId: v.id("agSessions") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return null;
+
+    // Get attendance records for this session
+    const attendanceRecords = await ctx.db
+      .query("agSessionAttendance")
+      .withIndex("by_session", (q: any) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    const stats = {
+      total: attendanceRecords.length,
+      present: attendanceRecords.filter(r => r.attendance === "present").length,
+      absent: attendanceRecords.filter(r => r.attendance === "absent").length,
+    };
+
+    return {
+      ...session,
+      attendanceStats: stats,
+      attendanceRecords,
+    };
+  },
+});
+
+// Mark self-attendance for a participant
+export const markSelfAttendance = mutation({
+  args: {
+    sessionId: v.id("agSessions"),
+    participantId: v.string(),
+    participantName: v.string(),
+    participantType: v.string(), // "registration" | "user"
+  },
+  handler: async (ctx, args) => {
+    // Get session first
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) {
+      return { success: false, error: "Sessão não encontrada." };
+    }
+
+    // Check if session is active
+    if (session.status !== "active") {
+      return { success: false, error: "Esta sessão não está mais ativa." };
+    }
+
+    // Check if participant has already marked attendance
+    const existingRecord = await ctx.db
+      .query("agSessionAttendance")
+      .withIndex("by_session", (q: any) => q.eq("sessionId", args.sessionId))
+      .filter((q: any) => q.eq(q.field("participantId"), args.participantId))
+      .first();
+
+    if (existingRecord) {
+      // Update to present if not already present
+      if (existingRecord.attendance !== "present") {
+        await ctx.db.patch(existingRecord._id, {
+          attendance: "present",
+          lastUpdated: Date.now(),
+          lastUpdatedBy: args.participantId,
+        });
+      }
+      return { success: true };
+    }
+
+    // Create new attendance record for self-marked attendance
+    const now = Date.now();
+    await ctx.db.insert("agSessionAttendance", {
+      sessionId: args.sessionId,
+      assemblyId: session.assemblyId, // Can be undefined for avulsa sessions
+      participantId: args.participantId,
+      participantType: args.participantType === "registration" ? "individual" : "user",
+      participantName: args.participantName,
+      attendance: "present",
+      markedAt: now,
+      markedBy: args.participantId, // Self-marked
+      lastUpdated: now,
+      lastUpdatedBy: args.participantId,
+    });
+
+    return { success: true };
+  },
+});
+
 // Get user's attendance across all sessions for an assembly
 export const getUserAttendanceStats = query({
   args: { 
@@ -342,27 +427,35 @@ export const getUserAttendanceStats = query({
       .withIndex("by_assembly", (q: any) => q.eq("assemblyId", args.assemblyId))
       .collect();
 
+    // Get all attendance records for all sessions in a single query
+    const allAttendanceRecords = await ctx.db
+      .query("agSessionAttendance")
+      .withIndex("by_assembly", (q: any) => q.eq("assemblyId", args.assemblyId))
+      .collect();
+
+    // Create a map of session ID to attendance records for quick lookup
+    const attendanceBySession = new Map();
+    for (const record of allAttendanceRecords) {
+      if (!attendanceBySession.has(record.sessionId)) {
+        attendanceBySession.set(record.sessionId, []);
+      }
+      attendanceBySession.get(record.sessionId).push(record);
+    }
+
     const attendanceData = [];
     let totalSessions = 0;
     let attendedSessions = 0;
 
+    // Get registration IDs for quick lookup
+    const registrationIds = new Set(userRegistrations.map(r => r._id.toString()));
+
     for (const session of sessions) {
-      // Look for attendance records using any of the user's registration IDs
-      let attendanceRecord = null;
+      const sessionRecords = attendanceBySession.get(session._id) || [];
       
-      for (const registration of userRegistrations) {
-        const record = await ctx.db
-          .query("agSessionAttendance")
-          .withIndex("by_session_and_participant", (q: any) => 
-            q.eq("sessionId", session._id).eq("participantId", registration._id)
-          )
-          .first();
-        
-        if (record) {
-          attendanceRecord = record;
-          break;
-        }
-      }
+      // Find the first matching attendance record for any of the user's registrations
+      const attendanceRecord = sessionRecords.find((record: { participantId: string }) => 
+        registrationIds.has(record.participantId)
+      );
 
       if (attendanceRecord) {
         totalSessions++;

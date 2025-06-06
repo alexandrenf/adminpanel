@@ -85,18 +85,11 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
     };
 
     const getAttendancePercentageColor = (percentage: number) => {
-        if (percentage >= 80) return "text-green-600";
-        if (percentage >= 60) return "text-yellow-600";
+        if (percentage >= 85) return "text-green-600";
+        if (percentage >= 75) return "text-yellow-600";
         return "text-red-600";
     };
 
-    const getAttendanceGrade = (percentage: number) => {
-        if (percentage >= 90) return { grade: "A", icon: "🏆" };
-        if (percentage >= 80) return { grade: "B", icon: "🥈" };
-        if (percentage >= 70) return { grade: "C", icon: "🥉" };
-        if (percentage >= 60) return { grade: "D", icon: "📚" };
-        return { grade: "F", icon: "❌" };
-    };
 
     if (!assemblyId || !userIdToUse) {
         return (
@@ -126,12 +119,11 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
     }
 
     const { sessions, stats } = attendanceStats;
-    const attendanceGrade = getAttendanceGrade(stats.attendancePercentage);
 
     return (
         <div className="space-y-6">
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Card>
                     <CardContent className="pt-6">
                         <div className="flex items-center space-x-2">
@@ -170,19 +162,7 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center space-x-2">
-                            <Award className="w-8 h-8 text-yellow-600" />
-                            <div>
-                                <p className="text-2xl font-bold text-yellow-600">
-                                    {attendanceGrade.icon} {attendanceGrade.grade}
-                                </p>
-                                <p className="text-sm text-gray-600">Conceito</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                
             </div>
 
             {/* Session Details */}
@@ -248,28 +228,7 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
                     )}
                 </CardContent>
             </Card>
-
-            {/* Performance Tips */}
-            {stats.attendancePercentage < 80 && (
-                <Card className="border-yellow-200 bg-yellow-50">
-                    <CardContent className="pt-6">
-                        <div className="flex items-start space-x-3">
-                            <TrendingUp className="w-6 h-6 text-yellow-600 mt-1" />
-                            <div>
-                                <h4 className="font-medium text-yellow-800 mb-2">
-                                    Dicas para Melhorar sua Presença
-                                </h4>
-                                <ul className="text-sm text-yellow-700 space-y-1">
-                                    <li>• Mantenha seu calendário atualizado com as datas das sessões</li>
-                                    <li>• Configure lembretes para não perder as reuniões</li>
-                                    <li>• Participe ativamente das discussões quando presente</li>
-                                    <li>• Em caso de ausência justificada, comunique antecipadamente</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+            
         </div>
     );
 }

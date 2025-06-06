@@ -470,6 +470,121 @@ export default function AGAdminPage() {
     const archiveSession = useMutation(convexApi.agSessions?.archiveSession);
     const createSessionMutation = useMutation(convexApi.agSessions?.createSession);
 
+    // Download session report functionality
+    const handleDownloadSessionReport = useCallback(async (sessionId: string, sessionName: string, sessionType: string) => {
+        try {
+            // Import XLSX dynamically
+            const XLSX = await import('xlsx');
+            
+            toast({
+                title: "⏳ Gerando relatório...",
+                description: "Por favor, aguarde enquanto o relatório é gerado.",
+            });
+            
+            // For now, create a basic report structure
+            // This will generate an Excel file showing the session information
+            const workbook = XLSX.utils.book_new();
+            
+            // Create basic session info sheet
+            const sessionInfo = [
+                [`Relatório de Presença - ${sessionName}`],
+                [''],
+                [`Tipo de sessão: ${sessionType === 'plenaria' ? 'Plenária' : sessionType === 'sessao' ? 'Sessão' : 'Avulsa'}`],
+                [`ID da sessão: ${sessionId}`],
+                [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
+                [''],
+                ['📋 INSTRUÇÕES:'],
+                ['1. Este relatório foi gerado automaticamente'],
+                ['2. Para obter dados de presença em tempo real, acesse a Chamada AG'],
+                ['3. Use este relatório como base para análises de participação'],
+                [''],
+                ['ℹ️ NOTA:'],
+                ['Para relatórios detalhados com dados de presença em tempo real,'],
+                ['utilize a funcionalidade de download na interface da Chamada AG'],
+                ['após finalizar a sessão.']
+            ];
+            
+            const infoSheet = XLSX.utils.aoa_to_sheet(sessionInfo);
+            XLSX.utils.book_append_sheet(workbook, infoSheet, 'Informações da Sessão');
+            
+            // Create template sheets based on session type
+            if (sessionType === 'plenaria') {
+                // Template for plenária participants
+                const plenTemplate = [
+                    ['Template - Diretoria Executiva'],
+                    [''],
+                    ['Nome', 'Cargo', 'Status de Presença', 'Observações'],
+                    ['[Nome do EB]', '[Cargo]', '[Presente/Ausente/Excluído]', '[Obs]'],
+                    [''],
+                    ['💡 DICA: Utilize a Chamada AG para marcar presenças em tempo real']
+                ];
+                const ebSheet = XLSX.utils.aoa_to_sheet(plenTemplate);
+                XLSX.utils.book_append_sheet(workbook, ebSheet, 'Template EBs');
+                
+                const crTemplate = [
+                    ['Template - Coordenadores Regionais'],
+                    [''],
+                    ['Nome', 'Regional', 'Status de Presença', 'Observações'],
+                    ['[Nome do CR]', '[Regional]', '[Presente/Ausente/Excluído]', '[Obs]'],
+                    [''],
+                    ['💡 DICA: Utilize a Chamada AG para marcar presenças em tempo real']
+                ];
+                const crSheet = XLSX.utils.aoa_to_sheet(crTemplate);
+                XLSX.utils.book_append_sheet(workbook, crSheet, 'Template CRs');
+                
+                const comiteTemplate = [
+                    ['Template - Comitês Locais'],
+                    [''],
+                    ['Comitê', 'Status', 'Status de Presença', 'Observações'],
+                    ['[Nome do Comitê]', '[Pleno/Não-pleno]', '[Presente/Ausente/Excluído]', '[Obs]'],
+                    [''],
+                    ['💡 DICA: Utilize a Chamada AG para marcar presenças em tempo real']
+                ];
+                const comiteSheet = XLSX.utils.aoa_to_sheet(comiteTemplate);
+                XLSX.utils.book_append_sheet(workbook, comiteSheet, 'Template Comitês');
+                
+            } else if (sessionType === 'sessao') {
+                // Template for sessão participants
+                const participantTemplate = [
+                    ['Template - Participantes da Sessão'],
+                    [''],
+                    ['Nome', 'Comitê/Organização', 'Status de Presença', 'Observações'],
+                    ['[Nome do Participante]', '[Comitê/Org]', '[Presente/Ausente/Excluído]', '[Obs]'],
+                    [''],
+                    ['💡 DICA: Utilize a Chamada AG para marcar presenças em tempo real']
+                ];
+                const participantSheet = XLSX.utils.aoa_to_sheet(participantTemplate);
+                XLSX.utils.book_append_sheet(workbook, participantSheet, 'Template Participantes');
+            }
+
+            // Generate and download file
+            const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const fileName = `relatorio-presenca-${sessionType}-${sessionName.replace(/[^a-zA-Z0-9]/g, '_')}-${new Date().toISOString().split('T')[0]}.xlsx`;
+            link.download = fileName;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toast({
+                title: "✅ Relatório baixado",
+                description: `Relatório de presença da ${sessionType === 'plenaria' ? 'plenária' : 'sessão'} "${sessionName}" foi baixado com sucesso.`,
+            });
+            
+        } catch (error) {
+            console.error("Error downloading session report:", error);
+            toast({
+                title: "❌ Erro",
+                description: "Erro ao baixar relatório. Tente novamente.",
+                variant: "destructive",
+            });
+        }
+    }, [toast]);
+
     // Session creation state
     const [sessionCreationDialogOpen, setSessionCreationDialogOpen] = useState(false);
     const [newSessionData, setNewSessionData] = useState({
@@ -1315,6 +1430,7 @@ export default function AGAdminPage() {
                                                 <SessionCard 
                                                     key={session._id} 
                                                     session={session}
+                                                    onDownloadReport={handleDownloadSessionReport}
                                                     onDelete={async (sessionId: string) => {
                                                         if (window.confirm("Tem certeza que deseja deletar esta sessão? Esta ação não pode ser desfeita.")) {
                                                             try {
@@ -2456,11 +2572,12 @@ function ModalityCard({ modality, onEdit, onDelete }: {
 } 
 
 // SessionCard Component
-function SessionCard({ session, onDelete, onReopen, onArchive }: { 
+function SessionCard({ session, onDelete, onReopen, onArchive, onDownloadReport }: { 
     session: any; 
     onDelete: (sessionId: string) => void; 
     onReopen: (sessionId: string) => void; 
     onArchive: (sessionId: string) => void; 
+    onDownloadReport: (sessionId: string, sessionName: string, sessionType: string) => void;
 }) {
     const getSessionTypeIcon = (type: string) => {
         switch (type) {
@@ -2522,6 +2639,16 @@ function SessionCard({ session, onDelete, onReopen, onArchive }: {
                     </div>
                     
                     <div className="flex space-x-2 ml-4">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onDownloadReport(session._id, session.name, session.type)}
+                            className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                            title="Baixar Relatório de Presença"
+                        >
+                            <Download className="w-3 h-3 mr-1" />
+                            Relatório
+                        </Button>
                         {session.status === "active" ? (
                             <Button
                                 size="sm"
