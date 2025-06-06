@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import PrecisaLogin from "./PrecisaLogin";
+import PrettyLoading from "~/components/ui/PrettyLoading";
 
 interface IfmsaEmailWrapperProps {
   children: React.ReactNode;
@@ -23,7 +24,7 @@ export default function IfmsaEmailWrapper({ children, fallback }: IfmsaEmailWrap
   }, [session]);
 
   if (isIfmsaEmail === null) {
-    return <div>Loading...</div>;
+    return <PrettyLoading />;
   }
 
   if (!isIfmsaEmail) {

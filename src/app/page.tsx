@@ -10,6 +10,7 @@ import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api as convexApi } from "../../convex/_generated/api";
+import PrettyLoading from "~/components/ui/PrettyLoading";
 
 // Utility function to format dates without timezone conversion
 const formatDateWithoutTimezone = (timestamp: number): string => {
@@ -36,7 +37,7 @@ export default function Home() {
   }, [session]);
 
   if (isIfmsaEmail === null) {
-    return <div>Loading...</div>;
+    return <PrettyLoading />;
   }
 
   return (
