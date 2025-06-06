@@ -313,9 +313,29 @@ export const getSessionAttendance = query({
 export const getUserAttendanceStats = query({
   args: { 
     assemblyId: v.id("assemblies"),
-    userId: v.string(), // Registration ID or participant identifier
+    userId: v.string(), // NextAuth user ID
   },
   handler: async (ctx, args) => {
+    // First, find the user's registration(s) for this assembly
+    // This will give us the registration ID used in attendance records
+    const userRegistrations = await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_assembly", (q: any) => q.eq("assemblyId", args.assemblyId))
+      .filter((q: any) => q.eq(q.field("registeredBy"), args.userId))
+      .collect();
+
+    if (userRegistrations.length === 0) {
+      // User has no registrations for this assembly
+      return {
+        sessions: [],
+        stats: {
+          totalSessions: 0,
+          attendedSessions: 0,
+          attendancePercentage: 0,
+        },
+      };
+    }
+
     // Get all sessions for this assembly
     const sessions = await ctx.db
       .query("agSessions")
@@ -327,12 +347,22 @@ export const getUserAttendanceStats = query({
     let attendedSessions = 0;
 
     for (const session of sessions) {
-      const attendanceRecord = await ctx.db
-        .query("agSessionAttendance")
-        .withIndex("by_session_and_participant", (q: any) => 
-          q.eq("sessionId", session._id).eq("participantId", args.userId)
-        )
-        .first();
+      // Look for attendance records using any of the user's registration IDs
+      let attendanceRecord = null;
+      
+      for (const registration of userRegistrations) {
+        const record = await ctx.db
+          .query("agSessionAttendance")
+          .withIndex("by_session_and_participant", (q: any) => 
+            q.eq("sessionId", session._id).eq("participantId", registration._id)
+          )
+          .first();
+        
+        if (record) {
+          attendanceRecord = record;
+          break;
+        }
+      }
 
       if (attendanceRecord) {
         totalSessions++;

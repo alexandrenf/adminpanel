@@ -61,7 +61,6 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import SessionAttendanceManager from "~/app/_components/SessionAttendanceManager";
-import UserAttendanceDashboard from "~/app/_components/UserAttendanceDashboard";
 
 type AttendanceState = "present" | "absent" | "not-counting" | "excluded";
 
@@ -2310,25 +2309,7 @@ export default function ChamadaAGPage() {
                         </Card>
                     )}
 
-                    {/* User Attendance Dashboard */}
-                    {currentSessionId && selectedAssemblyId && (
-                        <div className="space-y-6">
-                            <Card className="shadow-lg border-0 border-l-4 border-l-green-500">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center space-x-2">
-                                        <BarChart3 className="w-5 h-5 text-green-600" />
-                                        <span>Meu Dashboard de Presença</span>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <UserAttendanceDashboard 
-                                        assemblyId={selectedAssemblyId}
-                                        userId={session?.user?.id}
-                                    />
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
+
 
                     {/* Manual Attendance Management for Current Session */}
                     {currentSessionId && currentSessionData && (
