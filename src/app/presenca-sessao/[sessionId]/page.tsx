@@ -22,6 +22,7 @@ export default function SelfAttendancePage() {
     const [hasMarkedAttendance, setHasMarkedAttendance] = useState(false);
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
+    const [currentUrl, setCurrentUrl] = useState<string>('');
 
     // Get session data
     const sessionData = useQuery(api.agSessions.getSession, { 
@@ -37,13 +38,17 @@ export default function SelfAttendancePage() {
     // Mutation to mark attendance
     const markAttendance = useMutation(api.agSessions.markSelfAttendance);
 
-    // Get current page URL for QR code
-    const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
-
     // All useEffect hooks must be called before any early returns
+    // Set current URL
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setCurrentUrl(window.location.href);
+        }
+    }, []);
+
     // Generate QR code
     useEffect(() => {
-        if (currentUrl) {
+        if (currentUrl && currentUrl.length > 0) {
             QRCodeLib.toDataURL(currentUrl, {
                 width: 200,
                 margin: 2,
