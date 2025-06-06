@@ -12,11 +12,14 @@ import {
     BarChart3,
     Calendar,
     Award,
-    TrendingUp
+    TrendingUp,
+    AlertCircle,
+    RefreshCw
 } from "lucide-react";
 import { useQuery } from "convex/react";
 import { useSession } from "next-auth/react";
 import { api as convexApi } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 
 interface UserAttendanceDashboardProps {
     assemblyId?: string;
@@ -31,13 +34,10 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
     const attendanceStats = useQuery(
         convexApi.agSessions?.getUserAttendanceStats,
         assemblyId && userIdToUse ? { 
-            assemblyId: assemblyId as any, 
+            assemblyId: assemblyId as Id<"assemblies">, 
             userId: userIdToUse 
         } : "skip"
     );
-
-    // Get all assemblies to show global stats
-    const assemblies = useQuery(convexApi.assemblies?.getAll);
 
     const getStatusIcon = (attendance: string) => {
         switch (attendance) {
@@ -90,6 +90,11 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
         return "text-red-600";
     };
 
+    // Format attendance percentage with proper handling of zero sessions
+    const formatAttendancePercentage = (percentage: number) => {
+        if (percentage === 0) return "0.0";
+        return percentage.toFixed(1);
+    };
 
     if (!assemblyId || !userIdToUse) {
         return (
@@ -107,7 +112,7 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
         );
     }
 
-    if (!attendanceStats) {
+    if (attendanceStats === undefined) {
         return (
             <Card>
                 <CardContent className="text-center py-12">
@@ -118,67 +123,103 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
         );
     }
 
+    if (attendanceStats === null) {
+        return (
+            <Card>
+                <CardContent className="text-center py-12">
+                    <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-red-800 mb-2">
+                        Erro ao Carregar Dados
+                    </h3>
+                    <p className="text-red-600 mb-4">
+                        Não foi possível carregar os dados de presença. Por favor, tente novamente.
+                    </p>
+                    <Button
+                        onClick={() => window.location.reload()}
+                        variant="outline"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                    >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Tentar Novamente
+                    </Button>
+                </CardContent>
+            </Card>
+        );
+    }
+
     const { sessions, stats } = attendanceStats;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6" role="region" aria-label="Dashboard de Presença">
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <section aria-label="Resumo de Estatísticas" className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Card>
                     <CardContent className="pt-6">
-                        <div className="flex items-center space-x-2">
-                            <Calendar className="w-8 h-8 text-blue-600" />
+                        <article aria-label="Total de Sessões" className="flex items-center space-x-2">
+                            <Calendar className="w-8 h-8 text-blue-600" aria-hidden="true" />
                             <div>
-                                <p className="text-2xl font-bold text-blue-600">{stats.totalSessions}</p>
+                                <p 
+                                    className="text-2xl font-bold text-blue-600"
+                                    aria-label={`Total de ${stats.totalSessions} sessões`}
+                                >
+                                    {stats.totalSessions}
+                                </p>
                                 <p className="text-sm text-gray-600">Total de Sessões</p>
                             </div>
-                        </div>
+                        </article>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardContent className="pt-6">
-                        <div className="flex items-center space-x-2">
-                            <CheckCircle className="w-8 h-8 text-green-600" />
+                        <article aria-label="Sessões com Presença" className="flex items-center space-x-2">
+                            <CheckCircle className="w-8 h-8 text-green-600" aria-hidden="true" />
                             <div>
-                                <p className="text-2xl font-bold text-green-600">{stats.attendedSessions}</p>
+                                <p 
+                                    className="text-2xl font-bold text-green-600"
+                                    aria-label={`${stats.attendedSessions} sessões com presença`}
+                                >
+                                    {stats.attendedSessions}
+                                </p>
                                 <p className="text-sm text-gray-600">Presenças</p>
                             </div>
-                        </div>
+                        </article>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardContent className="pt-6">
-                        <div className="flex items-center space-x-2">
-                            <TrendingUp className="w-8 h-8 text-purple-600" />
+                        <article aria-label="Taxa de Presença" className="flex items-center space-x-2">
+                            <TrendingUp className="w-8 h-8 text-purple-600" aria-hidden="true" />
                             <div>
-                                <p className={`text-2xl font-bold ${getAttendancePercentageColor(stats.attendancePercentage)}`}>
-                                    {stats.attendancePercentage.toFixed(1)}%
+                                <p 
+                                    className={`text-2xl font-bold ${getAttendancePercentageColor(stats.attendancePercentage)}`}
+                                    aria-label={`Taxa de presença de ${formatAttendancePercentage(stats.attendancePercentage)}%`}
+                                >
+                                    {formatAttendancePercentage(stats.attendancePercentage)}%
                                 </p>
                                 <p className="text-sm text-gray-600">Taxa de Presença</p>
                             </div>
-                        </div>
+                        </article>
                     </CardContent>
                 </Card>
-
-                
-            </div>
+            </section>
 
             {/* Session Details */}
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
-                        <BarChart3 className="w-5 h-5 text-blue-600" />
+                        <BarChart3 className="w-5 h-5 text-blue-600" aria-hidden="true" />
                         <span>Histórico de Sessões</span>
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     {sessions.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-3" role="list" aria-label="Lista de Sessões">
                             {sessions.map((session) => (
                                 <div 
                                     key={session.sessionId}
+                                    role="listitem"
                                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
                                 >
                                     <div className="flex items-center space-x-3">
@@ -218,8 +259,8 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
                             ))}
                         </div>
                     ) : (
-                        <div className="text-center py-8">
-                            <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                        <div className="text-center py-8" role="status" aria-label="Nenhuma sessão encontrada">
+                            <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-2" aria-hidden="true" />
                             <p className="text-gray-500">Nenhuma sessão encontrada</p>
                             <p className="text-sm text-gray-400">
                                 Quando você participar de sessões, elas aparecerão aqui.
@@ -228,7 +269,6 @@ export default function UserAttendanceDashboard({ assemblyId, userId }: UserAtte
                     )}
                 </CardContent>
             </Card>
-            
         </div>
     );
 }

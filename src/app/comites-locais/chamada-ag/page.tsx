@@ -31,7 +31,9 @@ import {
     Smartphone,
     RotateCcw,
     BarChart3,
-    Clock
+    Clock,
+    Info,
+    AlertCircle
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useQuery, useMutation } from "convex/react";
@@ -276,6 +278,23 @@ export default function ChamadaAGPage() {
         convexApi.assemblies?.getComitesLocaisWithStatus, 
         currentSessionType === "plenaria" && selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
     );
+
+    // Generate QR code for current session self-attendance - MUST be before early returns
+    useEffect(() => {
+        if (currentSessionId && (currentSessionType === "plenaria" || currentSessionType === "sessao")) {
+            const selfAttendanceUrl = `${window.location.origin}/presenca-sessao/${currentSessionId}`;
+            QRCode.toDataURL(selfAttendanceUrl, {
+                width: 192, // 48 * 4 for w-48
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            }).then(setCurrentSessionQrCode);
+        } else {
+            setCurrentSessionQrCode("");
+        }
+    }, [currentSessionId, currentSessionType]);
 
     useEffect(() => {
         if (ebData) {
@@ -1662,22 +1681,7 @@ export default function ChamadaAGPage() {
         }
     };
 
-    // Generate QR code for current session self-attendance
-    useEffect(() => {
-        if (currentSessionId && (currentSessionType === "plenaria" || currentSessionType === "sessao")) {
-            const selfAttendanceUrl = `${window.location.origin}/presenca-sessao/${currentSessionId}`;
-            QRCode.toDataURL(selfAttendanceUrl, {
-                width: 192, // 48 * 4 for w-48
-                margin: 2,
-                color: {
-                    dark: '#000000',
-                    light: '#FFFFFF'
-                }
-            }).then(setCurrentSessionQrCode);
-        } else {
-            setCurrentSessionQrCode("");
-        }
-    }, [currentSessionId, currentSessionType]);
+
 
     if (loading || isLoadingNovaAG) {
         return (
@@ -1844,43 +1848,62 @@ export default function ChamadaAGPage() {
                                 </div>
 
                                 {/* Active Sessions for Selected Assembly */}
-                                {selectedAssemblyId && activeSessions && activeSessions.length > 0 && (
+                                {selectedAssemblyId && (
                                     <div>
                                         <Label className="text-base font-semibold">
                                             Sessões Ativas Disponíveis
                                         </Label>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                                            {activeSessions.map((session) => (
-                                                <Card 
-                                                    key={session._id} 
-                                                    className="cursor-pointer hover:bg-blue-50 border-blue-200 transition-colors"
-                                                    onClick={() => {
-                                                        setCurrentSessionId(session._id);
-                                                        setCurrentSessionType(session.type as "plenaria" | "sessao");
-                                                        toast({
-                                                            title: "✅ Sessão Selecionada",
-                                                            description: `Entrando na ${session.type === "plenaria" ? "plenária" : "sessão"}: ${session.name}`,
-                                                        });
-                                                    }}
-                                                >
-                                                    <CardContent className="pt-4">
-                                                        <div className="flex items-center space-x-3">
-                                                            {session.type === "plenaria" ? (
-                                                                <Users className="w-5 h-5 text-purple-600" />
-                                                            ) : (
-                                                                <Building className="w-5 h-5 text-blue-600" />
-                                                            )}
-                                                            <div>
-                                                                <h4 className="font-medium text-gray-900">{session.name}</h4>
-                                                                <p className="text-sm text-gray-600">
-                                                                    {session.type === "plenaria" ? "Plenária" : "Sessão"} • 
-                                                                    Criada {new Date(session.createdAt).toLocaleDateString('pt-BR')}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            ))}
+                                        <div className="mt-2">
+                                            {activeSessions === undefined ? (
+                                                <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg">
+                                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                                                    <span className="text-gray-600">Carregando sessões...</span>
+                                                </div>
+                                            ) : activeSessions === null ? (
+                                                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                                                    <AlertCircle className="w-5 h-5 inline-block mr-2" />
+                                                    Erro ao carregar sessões. Tente novamente.
+                                                </div>
+                                            ) : activeSessions.length === 0 ? (
+                                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
+                                                    <Info className="w-5 h-5 inline-block mr-2" />
+                                                    Nenhuma sessão ativa encontrada.
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {activeSessions.map((session) => (
+                                                        <Card 
+                                                            key={session._id} 
+                                                            className="cursor-pointer hover:bg-blue-50 border-blue-200 transition-colors"
+                                                            onClick={() => {
+                                                                setCurrentSessionId(session._id);
+                                                                setCurrentSessionType(session.type as "plenaria" | "sessao");
+                                                                toast({
+                                                                    title: "✅ Sessão Selecionada",
+                                                                    description: `Entrando na ${session.type === "plenaria" ? "plenária" : "sessão"}: ${session.name}`,
+                                                                });
+                                                            }}
+                                                        >
+                                                            <CardContent className="pt-4">
+                                                                <div className="flex items-center space-x-3">
+                                                                    {session.type === "plenaria" ? (
+                                                                        <Users className="w-5 h-5 text-purple-600" />
+                                                                    ) : (
+                                                                        <Building className="w-5 h-5 text-blue-600" />
+                                                                    )}
+                                                                    <div>
+                                                                        <h4 className="font-medium text-gray-900">{session.name}</h4>
+                                                                        <p className="text-sm text-gray-600">
+                                                                            {session.type === "plenaria" ? "Plenária" : "Sessão"} • 
+                                                                            Criada {new Date(session.createdAt).toLocaleDateString('pt-BR')}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </CardContent>
+                                                        </Card>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}

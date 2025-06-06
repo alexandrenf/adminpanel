@@ -342,7 +342,7 @@ export const markSelfAttendance = mutation({
     sessionId: v.id("agSessions"),
     participantId: v.string(),
     participantName: v.string(),
-    participantType: v.string(), // "registration" | "user"
+    participantType: v.string(), // "individual" | "user" - "individual" for registered participants, "user" for direct users
   },
   handler: async (ctx, args) => {
     // Get session first
@@ -381,7 +381,7 @@ export const markSelfAttendance = mutation({
       sessionId: args.sessionId,
       assemblyId: session.assemblyId, // Can be undefined for avulsa sessions
       participantId: args.participantId,
-      participantType: args.participantType === "registration" ? "individual" : "user",
+      participantType: args.participantType, // Now using consistent types directly
       participantName: args.participantName,
       attendance: "present",
       markedAt: now,
@@ -405,21 +405,10 @@ export const getUserAttendanceStats = query({
     // This will give us the registration ID used in attendance records
     const userRegistrations = await ctx.db
       .query("agRegistrations")
-      .withIndex("by_assembly", (q: any) => q.eq("assemblyId", args.assemblyId))
-      .filter((q: any) => q.eq(q.field("registeredBy"), args.userId))
+      .withIndex("by_assembly_and_registeredBy", (q: any) => 
+        q.eq("assemblyId", args.assemblyId).eq("registeredBy", args.userId)
+      )
       .collect();
-
-    if (userRegistrations.length === 0) {
-      // User has no registrations for this assembly
-      return {
-        sessions: [],
-        stats: {
-          totalSessions: 0,
-          attendedSessions: 0,
-          attendancePercentage: 0,
-        },
-      };
-    }
 
     // Get all sessions for this assembly
     const sessions = await ctx.db
@@ -452,9 +441,12 @@ export const getUserAttendanceStats = query({
     for (const session of sessions) {
       const sessionRecords = attendanceBySession.get(session._id) || [];
       
-      // Find the first matching attendance record for any of the user's registrations
-      const attendanceRecord = sessionRecords.find((record: { participantId: string }) => 
-        registrationIds.has(record.participantId)
+      // Find the first matching attendance record for either:
+      // 1. Any of the user's registrations
+      // 2. The user's NextAuth ID (when participantType is "user")
+      const attendanceRecord = sessionRecords.find((record: { participantId: string; participantType: string }) => 
+        registrationIds.has(record.participantId) || 
+        (record.participantType === "user" && record.participantId === args.userId)
       );
 
       if (attendanceRecord) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -10,12 +10,12 @@ import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Badge } from "../../../components/ui/badge";
 import { useToast } from "../../../hooks/use-toast";
-import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 import { CheckCircle, XCircle, Clock, Users, Building, QrCode, ExternalLink, Copy, AlertCircle } from "lucide-react";
 import QRCodeLib from 'qrcode';
 
 export default function SelfAttendancePage() {
     const { sessionId } = useParams() as { sessionId: string };
+    const router = useRouter();
     const { data: session } = useSession();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +40,7 @@ export default function SelfAttendancePage() {
     // Get current page URL for QR code
     const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
 
+    // All useEffect hooks must be called before any early returns
     // Generate QR code
     useEffect(() => {
         if (currentUrl) {
@@ -57,8 +58,18 @@ export default function SelfAttendancePage() {
     useEffect(() => {
         const checkEmail = async () => {
             if (session) {
-                const result = await isIfmsaEmailSession(session);
-                setIsIfmsaEmail(result);
+                try {
+                    const response = await fetch('/api/check-ifmsa-email');
+                    if (response.ok) {
+                        const data = await response.json();
+                        setIsIfmsaEmail(data.isIfmsaEmail);
+                    } else {
+                        setIsIfmsaEmail(false);
+                    }
+                } catch (error) {
+                    console.error('Error checking IFMSA email:', error);
+                    setIsIfmsaEmail(false);
+                }
             } else {
                 setIsIfmsaEmail(false);
             }
@@ -119,7 +130,7 @@ export default function SelfAttendancePage() {
                 sessionId: sessionId as Id<"agSessions">,
                 participantId,
                 participantName: session.user.name || "Participante",
-                participantType: sessionData.type === "sessao" ? "registration" : "user"
+                participantType: sessionData.type === "sessao" ? "individual" : "user"
             });
 
             if (result.success) {
@@ -146,12 +157,21 @@ export default function SelfAttendancePage() {
         }
     };
 
-    const handleCopyLink = () => {
-        navigator.clipboard.writeText(currentUrl);
-        toast({
-            title: "✅ Link copiado!",
-            description: "Link da sessão copiado para a área de transferência.",
-        });
+    const handleCopyLink = async () => {
+        try {
+            await navigator.clipboard.writeText(currentUrl);
+            toast({
+                title: "✅ Link copiado!",
+                description: "Link da sessão copiado para a área de transferência.",
+            });
+        } catch (error) {
+            console.error("Failed to copy link:", error);
+            toast({
+                title: "❌ Erro ao copiar",
+                description: "Não foi possível copiar o link. Por favor, tente novamente ou copie manualmente.",
+                variant: "destructive",
+            });
+        }
     };
 
     if (!sessionData) {
@@ -293,7 +313,7 @@ export default function SelfAttendancePage() {
                                         Você precisa estar logado para marcar presença.
                                     </p>
                                     <Button
-                                        onClick={() => window.location.href = "/api/auth/signin"}
+                                        onClick={() => router.push("/api/auth/signin")}
                                         className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                                     >
                                         Fazer Login
