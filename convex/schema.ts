@@ -159,7 +159,8 @@ export default defineSchema({
     .index("by_participant", ["participantId"])
     .index("by_status", ["status"])
     .index("by_assembly_and_status", ["assemblyId", "status"])
-    .index("by_modality", ["modalityId"]),
+    .index("by_modality", ["modalityId"])
+    .index("by_assembly_and_registeredBy", ["assemblyId", "registeredBy"]),
 
   agParticipants: defineTable({
     assemblyId: v.id("assemblies"),

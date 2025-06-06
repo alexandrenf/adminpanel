@@ -31,7 +31,9 @@ import {
     Smartphone,
     RotateCcw,
     BarChart3,
-    Clock
+    Clock,
+    Info,
+    AlertCircle
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useQuery, useMutation } from "convex/react";
@@ -158,6 +160,8 @@ export default function ChamadaAGPage() {
     const [isQrReadersDialogOpen, setIsQrReadersDialogOpen] = useState(false);
     const [newReaderName, setNewReaderName] = useState("");
     const [isCreatingReader, setIsCreatingReader] = useState(false);
+    const [isSelfAttendanceQrOpen, setIsSelfAttendanceQrOpen] = useState(false);
+    const [currentSessionQrCode, setCurrentSessionQrCode] = useState<string>("");
 
     // Session QR Reader state
     const [isSessionQrDialogOpen, setIsSessionQrDialogOpen] = useState(false);
@@ -274,6 +278,23 @@ export default function ChamadaAGPage() {
         convexApi.assemblies?.getComitesLocaisWithStatus, 
         currentSessionType === "plenaria" && selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
     );
+
+    // Generate QR code for current session self-attendance - MUST be before early returns
+    useEffect(() => {
+        if (currentSessionId && (currentSessionType === "plenaria" || currentSessionType === "sessao")) {
+            const selfAttendanceUrl = `${window.location.origin}/presenca-sessao/${currentSessionId}`;
+            QRCode.toDataURL(selfAttendanceUrl, {
+                width: 192, // 48 * 4 for w-48
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            }).then(setCurrentSessionQrCode);
+        } else {
+            setCurrentSessionQrCode("");
+        }
+    }, [currentSessionId, currentSessionType]);
 
     useEffect(() => {
         if (ebData) {
@@ -1660,6 +1681,8 @@ export default function ChamadaAGPage() {
         }
     };
 
+
+
     if (loading || isLoadingNovaAG) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -1793,6 +1816,176 @@ export default function ChamadaAGPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Session Selection Panel */}
+                    {!currentSessionId && (
+                        <Card className="shadow-lg border-0 border-l-4 border-l-blue-500">
+                            <CardHeader>
+                                <CardTitle className="flex items-center space-x-2">
+                                    <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                                    <span>Iniciar Nova Sessão</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {/* Assembly Selection */}
+                                <div>
+                                    <Label htmlFor="assembly-select" className="text-base font-semibold">
+                                        Selecione uma Assembleia
+                                    </Label>
+                                    <select
+                                        id="assembly-select"
+                                        value={selectedAssemblyId}
+                                        onChange={(e) => setSelectedAssemblyId(e.target.value)}
+                                        className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">Selecione uma assembleia...</option>
+                                        {assemblies?.map((assembly) => (
+                                            <option key={assembly._id} value={assembly._id}>
+                                                {assembly.name} - {assembly.location}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Active Sessions for Selected Assembly */}
+                                {selectedAssemblyId && (
+                                    <div>
+                                        <Label className="text-base font-semibold">
+                                            Sessões Ativas Disponíveis
+                                        </Label>
+                                        <div className="mt-2">
+                                            {activeSessions === undefined ? (
+                                                <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg">
+                                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                                                    <span className="text-gray-600">Carregando sessões...</span>
+                                                </div>
+                                            ) : activeSessions === null ? (
+                                                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                                                    <AlertCircle className="w-5 h-5 inline-block mr-2" />
+                                                    Erro ao carregar sessões. Tente novamente.
+                                                </div>
+                                            ) : activeSessions.length === 0 ? (
+                                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
+                                                    <Info className="w-5 h-5 inline-block mr-2" />
+                                                    Nenhuma sessão ativa encontrada.
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {activeSessions.map((session) => (
+                                                        <Card 
+                                                            key={session._id} 
+                                                            className="cursor-pointer hover:bg-blue-50 border-blue-200 transition-colors"
+                                                            onClick={() => {
+                                                                setCurrentSessionId(session._id);
+                                                                setCurrentSessionType(session.type as "plenaria" | "sessao");
+                                                                toast({
+                                                                    title: "✅ Sessão Selecionada",
+                                                                    description: `Entrando na ${session.type === "plenaria" ? "plenária" : "sessão"}: ${session.name}`,
+                                                                });
+                                                            }}
+                                                        >
+                                                            <CardContent className="pt-4">
+                                                                <div className="flex items-center space-x-3">
+                                                                    {session.type === "plenaria" ? (
+                                                                        <Users className="w-5 h-5 text-purple-600" />
+                                                                    ) : (
+                                                                        <Building className="w-5 h-5 text-blue-600" />
+                                                                    )}
+                                                                    <div>
+                                                                        <h4 className="font-medium text-gray-900">{session.name}</h4>
+                                                                        <p className="text-sm text-gray-600">
+                                                                            {session.type === "plenaria" ? "Plenária" : "Sessão"} • 
+                                                                            Criada {new Date(session.createdAt).toLocaleDateString('pt-BR')}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </CardContent>
+                                                        </Card>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Create New Session Options */}
+                                <div>
+                                    <Label className="text-base font-semibold">
+                                        Ou Criar Nova Sessão
+                                    </Label>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+                                        <Button
+                                            onClick={handleNovaChamada}
+                                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 p-4 h-auto"
+                                        >
+                                            <div className="flex flex-col items-center space-y-2">
+                                                <ClipboardCheck className="w-6 h-6" />
+                                                <span>Chamada Avulsa</span>
+                                                <span className="text-xs opacity-90">Geral independente</span>
+                                            </div>
+                                        </Button>
+                                        
+                                        <Button
+                                            onClick={() => {
+                                                if (!selectedAssemblyId) {
+                                                    toast({
+                                                        title: "❌ Erro",
+                                                        description: "Selecione uma assembleia primeiro.",
+                                                        variant: "destructive",
+                                                    });
+                                                    return;
+                                                }
+                                                setIsSessionDialogOpen(true);
+                                                setChamadaType("plenaria");
+                                            }}
+                                            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 p-4 h-auto"
+                                            disabled={!selectedAssemblyId}
+                                        >
+                                            <div className="flex flex-col items-center space-y-2">
+                                                <Users className="w-6 h-6" />
+                                                <span>Nova Plenária</span>
+                                                <span className="text-xs opacity-90">EBs, CRs e Comitês</span>
+                                            </div>
+                                        </Button>
+                                        
+                                        <Button
+                                            onClick={() => {
+                                                if (!selectedAssemblyId) {
+                                                    toast({
+                                                        title: "❌ Erro",
+                                                        description: "Selecione uma assembleia primeiro.",
+                                                        variant: "destructive",
+                                                    });
+                                                    return;
+                                                }
+                                                setIsSessionDialogOpen(true);
+                                                setChamadaType("sessao");
+                                            }}
+                                            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 p-4 h-auto"
+                                            disabled={!selectedAssemblyId}
+                                        >
+                                            <div className="flex flex-col items-center space-y-2">
+                                                <Building className="w-6 h-6" />
+                                                <span>Nova Sessão</span>
+                                                <span className="text-xs opacity-90">Participantes específicos</span>
+                                            </div>
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Instructions */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <h4 className="font-semibold text-blue-900 mb-2">💡 Como usar:</h4>
+                                    <ul className="text-sm text-blue-800 space-y-1">
+                                        <li>• <strong>Sessões Ativas:</strong> Clique para entrar em uma sessão já criada</li>
+                                        <li>• <strong>Chamada Avulsa:</strong> Para controle geral de presença (independente de AG)</li>
+                                        <li>• <strong>Plenária:</strong> Sessão oficial com todos os tipos de participantes</li>
+                                        <li>• <strong>Sessão:</strong> Para participantes que se inscreveram na AG específica</li>
+                                    </ul>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Action Buttons */}
                     <Card className="shadow-lg border-0">
@@ -2041,7 +2234,42 @@ export default function ChamadaAGPage() {
                                     Cancelar
                                 </Button>
                                 <Button 
-                                    onClick={handleCreateNewSessionFromModal}
+                                    onClick={async () => {
+                                        if (!session?.user?.id || !chamadaType || !sessionName.trim() || !selectedAssemblyId) {
+                                            toast({
+                                                title: "Erro",
+                                                description: "Selecione a assembleia e digite um nome para a sessão.",
+                                                variant: "destructive"
+                                            });
+                                            return;
+                                        }
+
+                                        try {
+                                            const result = await createSession({
+                                                assemblyId: selectedAssemblyId as any,
+                                                name: sessionName.trim(),
+                                                type: chamadaType,
+                                                createdBy: session.user.id
+                                            });
+                                            
+                                            if (result) {
+                                                setCurrentSessionId(result as string);
+                                                setCurrentSessionType(chamadaType);
+                                                toast({
+                                                    title: "✅ Sessão criada",
+                                                    description: `${getChamadaTypeLabel(chamadaType)} "${sessionName}" foi criada com sucesso!`
+                                                });
+                                                setIsSessionDialogOpen(false);
+                                                setSessionName("");
+                                            }
+                                        } catch (error) {
+                                            toast({
+                                                title: "❌ Erro",
+                                                description: "Erro ao criar sessão. Tente novamente.",
+                                                variant: "destructive"
+                                            });
+                                        }
+                                    }}
                                     disabled={!selectedAssemblyId || !sessionName.trim()}
                                     className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                                 >
@@ -2077,6 +2305,93 @@ export default function ChamadaAGPage() {
                                     </div>
                                     
                                     <div className="flex items-center space-x-3">
+                                        {/* Self Attendance QR - Only for plenaria and sessao */}
+                                        {(currentSessionType === "plenaria" || currentSessionType === "sessao") && (
+                                            <Dialog open={isSelfAttendanceQrOpen} onOpenChange={setIsSelfAttendanceQrOpen}>
+                                                <DialogTrigger asChild>
+                                                    <Button
+                                                        className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700"
+                                                    >
+                                                        <QrCode className="w-4 h-4 mr-2" />
+                                                        QR Auto Presença
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="sm:max-w-[500px]">
+                                                    <DialogHeader>
+                                                        <DialogTitle className="flex items-center space-x-2">
+                                                            <QrCode className="w-5 h-5 text-purple-600" />
+                                                            <span>QR Code para Auto Presença</span>
+                                                        </DialogTitle>
+                                                        <DialogDescription>
+                                                            Compartilhe este QR Code ou link para que os participantes possam marcar presença automaticamente.
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+                                                    
+                                                    <div className="space-y-4">
+                                                        <div className="text-center">
+                                                            <div className="bg-white p-4 rounded-lg inline-block shadow-sm border">
+                                                                {currentSessionQrCode ? (
+                                                                    <img 
+                                                                        src={currentSessionQrCode} 
+                                                                        alt="QR Code Auto Presença" 
+                                                                        className="w-48 h-48"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="w-48 h-48 bg-gray-100 flex items-center justify-center">
+                                                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="self-attendance-url">Link da Auto Presença</Label>
+                                                            <div className="flex space-x-2">
+                                                                <Input
+                                                                    id="self-attendance-url"
+                                                                    value={`${window.location.origin}/presenca-sessao/${currentSessionId}`}
+                                                                    readOnly
+                                                                    className="flex-1"
+                                                                />
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        const url = `${window.location.origin}/presenca-sessao/${currentSessionId}`;
+                                                                        navigator.clipboard.writeText(url);
+                                                                        toast({
+                                                                            title: "✅ Link copiado!",
+                                                                            description: "Link da auto presença copiado para a área de transferência.",
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    <Copy className="w-4 h-4" />
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        const url = `${window.location.origin}/presenca-sessao/${currentSessionId}`;
+                                                                        window.open(url, '_blank');
+                                                                    }}
+                                                                >
+                                                                    <ExternalLink className="w-4 h-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                                            <h4 className="font-semibold text-purple-900 mb-2">💡 Como usar:</h4>
+                                                            <ul className="text-sm text-purple-800 space-y-1">
+                                                                <li>• Participantes podem escanear o QR Code com a câmera do celular</li>
+                                                                <li>• Ou acessar diretamente o link compartilhado</li>
+                                                                <li>• Fazem login e confirmam presença com um clique</li>
+                                                                <li>• Disponível enquanto a sessão estiver ativa</li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </DialogContent>
+                                            </Dialog>
+                                        )}
+                                        
                                         <Button
                                             onClick={() => setIsSessionQrDialogOpen(true)}
                                             className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
@@ -2157,6 +2472,8 @@ export default function ChamadaAGPage() {
                             </CardContent>
                         </Card>
                     )}
+
+
 
                     {/* Manual Attendance Management for Current Session */}
                     {currentSessionId && currentSessionData && (
