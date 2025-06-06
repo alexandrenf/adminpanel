@@ -3,16 +3,18 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { BarChart3 } from "lucide-react";
+import { ArrowLeft, BarChart3 } from "lucide-react";
 import UserAttendanceDashboard from "~/app/_components/UserAttendanceDashboard";
 import { useQuery } from "convex/react";
 import { api as convexApi } from "../../../../../convex/_generated/api";
 import PrecisaLogin from "~/app/_components/PrecisaLogin";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { Button } from "~/components/ui/button";
 
 export default function AttendancePage({ params }: { params: { id: string } }) {
     const { data: session } = useSession();
     const assembly = useQuery(convexApi.assemblies?.getById, { id: params.id as Id<"assemblies"> });
+    const router = useRouter();
 
     if (!session) {
         return (
@@ -57,6 +59,16 @@ export default function AttendancePage({ params }: { params: { id: string } }) {
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
             <div className="container mx-auto px-6 py-12">
                 <div className="max-w-7xl mx-auto space-y-8">
+                <div className="flex items-center justify-start space-x-4 mb-8">
+                        <Button
+                            variant="outline"
+                            onClick={() => router.push("/ag")}
+                            className="hover:bg-gray-50"
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            Voltar
+                        </Button>
+                    </div>
                     {/* Header */}
                     <div className="flex items-center space-x-4">
                         <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
