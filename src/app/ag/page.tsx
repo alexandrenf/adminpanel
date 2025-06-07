@@ -547,6 +547,13 @@ const formatDateWithoutTimezone = (timestamp: number): string => {
     return `${day}/${month}/${year}`;
 };
 
+/**
+ * Renders the main page for managing and participating in General Assemblies (Assembleias Gerais), providing both admin and user views.
+ *
+ * Displays a list of assemblies, allows users to register, and provides administrative actions such as creating, editing, deleting assemblies, and downloading reports. Dialogs for assembly creation, editing, deletion, and creation progress are included. The view adapts based on user role and session status.
+ *
+ * @returns The complete page UI for assemblies management and participation.
+ */
 export default function AGPage() {
     const { data: session } = useSession();
     const router = useRouter();
