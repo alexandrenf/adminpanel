@@ -75,7 +75,7 @@ model VerificationToken {
 model Blog {
     id              Int      @id @default(autoincrement())
     date            DateTime
-    author          String
+    author          String   // Legacy author field for backward compatibility
     title           String
     summary         String
     link            String
@@ -84,8 +84,37 @@ model Blog {
     userId          String
 
     user            User     @relation(fields: [userId], references: [id])
+    authors         BlogAuthor[] // New relationship for extended author info
 
     @@index([title])
+}
+
+// Extended Author Information
+model Author {
+    id              Int      @id @default(autoincrement())
+    name            String
+    bio             String?
+    photoLink       String?
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+    
+    blogAuthors     BlogAuthor[]
+    
+    @@index([name])
+}
+
+// Many-to-many relationship between Blog and Author
+model BlogAuthor {
+    id              Int      @id @default(autoincrement())
+    blogId          Int
+    authorId        Int
+    
+    blog            Blog     @relation(fields: [blogId], references: [id], onDelete: Cascade)
+    author          Author   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+    
+    @@unique([blogId, authorId])
+    @@index([blogId])
+    @@index([authorId])
 }
 
 model EB {
