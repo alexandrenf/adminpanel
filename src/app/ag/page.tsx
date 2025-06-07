@@ -577,17 +577,18 @@ export default function AGPage() {
     const deleteAssembly = useMutation(convexApi.assemblies?.deleteWithRelatedData);
     const bulkInsertParticipants = useMutation(convexApi.assemblies?.bulkInsertParticipants);
     
-    // Compute if we should fetch admin data
-    const shouldFetchAdminData = Boolean(isIfmsaEmail) && (isAdminView || isCreating);
+    // Always fetch admin data when user has IFMSA email and is in admin view
+    // This prevents race conditions during assembly creation
+    const shouldFetchAdminData = Boolean(isIfmsaEmail) && isAdminView;
     
-    // Only fetch admin data when needed
-    const { data: registrosData } = api.registros.get.useQuery(undefined, {
+    // Fetch admin data when needed (always enabled for admin users to prevent race conditions)
+    const { data: registrosData, isLoading: registrosLoading } = api.registros.get.useQuery(undefined, {
         enabled: shouldFetchAdminData
     });
-    const { data: ebData } = api.eb.getAll.useQuery(undefined, {
+    const { data: ebData, isLoading: ebLoading } = api.eb.getAll.useQuery(undefined, {
         enabled: shouldFetchAdminData
     });
-    const { data: crData } = api.cr.getAll.useQuery(undefined, {
+    const { data: crData, isLoading: crLoading } = api.cr.getAll.useQuery(undefined, {
         enabled: shouldFetchAdminData
     });
 
@@ -626,6 +627,19 @@ export default function AGPage() {
             toast({ title: "❌ Erro", description: "Preencha todos os campos obrigatórios.", variant: "destructive" });
             return;
         }
+        
+        // Check if required data is still loading
+        if (registrosLoading || ebLoading || crLoading) {
+            toast({ title: "⏳ Aguarde", description: "Carregando dados necessários. Tente novamente em alguns segundos.", variant: "default" });
+            return;
+        }
+        
+        // Check if required data is available
+        if (!registrosData?.url) {
+            toast({ title: "❌ Erro", description: "Dados de registro não disponíveis. Verifique a configuração do CSV.", variant: "destructive" });
+            return;
+        }
+        
         const startDate = new Date(dialogData.startDate);
         const endDate = new Date(dialogData.endDate);
         if (endDate < startDate) {
@@ -651,7 +665,6 @@ export default function AGPage() {
             });
 
             setCreationProgress(prev => [...prev, "Carregando dados do CSV..."]);
-            if (!registrosData?.url) throw new Error("URL do CSV não configurada");
             const response = await fetch(registrosData.url, { redirect: 'follow' });
             if (!response.ok) throw new Error(`Erro ao buscar dados do CSV: ${response.status}`);
             const csvText = await response.text();
@@ -704,7 +717,7 @@ export default function AGPage() {
             toast({ title: "❌ Erro ao Criar AG", description: "Erro ao criar assembleia. Tente novamente.", variant: "destructive" });
             setTimeout(() => { setIsCreating(false); setCreationProgress([]); }, 3000);
         }
-    }, [session?.user?.id, createAssembly, bulkInsertParticipants, toast, registrosData?.url, ebData, crData, getParticipantTypeName]);
+    }, [session?.user?.id, createAssembly, bulkInsertParticipants, toast, registrosData?.url, ebData, crData, getParticipantTypeName, registrosLoading, ebLoading, crLoading]);
 
     // Handle edit AG submission
     const handleEditAGSubmit = useCallback(async (dialogData: DialogFormData) => {
@@ -1297,10 +1310,15 @@ export default function AGPage() {
                         <div className="flex items-center space-x-4">
                             <Button 
                                 onClick={() => setIsCreateDialogOpen(true)}
-                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                                disabled={registrosLoading || ebLoading || crLoading}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50"
                             >
-                                <Plus className="w-4 h-4 mr-2" />
-                                Nova Assembleia
+                                {(registrosLoading || ebLoading || crLoading) ? (
+                                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                    <Plus className="w-4 h-4 mr-2" />
+                                )}
+                                {(registrosLoading || ebLoading || crLoading) ? "Carregando..." : "Nova Assembleia"}
                             </Button>
                             <Button 
                                 onClick={() => router.push('/ag/analytics')}
