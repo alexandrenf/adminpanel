@@ -577,9 +577,19 @@ export default function AGPage() {
     const deleteAssembly = useMutation(convexApi.assemblies?.deleteWithRelatedData);
     const bulkInsertParticipants = useMutation(convexApi.assemblies?.bulkInsertParticipants);
     
-    const { data: registrosData } = api.registros.get.useQuery();
-    const { data: ebData } = api.eb.getAll.useQuery();
-    const { data: crData } = api.cr.getAll.useQuery();
+    // Compute if we should fetch admin data
+    const shouldFetchAdminData = Boolean(isIfmsaEmail) && (isAdminView || isCreating);
+    
+    // Only fetch admin data when needed
+    const { data: registrosData } = api.registros.get.useQuery(undefined, {
+        enabled: shouldFetchAdminData
+    });
+    const { data: ebData } = api.eb.getAll.useQuery(undefined, {
+        enabled: shouldFetchAdminData
+    });
+    const { data: crData } = api.cr.getAll.useQuery(undefined, {
+        enabled: shouldFetchAdminData
+    });
 
     const handleDialogOpenChange = useCallback((open: boolean) => {
         setIsCreateDialogOpen(open);
