@@ -22,24 +22,64 @@ import {
     Loader2,
     ArrowLeft,
     Calendar,
-    User
+    User,
+    UserPlus,
+    X,
+    Edit3
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import "react-datepicker/dist/react-datepicker.css";
 import DatePicker from "react-datepicker";
 import { api } from "~/trpc/react";
 import { authorOptions } from "~/app/constants/authorOptions";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "../../components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
 
 // Dynamic import for MDEditor
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
+
+// Author interface for extended author information
+interface ExtendedAuthor {
+    id: number;
+    name: string;
+    bio?: string | null;
+    photoLink?: string | null;
+}
+
+// Type for authors from the database
+type DBAuthor = {
+    id: number;
+    name: string;
+    bio: string | null;
+    photoLink: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+};
 
 const CreateNoticia = () => {
     const [title, setTitle] = useState("");
     const [date, setDate] = useState<Date | null>(null);
     const [markdown, setMarkdown] = useState("");
     const [resumo, setResumo] = useState("");
-    const [author, setAuthor] = useState<string>(authorOptions[0] ?? ""); // Default to the first author option
+    const [author, setAuthor] = useState<string>(authorOptions[0] ?? ""); // Legacy author field
     const [otherAuthor, setOtherAuthor] = useState("");
+    
+    // Extended author information
+    const [useExtendedAuthors, setUseExtendedAuthors] = useState(false);
+    const [selectedAuthors, setSelectedAuthors] = useState<ExtendedAuthor[]>([]);
+    const [showAuthorDialog, setShowAuthorDialog] = useState(false);
+    const [newAuthorName, setNewAuthorName] = useState("");
+    const [newAuthorBio, setNewAuthorBio] = useState("");
+    const [newAuthorPhoto, setNewAuthorPhoto] = useState<string | null>(null);
+    
     const [image, setImage] = useState<string | null>(null);
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [forcarPaginaInicial, setForcarPaginaInicial] = useState(false);
@@ -52,18 +92,55 @@ const CreateNoticia = () => {
     const latestBlogId = api.noticias.latestBlogId.useQuery();
     const uploadFile = api.file.uploadFile.useMutation();
     const updateFile = api.file.updateFile.useMutation();
+    
+    // Author-related queries
+    const { data: allAuthors } = api.authors.getAll.useQuery();
+    const createAuthor = api.authors.create.useMutation({
+        onSuccess: (newAuthor) => {
+            setSelectedAuthors(prev => [...prev, newAuthor]);
+            setShowAuthorDialog(false);
+            setNewAuthorName("");
+            setNewAuthorBio("");
+            setNewAuthorPhoto(null);
+        },
+    });
+    const associateAuthors = api.authors.associateWithBlog.useMutation();
+    
     const createNoticia = api.noticias.create.useMutation({
-        onSuccess: () => {
+        onSuccess: async (newBlog) => {
+            // If using extended authors, associate them with the blog
+            if (useExtendedAuthors && selectedAuthors.length > 0) {
+                await associateAuthors.mutateAsync({
+                    blogId: newBlog.id,
+                    authorIds: selectedAuthors.map(a => a.id),
+                });
+            }
             router.push("/noticias");
         },
     });
     const updateNoticia = api.noticias.update.useMutation({
-        onSuccess: () => {
+        onSuccess: async (updatedBlog) => {
+            // If using extended authors, update associations
+            if (useExtendedAuthors) {
+                await associateAuthors.mutateAsync({
+                    blogId: updatedBlog.id,
+                    authorIds: selectedAuthors.map(a => a.id),
+                });
+            }
             router.push("/noticias");
         },
     });
+    
     const { data: noticiaData } = api.noticias.getOne.useQuery(
         { id: noticiaId ?? -1 },
+        {
+            enabled: isEditMode && noticiaId !== null,
+        }
+    );
+    
+    // Get extended author info for editing
+    const { data: extendedAuthorInfo } = api.authors.getByBlogId.useQuery(
+        { blogId: noticiaId ?? -1 },
         {
             enabled: isEditMode && noticiaId !== null,
         }
@@ -85,7 +162,8 @@ const CreateNoticia = () => {
             setDate(new Date(noticiaData.date));
             fetchMarkdownFile(noticiaData.link);
             setResumo(noticiaData.summary);
-            // Check if the author is in the predefined options
+            
+            // Handle legacy author format
             const isPredefinedAuthor = authorOptions.includes(noticiaData.author);
             if (isPredefinedAuthor) {
                 setAuthor(noticiaData.author);
@@ -97,6 +175,18 @@ const CreateNoticia = () => {
             setForcarPaginaInicial(noticiaData.forceHomePage);
         }
     }, [noticiaData]);
+
+    useEffect(() => {
+        if (extendedAuthorInfo && extendedAuthorInfo.hasExtendedInfo && extendedAuthorInfo.authors) {
+            setUseExtendedAuthors(true);
+            setSelectedAuthors(extendedAuthorInfo.authors.map(author => ({
+                id: author.id,
+                name: author.name,
+                bio: author.bio || undefined,
+                photoLink: author.photo || undefined,
+            })));
+        }
+    }, [extendedAuthorInfo]);
 
     const fetchMarkdownFile = async (url: string) => {
         try {
@@ -163,11 +253,16 @@ const CreateNoticia = () => {
                     imageLink: noticiaData?.imageLink ?? "",
                 });
 
+                // Determine the author for the legacy field
+                const finalAuthor = useExtendedAuthors 
+                    ? selectedAuthors.map(a => a.name).join(", ")
+                    : (author === "Outros" ? otherAuthor : author);
+
                 // Then update the database with the new links
                 await updateNoticia.mutateAsync({
                     id: noticiaId,
                     date: date ? new Date(date) : new Date(),
-                    author: author === "Outros" ? otherAuthor : author,
+                    author: finalAuthor,
                     title,
                     summary: resumo,
                     link: uploadResult.markdownUrl,
@@ -187,7 +282,10 @@ const CreateNoticia = () => {
             const nextId = (latestBlogId.data ?? 0) + 1;
 
             try {
-                const finalAuthor = author === "Outros" ? otherAuthor : author;
+                // Determine the author for the legacy field
+                const finalAuthor = useExtendedAuthors 
+                    ? selectedAuthors.map(a => a.name).join(", ")
+                    : (author === "Outros" ? otherAuthor : author);
 
                 const uploadResult = await uploadFile.mutateAsync({
                     id: nextId.toString(),
@@ -211,7 +309,32 @@ const CreateNoticia = () => {
         }
     };
 
-    const isLoading = createNoticia.isPending || uploadFile.isPending || updateFile.isPending || updateNoticia.isPending;
+    const handleCreateNewAuthor = async () => {
+        if (!newAuthorName.trim()) return;
+        
+        try {
+            await createAuthor.mutateAsync({
+                name: newAuthorName.trim(),
+                bio: newAuthorBio.trim() || undefined,
+                photoLink: newAuthorPhoto || undefined,
+            });
+        } catch (error) {
+            console.error("Error creating author:", error);
+            alert("Failed to create author. Please try again.");
+        }
+    };
+
+    const removeSelectedAuthor = (authorId: number) => {
+        setSelectedAuthors(prev => prev.filter(a => a.id !== authorId));
+    };
+
+    const addSelectedAuthor = (author: ExtendedAuthor) => {
+        if (!selectedAuthors.find(a => a.id === author.id)) {
+            setSelectedAuthors(prev => [...prev, author]);
+        }
+    };
+
+    const isLoading = createNoticia.isPending || uploadFile.isPending || updateFile.isPending || updateNoticia.isPending || createAuthor.isPending;
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -271,36 +394,168 @@ const CreateNoticia = () => {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="author">Autor</Label>
-                                        <Select value={author} onValueChange={setAuthor}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione um autor" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {authorOptions.map((option) => (
-                                                    <SelectItem key={option} value={option}>
-                                                        <div className="flex items-center space-x-2">
-                                                            <User className="w-4 h-4 text-gray-400" />
-                                                            <span>{option}</span>
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {author === "Outros" && (
-                                            <Input
-                                                type="text"
-                                                value={otherAuthor}
-                                                onChange={(e) => setOtherAuthor(e.target.value)}
-                                                placeholder="Especifique o Autor"
-                                                className="mt-2"
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') {
-                                                        e.preventDefault();
+                                    <div className="space-y-4">
+                                        <Label>Autores</Label>
+                                        
+                                        {/* Toggle between legacy and extended author info */}
+                                        <div className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id="useExtendedAuthors"
+                                                checked={useExtendedAuthors}
+                                                onCheckedChange={(checked) => {
+                                                    setUseExtendedAuthors(checked === true);
+                                                    if (!checked) {
+                                                        setSelectedAuthors([]);
                                                     }
                                                 }}
                                             />
+                                            <Label htmlFor="useExtendedAuthors" className="text-sm">
+                                                Usar informações estendidas de autor (com foto e bio)
+                                            </Label>
+                                        </div>
+
+                                        {!useExtendedAuthors ? (
+                                            /* Legacy author selection */
+                                            <div className="space-y-2">
+                                                <Select value={author} onValueChange={setAuthor}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Selecione um autor" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {authorOptions.map((option) => (
+                                                            <SelectItem key={option} value={option}>
+                                                                <div className="flex items-center space-x-2">
+                                                                    <User className="w-4 h-4 text-gray-400" />
+                                                                    <span>{option}</span>
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                {author === "Outros" && (
+                                                    <Input
+                                                        type="text"
+                                                        value={otherAuthor}
+                                                        onChange={(e) => setOtherAuthor(e.target.value)}
+                                                        placeholder="Especifique o Autor"
+                                                        className="mt-2"
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                            }
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                        ) : (
+                                            /* Extended author selection */
+                                            <div className="space-y-4">
+                                                {/* Selected authors */}
+                                                {selectedAuthors.length > 0 && (
+                                                    <div className="space-y-2">
+                                                        <Label className="text-sm font-medium">Autores selecionados:</Label>
+                                                        <div className="space-y-2">
+                                                            {selectedAuthors.map((selectedAuthor) => (
+                                                                <div key={selectedAuthor.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                                                                    <Avatar className="w-10 h-10">
+                                                                        <AvatarImage src={selectedAuthor.photoLink ?? undefined} />
+                                                                        <AvatarFallback>{selectedAuthor.name.charAt(0)}</AvatarFallback>
+                                                                    </Avatar>
+                                                                    <div className="flex-1">
+                                                                        <p className="font-medium text-sm">{selectedAuthor.name}</p>
+                                                                        {selectedAuthor.bio && (
+                                                                            <p className="text-xs text-gray-600">{selectedAuthor.bio}</p>
+                                                                        )}
+                                                                    </div>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => removeSelectedAuthor(selectedAuthor.id)}
+                                                                    >
+                                                                        <X className="w-4 h-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Available authors */}
+                                                {allAuthors && allAuthors.length > 0 && (
+                                                    <div className="space-y-2">
+                                                        <Label className="text-sm font-medium">Adicionar autor existente:</Label>
+                                                        <div className="max-h-32 overflow-y-auto space-y-2 border rounded-md p-2">
+                                                                                                                         {allAuthors
+                                                                 .filter((author: DBAuthor) => !selectedAuthors.find(sa => sa.id === author.id))
+                                                                 .map((author: DBAuthor) => (
+                                                                <div key={author.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                                                                     onClick={() => addSelectedAuthor(author)}>
+                                                                    <Avatar className="w-8 h-8">
+                                                                        <AvatarImage src={author.photoLink || undefined} />
+                                                                        <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
+                                                                    </Avatar>
+                                                                    <div className="flex-1">
+                                                                        <p className="font-medium text-sm">{author.name}</p>
+                                                                        {author.bio && (
+                                                                            <p className="text-xs text-gray-600 truncate">{author.bio}</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Create new author */}
+                                                <Dialog open={showAuthorDialog} onOpenChange={setShowAuthorDialog}>
+                                                    <DialogTrigger asChild>
+                                                        <Button type="button" variant="outline" className="w-full">
+                                                            <UserPlus className="w-4 h-4 mr-2" />
+                                                            Criar novo autor
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent>
+                                                        <DialogHeader>
+                                                            <DialogTitle>Criar Novo Autor</DialogTitle>
+                                                            <DialogDescription>
+                                                                Adicione um novo autor com informações estendidas.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <div className="space-y-4">
+                                                            <div>
+                                                                <Label htmlFor="newAuthorName">Nome *</Label>
+                                                                <Input
+                                                                    id="newAuthorName"
+                                                                    value={newAuthorName}
+                                                                    onChange={(e) => setNewAuthorName(e.target.value)}
+                                                                    placeholder="Nome do autor"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <Label htmlFor="newAuthorBio">Bio</Label>
+                                                                <Textarea
+                                                                    id="newAuthorBio"
+                                                                    value={newAuthorBio}
+                                                                    onChange={(e) => setNewAuthorBio(e.target.value)}
+                                                                    placeholder="Breve biografia (50-150 caracteres)"
+                                                                    maxLength={150}
+                                                                />
+                                                                <p className="text-xs text-gray-500">{newAuthorBio.length}/150 caracteres</p>
+                                                            </div>
+                                                            {/* TODO: Add photo upload functionality similar to main image upload */}
+                                                        </div>
+                                                        <DialogFooter>
+                                                            <Button type="button" variant="outline" onClick={() => setShowAuthorDialog(false)}>
+                                                                Cancelar
+                                                            </Button>
+                                                            <Button type="button" onClick={handleCreateNewAuthor} disabled={!newAuthorName.trim()}>
+                                                                Criar Autor
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
                                         )}
                                     </div>
                                     <div className="space-y-2">
