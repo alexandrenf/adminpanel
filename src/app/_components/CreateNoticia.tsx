@@ -79,6 +79,8 @@ const CreateNoticia = () => {
     const [newAuthorName, setNewAuthorName] = useState("");
     const [newAuthorBio, setNewAuthorBio] = useState("");
     const [newAuthorPhoto, setNewAuthorPhoto] = useState<string | null>(null);
+    const [newAuthorPhotoSrc, setNewAuthorPhotoSrc] = useState<string | null>(null);
+    const authorPhotoInputRef = useRef<HTMLInputElement>(null);
     
     const [image, setImage] = useState<string | null>(null);
     const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -102,6 +104,7 @@ const CreateNoticia = () => {
             setNewAuthorName("");
             setNewAuthorBio("");
             setNewAuthorPhoto(null);
+            setNewAuthorPhotoSrc(null);
         },
     });
     const associateAuthors = api.authors.associateWithBlog.useMutation();
@@ -305,6 +308,22 @@ const CreateNoticia = () => {
             } catch (error) {
                 console.error("Error creating noticia:", error);
                 alert("Failed to create noticia. Please try again.");
+            }
+        }
+    };
+
+    const onAuthorPhotoChange = async (file: File) => {
+        const imageDataUrl = await readFile(file);
+        const resizedImageDataUrl = await resizeAuthorPhoto(imageDataUrl);
+        setNewAuthorPhotoSrc(resizedImageDataUrl);
+        setNewAuthorPhoto(resizedImageDataUrl?.split(",")[1] ?? null);
+    };
+
+    const handleAuthorPhotoInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+            if (file !== undefined) {
+                await onAuthorPhotoChange(file);
             }
         }
     };
@@ -543,7 +562,38 @@ const CreateNoticia = () => {
                                                                 />
                                                                 <p className="text-xs text-gray-500">{newAuthorBio.length}/150 caracteres</p>
                                                             </div>
-                                                            {/* TODO: Add photo upload functionality similar to main image upload */}
+                                                            <div>
+                                                                <Label>Foto do Autor</Label>
+                                                                <div className="flex items-center space-x-4">
+                                                                    {newAuthorPhotoSrc && (
+                                                                        <Avatar className="w-16 h-16">
+                                                                            <AvatarImage src={newAuthorPhotoSrc} />
+                                                                            <AvatarFallback>{newAuthorName.charAt(0)}</AvatarFallback>
+                                                                        </Avatar>
+                                                                    )}
+                                                                    <div className="flex-1">
+                                                                        <input
+                                                                            type="file"
+                                                                            onChange={handleAuthorPhotoInputChange}
+                                                                            className="hidden"
+                                                                            ref={authorPhotoInputRef}
+                                                                            accept="image/*"
+                                                                        />
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="outline"
+                                                                            onClick={() => authorPhotoInputRef.current?.click()}
+                                                                            className="w-full"
+                                                                        >
+                                                                            <Upload className="w-4 h-4 mr-2" />
+                                                                            {newAuthorPhotoSrc ? "Alterar Foto" : "Adicionar Foto"}
+                                                                        </Button>
+                                                                        <p className="text-xs text-gray-500 mt-1 text-center">
+                                                                            Será redimensionada para 150x150px
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                         <DialogFooter>
                                                             <Button type="button" variant="outline" onClick={() => setShowAuthorDialog(false)}>
@@ -715,6 +765,37 @@ const cropAndConvertImage = (imageSrc: string): Promise<string> =>
                     size
                 );
                 resolve(canvas.toDataURL("image/png")); // Convert to PNG
+            }
+        };
+    });
+
+const resizeAuthorPhoto = (imageSrc: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const image = new Image();
+        image.src = imageSrc;
+        image.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 150;
+            canvas.height = 150;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+                // Calculate dimensions to maintain aspect ratio while filling 150x150
+                const size = Math.min(image.width, image.height);
+                const startX = (image.width - size) / 2;
+                const startY = (image.height - size) / 2;
+                
+                ctx.drawImage(
+                    image,
+                    startX,
+                    startY,
+                    size,
+                    size,
+                    0,
+                    0,
+                    150,
+                    150
+                );
+                resolve(canvas.toDataURL("image/png"));
             }
         };
     });
