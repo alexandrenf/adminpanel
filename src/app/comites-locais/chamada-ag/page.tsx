@@ -492,15 +492,46 @@ export default function ChamadaAGPage() {
                     throw new Error("O arquivo CSV não contém dados");
                 }
                 
+                // Helper function to parse CSV line with proper handling of quoted fields
+                const parseCSVLine = (line: string): string[] => {
+                    const result: string[] = [];
+                    let current = '';
+                    let inQuotes = false;
+                    let i = 0;
+                    
+                    while (i < line.length) {
+                        const char = line[i];
+                        
+                        if (char === '"') {
+                            if (inQuotes && line[i + 1] === '"') {
+                                // Escaped quote
+                                current += '"';
+                                i += 2;
+                            } else {
+                                // Toggle quote mode
+                                inQuotes = !inQuotes;
+                                i++;
+                            }
+                        } else if (char === ',' && !inQuotes) {
+                            // Field separator
+                            result.push(current.trim());
+                            current = '';
+                            i++;
+                        } else {
+                            current += char;
+                            i++;
+                        }
+                    }
+                    
+                    // Add the last field
+                    result.push(current.trim());
+                    return result;
+                };
+
                 const dataLines = lines.slice(1);
                 const comites: ComiteLocal[] = dataLines.map((line) => {
                     try {
-                        const columns = line.split(',').map(col => {
-                            const trimmed = col.trim();
-                            return trimmed.startsWith('"') && trimmed.endsWith('"') 
-                                ? trimmed.slice(1, -1).trim() 
-                                : trimmed;
-                        });
+                        const columns = parseCSVLine(line);
                         
                         // Debug: Log the first few rows to understand CSV structure
                         if (dataLines.indexOf(line) < 3) {
@@ -1013,12 +1044,7 @@ export default function ChamadaAGPage() {
                                 // Add missing comité records
                                 for (const line of dataLines) {
                                     try {
-                                        const columns = line.split(',').map(col => {
-                                            const trimmed = col.trim();
-                                            return trimmed.startsWith('"') && trimmed.endsWith('"') 
-                                                ? trimmed.slice(1, -1).trim() 
-                                                : trimmed;
-                                        });
+                                        const columns = parseCSVLine(line);
                                         
                                         const name = columns[0] || '';
                                         if (!name) continue; // Skip if no name
