@@ -17,7 +17,8 @@ import {
     AlertTriangle,
     RefreshCw,
     Eye,
-    EyeOff
+    EyeOff,
+    MapPin
 } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api as convexApi } from "../../../../convex/_generated/api";
@@ -48,6 +49,7 @@ export default function AnalyticsPage() {
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
     const [expandedOthers, setExpandedOthers] = useState(false);
+    const [selectedRegional, setSelectedRegional] = useState<string>("");
     
     // Fetch assemblies and analytics data
     const assemblies = useQuery(convexApi.assemblies?.getAll);
@@ -80,6 +82,56 @@ export default function AnalyticsPage() {
             }
         }
     }, [assemblies, selectedAssemblyId]);
+
+    // Clear regional filter when assembly changes
+    useEffect(() => {
+        setSelectedRegional("all");
+    }, [selectedAssemblyId]);
+
+    // Helper function to get unique regionals from committee data
+    const getUniqueRegionals = () => {
+        if (!analyticsData) return [];
+        
+        const regionals = new Set<string>();
+        
+        // Collect regionals from both plenos and não-plenos
+        analyticsData.comitesPlenos?.details?.forEach((detail: any) => {
+            if (detail.regional && detail.regional.trim()) {
+                regionals.add(detail.regional.trim());
+            }
+        });
+        
+        analyticsData.comitesNaoPlenos?.details?.forEach((detail: any) => {
+            if (detail.regional && detail.regional.trim()) {
+                regionals.add(detail.regional.trim());
+            }
+        });
+        
+        return Array.from(regionals).sort();
+    };
+
+    // Helper function to filter committee details by regional
+    const filterByRegional = (details: any[]) => {
+        if (!selectedRegional || selectedRegional === "all") return details;
+        return details.filter((detail: any) => detail.regional === selectedRegional);
+    };
+
+    // Helper function to get filtered stats for a committee category
+    const getFilteredStats = (originalStats: any) => {
+        if (!selectedRegional || selectedRegional === "all") return originalStats;
+        
+        const filteredDetails = filterByRegional(originalStats.details);
+        const registeredCount = filteredDetails.filter((d: any) => d.isRegistered).length;
+        
+        return {
+            ...originalStats,
+            total: filteredDetails.length,
+            registered: registeredCount,
+            unregistered: filteredDetails.length - registeredCount,
+            registrationRate: filteredDetails.length > 0 ? (registeredCount / filteredDetails.length * 100) : 0,
+            details: filteredDetails
+        };
+    };
 
     if (!session) {
         return (
@@ -185,6 +237,7 @@ export default function AnalyticsPage() {
                         </CardContent>
                     </Card>
 
+
                     {/* Analytics Content */}
                     {analyticsData && analyticsData.summary ? (
                         <div className="space-y-8">
@@ -263,8 +316,8 @@ export default function AnalyticsPage() {
                                     <CardContent>
                                         <div className="space-y-4">
                                             {[
-                                                { name: "Comitês Plenos", stats: analyticsData.comitesPlenos, color: "bg-green-500" },
-                                                { name: "Comitês Não-Plenos", stats: analyticsData.comitesNaoPlenos, color: "bg-blue-500" },
+                                                { name: "Comitês Plenos", stats: getFilteredStats(analyticsData.comitesPlenos), color: "bg-green-500" },
+                                                { name: "Comitês Não-Plenos", stats: getFilteredStats(analyticsData.comitesNaoPlenos), color: "bg-blue-500" },
                                                 { name: "Executive Board", stats: analyticsData.ebs, color: "bg-purple-500" },
                                                 { name: "Coordenadores Regionais", stats: analyticsData.crs, color: "bg-orange-500" },
                                             ].map((category, index) => (
@@ -371,21 +424,71 @@ export default function AnalyticsPage() {
                                 </Card>
                             </div>
 
+                            {/* Regional Filter */}
+                    {analyticsData && getUniqueRegionals().length > 0 && (
+                        <Card className="shadow-lg border-0">
+                            <CardHeader>
+                                <CardTitle className="flex items-center space-x-2">
+                                    <MapPin className="w-5 h-5 text-purple-600" />
+                                    <span>Filtrar por Regional</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center space-x-4">
+                                    <div className="flex-1">
+                                        <Select value={selectedRegional} onValueChange={setSelectedRegional}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Todas as regionais..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">
+                                                    <span>Todas as Regionais</span>
+                                                </SelectItem>
+                                                {getUniqueRegionals().map((regional) => (
+                                                    <SelectItem key={regional} value={regional}>
+                                                        <span>{regional}</span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {selectedRegional && selectedRegional !== "all" && (
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setSelectedRegional("all")}
+                                            className="text-sm"
+                                        >
+                                            Limpar Filtro
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                             {/* Detailed Breakdown */}
                             <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Detalhamento por Categoria</h3>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold">Detalhamento por Categoria</h3>
+                                    {selectedRegional && selectedRegional !== "all" && (
+                                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                                            <MapPin className="w-3 h-3 mr-1" />
+                                            Filtrado por: {selectedRegional}
+                                        </Badge>
+                                    )}
+                                </div>
                                 {[
                                     { 
                                         id: "comites-plenos", 
                                         name: "Comitês Plenos", 
-                                        stats: analyticsData.comitesPlenos, 
+                                        stats: getFilteredStats(analyticsData.comitesPlenos), 
                                         color: "border-green-200 bg-green-50",
                                         iconColor: "text-green-600"
                                     },
                                     { 
                                         id: "comites-nao-plenos", 
                                         name: "Comitês Não-Plenos", 
-                                        stats: analyticsData.comitesNaoPlenos, 
+                                        stats: getFilteredStats(analyticsData.comitesNaoPlenos), 
                                         color: "border-blue-200 bg-blue-50",
                                         iconColor: "text-blue-600"
                                     },
@@ -458,6 +561,9 @@ export default function AnalyticsPage() {
                                                                     )}
                                                                     {detail.role && (
                                                                         <p className="text-sm text-gray-600">{detail.role}</p>
+                                                                    )}
+                                                                    {detail.regional && selectedRegional !== "all" && (
+                                                                        <p className="text-sm text-purple-600 font-medium">Regional: {detail.regional}</p>
                                                                     )}
                                                                     {(detail.cidade || detail.uf) && (
                                                                         <p className="text-xs text-gray-500">
