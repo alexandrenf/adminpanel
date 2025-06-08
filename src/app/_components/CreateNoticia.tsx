@@ -770,7 +770,7 @@ const cropAndConvertImage = (imageSrc: string): Promise<string> =>
     });
 
 const resizeAuthorPhoto = (imageSrc: string): Promise<string> =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
         const image = new Image();
         image.src = imageSrc;
         image.onload = () => {
