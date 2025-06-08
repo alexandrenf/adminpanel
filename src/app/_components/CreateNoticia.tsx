@@ -42,6 +42,7 @@ import {
     DialogTrigger,
 } from "../../components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
+import AuthorSelector from "./AuthorSelector";
 
 // Dynamic import for MDEditor
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -75,12 +76,6 @@ const CreateNoticia = () => {
     // Extended author information
     const [useExtendedAuthors, setUseExtendedAuthors] = useState(false);
     const [selectedAuthors, setSelectedAuthors] = useState<ExtendedAuthor[]>([]);
-    const [showAuthorDialog, setShowAuthorDialog] = useState(false);
-    const [newAuthorName, setNewAuthorName] = useState("");
-    const [newAuthorBio, setNewAuthorBio] = useState("");
-    const [newAuthorPhoto, setNewAuthorPhoto] = useState<string | null>(null);
-    const [newAuthorPhotoSrc, setNewAuthorPhotoSrc] = useState<string | null>(null);
-    const authorPhotoInputRef = useRef<HTMLInputElement>(null);
     
     const [image, setImage] = useState<string | null>(null);
     const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -96,17 +91,6 @@ const CreateNoticia = () => {
     const updateFile = api.file.updateFile.useMutation();
     
     // Author-related queries
-    const { data: allAuthors } = api.authors.getAll.useQuery();
-    const createAuthor = api.authors.create.useMutation({
-        onSuccess: (newAuthor) => {
-            setSelectedAuthors(prev => [...prev, newAuthor]);
-            setShowAuthorDialog(false);
-            setNewAuthorName("");
-            setNewAuthorBio("");
-            setNewAuthorPhoto(null);
-            setNewAuthorPhotoSrc(null);
-        },
-    });
     const associateAuthors = api.authors.associateWithBlog.useMutation();
     
     const createNoticia = api.noticias.create.useMutation({
@@ -312,48 +296,7 @@ const CreateNoticia = () => {
         }
     };
 
-    const onAuthorPhotoChange = async (file: File) => {
-        const imageDataUrl = await readFile(file);
-        const resizedImageDataUrl = await resizeAuthorPhoto(imageDataUrl);
-        setNewAuthorPhotoSrc(resizedImageDataUrl);
-        setNewAuthorPhoto(resizedImageDataUrl?.split(",")[1] ?? null);
-    };
-
-    const handleAuthorPhotoInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const file = e.target.files[0];
-            if (file !== undefined) {
-                await onAuthorPhotoChange(file);
-            }
-        }
-    };
-
-    const handleCreateNewAuthor = async () => {
-        if (!newAuthorName.trim()) return;
-        
-        try {
-            await createAuthor.mutateAsync({
-                name: newAuthorName.trim(),
-                bio: newAuthorBio.trim() || undefined,
-                photoLink: newAuthorPhoto || undefined,
-            });
-        } catch (error) {
-            console.error("Error creating author:", error);
-            alert("Failed to create author. Please try again.");
-        }
-    };
-
-    const removeSelectedAuthor = (authorId: number) => {
-        setSelectedAuthors(prev => prev.filter(a => a.id !== authorId));
-    };
-
-    const addSelectedAuthor = (author: ExtendedAuthor) => {
-        if (!selectedAuthors.find(a => a.id === author.id)) {
-            setSelectedAuthors(prev => [...prev, author]);
-        }
-    };
-
-    const isLoading = createNoticia.isPending || uploadFile.isPending || updateFile.isPending || updateNoticia.isPending || createAuthor.isPending;
+    const isLoading = createNoticia.isPending || uploadFile.isPending || updateFile.isPending || updateNoticia.isPending;
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -467,145 +410,12 @@ const CreateNoticia = () => {
                                                 )}
                                             </div>
                                         ) : (
-                                            /* Extended author selection */
-                                            <div className="space-y-4">
-                                                {/* Selected authors */}
-                                                {selectedAuthors.length > 0 && (
-                                                    <div className="space-y-2">
-                                                        <Label className="text-sm font-medium">Autores selecionados:</Label>
-                                                        <div className="space-y-2">
-                                                            {selectedAuthors.map((selectedAuthor) => (
-                                                                <div key={selectedAuthor.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                                                                    <Avatar className="w-10 h-10">
-                                                                        <AvatarImage src={selectedAuthor.photoLink ?? undefined} />
-                                                                        <AvatarFallback>{selectedAuthor.name.charAt(0)}</AvatarFallback>
-                                                                    </Avatar>
-                                                                    <div className="flex-1">
-                                                                        <p className="font-medium text-sm">{selectedAuthor.name}</p>
-                                                                        {selectedAuthor.bio && (
-                                                                            <p className="text-xs text-gray-600">{selectedAuthor.bio}</p>
-                                                                        )}
-                                                                    </div>
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        onClick={() => removeSelectedAuthor(selectedAuthor.id)}
-                                                                    >
-                                                                        <X className="w-4 h-4" />
-                                                                    </Button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Available authors */}
-                                                {allAuthors && allAuthors.length > 0 && (
-                                                    <div className="space-y-2">
-                                                        <Label className="text-sm font-medium">Adicionar autor existente:</Label>
-                                                        <div className="max-h-32 overflow-y-auto space-y-2 border rounded-md p-2">
-                                                                                                                         {allAuthors
-                                                                 .filter((author: DBAuthor) => !selectedAuthors.find(sa => sa.id === author.id))
-                                                                 .map((author: DBAuthor) => (
-                                                                <div key={author.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
-                                                                     onClick={() => addSelectedAuthor(author)}>
-                                                                    <Avatar className="w-8 h-8">
-                                                                        <AvatarImage src={author.photoLink || undefined} />
-                                                                        <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
-                                                                    </Avatar>
-                                                                    <div className="flex-1">
-                                                                        <p className="font-medium text-sm">{author.name}</p>
-                                                                        {author.bio && (
-                                                                            <p className="text-xs text-gray-600 truncate">{author.bio}</p>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Create new author */}
-                                                <Dialog open={showAuthorDialog} onOpenChange={setShowAuthorDialog}>
-                                                    <DialogTrigger asChild>
-                                                        <Button type="button" variant="outline" className="w-full">
-                                                            <UserPlus className="w-4 h-4 mr-2" />
-                                                            Criar novo autor
-                                                        </Button>
-                                                    </DialogTrigger>
-                                                    <DialogContent>
-                                                        <DialogHeader>
-                                                            <DialogTitle>Criar Novo Autor</DialogTitle>
-                                                            <DialogDescription>
-                                                                Adicione um novo autor com informações estendidas.
-                                                            </DialogDescription>
-                                                        </DialogHeader>
-                                                        <div className="space-y-4">
-                                                            <div>
-                                                                <Label htmlFor="newAuthorName">Nome *</Label>
-                                                                <Input
-                                                                    id="newAuthorName"
-                                                                    value={newAuthorName}
-                                                                    onChange={(e) => setNewAuthorName(e.target.value)}
-                                                                    placeholder="Nome do autor"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <Label htmlFor="newAuthorBio">Bio</Label>
-                                                                <Textarea
-                                                                    id="newAuthorBio"
-                                                                    value={newAuthorBio}
-                                                                    onChange={(e) => setNewAuthorBio(e.target.value)}
-                                                                    placeholder="Breve biografia (50-150 caracteres)"
-                                                                    maxLength={150}
-                                                                />
-                                                                <p className="text-xs text-gray-500">{newAuthorBio.length}/150 caracteres</p>
-                                                            </div>
-                                                            <div>
-                                                                <Label>Foto do Autor</Label>
-                                                                <div className="flex items-center space-x-4">
-                                                                    {newAuthorPhotoSrc && (
-                                                                        <Avatar className="w-16 h-16">
-                                                                            <AvatarImage src={newAuthorPhotoSrc} />
-                                                                            <AvatarFallback>{newAuthorName.charAt(0)}</AvatarFallback>
-                                                                        </Avatar>
-                                                                    )}
-                                                                    <div className="flex-1">
-                                                                        <input
-                                                                            type="file"
-                                                                            onChange={handleAuthorPhotoInputChange}
-                                                                            className="hidden"
-                                                                            ref={authorPhotoInputRef}
-                                                                            accept="image/*"
-                                                                        />
-                                                                        <Button
-                                                                            type="button"
-                                                                            variant="outline"
-                                                                            onClick={() => authorPhotoInputRef.current?.click()}
-                                                                            className="w-full"
-                                                                        >
-                                                                            <Upload className="w-4 h-4 mr-2" />
-                                                                            {newAuthorPhotoSrc ? "Alterar Foto" : "Adicionar Foto"}
-                                                                        </Button>
-                                                                        <p className="text-xs text-gray-500 mt-1 text-center">
-                                                                            Será redimensionada para 150x150px
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <DialogFooter>
-                                                            <Button type="button" variant="outline" onClick={() => setShowAuthorDialog(false)}>
-                                                                Cancelar
-                                                            </Button>
-                                                            <Button type="button" onClick={handleCreateNewAuthor} disabled={!newAuthorName.trim()}>
-                                                                Criar Autor
-                                                            </Button>
-                                                        </DialogFooter>
-                                                    </DialogContent>
-                                                </Dialog>
-                                            </div>
+                                            /* Extended author selection with new AuthorSelector */
+                                            <AuthorSelector
+                                                selectedAuthors={selectedAuthors}
+                                                onAuthorsChange={setSelectedAuthors}
+                                                disabled={isLoading}
+                                            />
                                         )}
                                     </div>
                                     <div className="space-y-2">

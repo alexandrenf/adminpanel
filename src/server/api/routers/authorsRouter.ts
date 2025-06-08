@@ -10,6 +10,52 @@ export const authorsRouter = createTRPCRouter({
     });
   }),
 
+  // Search authors with pagination
+  search: publicProcedure
+    .input(
+      z.object({
+        query: z.string().min(3, "Search query must be at least 3 characters"),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(50).default(10),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { query, page, pageSize } = input;
+      const skip = (page - 1) * pageSize;
+
+      const [authors, totalCount] = await Promise.all([
+        ctx.db.author.findMany({
+          where: {
+            name: {
+              contains: query,
+            },
+          },
+          orderBy: { name: "asc" },
+          skip,
+          take: pageSize,
+        }),
+        ctx.db.author.count({
+          where: {
+            name: {
+              contains: query,
+            },
+          },
+        }),
+      ]);
+
+      return {
+        authors,
+        pagination: {
+          page,
+          pageSize,
+          totalCount,
+          totalPages: Math.ceil(totalCount / pageSize),
+          hasNext: page * pageSize < totalCount,
+          hasPrev: page > 1,
+        },
+      };
+    }),
+
   // Get a single author by ID
   getById: publicProcedure
     .input(z.object({ id: z.number() }))
