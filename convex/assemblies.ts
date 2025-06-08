@@ -815,6 +815,8 @@ export const getRegistrationAnalytics = query({
         escola: p.escola,
         cidade: p.cidade,
         uf: p.uf,
+        regional: p.regional,
+        agFiliacao: p.agFiliacao,
         isRegistered: registrationsByParticipantId.has(p.participantId),
         registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null,
         // Add count of registrations from this comitê
@@ -834,6 +836,8 @@ export const getRegistrationAnalytics = query({
         escola: p.escola,
         cidade: p.cidade,
         uf: p.uf,
+        regional: p.regional,
+        agFiliacao: p.agFiliacao,
         isRegistered: registrationsByParticipantId.has(p.participantId),
         registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null,
         // Add count of registrations from this comitê
