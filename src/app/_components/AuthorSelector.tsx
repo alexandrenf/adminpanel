@@ -117,6 +117,9 @@ export default function AuthorSelector({ selectedAuthors, onAuthorsChange, disab
         }
     );
 
+    // Photo upload mutation
+    const uploadPhoto = api.authors.uploadPhoto.useMutation();
+
     // Create author mutation
     const createAuthor = api.authors.create.useMutation({
         onSuccess: (newAuthor) => {
@@ -182,11 +185,24 @@ export default function AuthorSelector({ selectedAuthors, onAuthorsChange, disab
         if (!newAuthorName.trim()) return;
         
         try {
-            await createAuthor.mutateAsync({
+            // First create the author without photo
+            const newAuthor = await createAuthor.mutateAsync({
                 name: newAuthorName.trim(),
                 bio: newAuthorBio.trim() || undefined,
-                photoLink: newAuthorPhoto || undefined,
+                photoLink: undefined,
             });
+
+            // If there's a photo, upload it and update the author
+            if (newAuthorPhoto && newAuthor.id) {
+                const photoResult = await uploadPhoto.mutateAsync({
+                    authorId: newAuthor.id,
+                    image: newAuthorPhoto,
+                });
+                
+                // Update the local state with the new photo URL
+                const updatedAuthor = { ...newAuthor, photoLink: photoResult.photoUrl };
+                onAuthorsChange([...selectedAuthors.filter(a => a.id !== newAuthor.id), updatedAuthor]);
+            }
         } catch (error) {
             console.error("Error creating author:", error);
             alert("Failed to create author. Please try again.");
@@ -207,11 +223,23 @@ export default function AuthorSelector({ selectedAuthors, onAuthorsChange, disab
         if (!editingAuthor || !editAuthorName.trim()) return;
         
         try {
+            let photoUrl = editingAuthor.photoLink;
+            
+            // If there's a new photo, upload it first
+            if (editAuthorPhoto) {
+                const photoResult = await uploadPhoto.mutateAsync({
+                    authorId: editingAuthor.id,
+                    image: editAuthorPhoto,
+                });
+                photoUrl = photoResult.photoUrl;
+            }
+            
+            // Update the author with the new data
             await updateAuthor.mutateAsync({
                 id: editingAuthor.id,
                 name: editAuthorName.trim(),
                 bio: editAuthorBio.trim() || undefined,
-                photoLink: editAuthorPhoto || editingAuthor.photoLink || undefined,
+                photoLink: photoUrl || undefined,
             });
         } catch (error) {
             console.error("Error updating author:", error);

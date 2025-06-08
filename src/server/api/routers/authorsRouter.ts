@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
+import fetch from 'node-fetch';
+import { env } from "~/env";
+
+const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
+const REPO_OWNER = "ifmsabrazil";
+const REPO_NAME = "dataifmsabrazil";
 
 export const authorsRouter = createTRPCRouter({
   // Get all authors
@@ -189,7 +195,7 @@ export const authorsRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  // Upload author photo (similar to existing photo upload patterns)
+  // Upload author photo
   uploadPhoto: protectedProcedure
     .input(
       z.object({
@@ -198,15 +204,55 @@ export const authorsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // This would integrate with the existing GitHub file upload system
-      // For now, we'll just update the photoLink field
-      // The actual GitHub integration would be similar to the existing file upload logic
+      const { authorId, image } = input;
       
-      const photoUrl = `https://example.com/authors/${input.authorId}/photo.jpg`; // Placeholder
+      const imageFilename = `photo_${new Date().getTime()}.png`;
+      const GITHUB_API_URL_IMAGE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/authors/${authorId}/${imageFilename}`;
       
-      return ctx.db.author.update({
-        where: { id: input.authorId },
-        data: { photoLink: photoUrl },
-      });
+      const imageContent = Buffer.from(image, "base64").toString("base64");
+      
+      try {
+        // Upload the image file to GitHub
+        const imageResponse = await fetch(GITHUB_API_URL_IMAGE, {
+          method: "PUT",
+          headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: `Add author photo for ${authorId}`,
+            content: imageContent,
+            committer: {
+              name: "Admin Panel",
+              email: "admin@ifmsabrazil.org",
+            },
+          }),
+        });
+
+        if (!imageResponse.ok) {
+          const imageResponseData = await imageResponse.text();
+          console.error("Image response error:", imageResponseData);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `GitHub API responded with status ${imageResponse.status}`,
+          });
+        }
+
+        const photoUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/authors/${authorId}/${imageFilename}`;
+        
+        // Update the author's photoLink in the database
+        await ctx.db.author.update({
+          where: { id: authorId },
+          data: { photoLink: photoUrl },
+        });
+        
+        return { photoUrl };
+      } catch (error) {
+        console.error("Error uploading author photo:", error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: "Error uploading author photo",
+        });
+      }
     }),
 }); 
