@@ -468,10 +468,7 @@ export default function AGRegistrationPage() {
                                 modalityName: selectedModality.name,
                                 additionalInstructions: "Sua resubmissão foi aprovada automaticamente. Bem-vindo(a)!",
                                 paymentAmount: selectedModality.price && selectedModality.price > 0 ? 
-                                    new Intl.NumberFormat('pt-BR', {
-                                        style: 'currency',
-                                        currency: 'BRL'
-                                    }).format(selectedModality.price / 100) : undefined,
+                                    selectedModality.price / 100 : undefined,
                                 isPaymentExempt: selectedModality.price === 0,
                             });
                             console.log('✅ Auto-approval resubmission email sent successfully');
@@ -487,7 +484,7 @@ export default function AGRegistrationPage() {
                                 assemblyEndDate: new Date(assembly.endDate),
                                 modalityName: selectedModality.name,
                                 paymentRequired: selectedModality.price ? selectedModality.price > 0 : false,
-                                paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price : undefined,
+                                paymentAmount: selectedModality.price && selectedModality.price > 0 ? selectedModality.price / 100 : undefined,
                             });
                             console.log('✅ Resubmission confirmation email sent successfully');
                         }
@@ -571,10 +568,7 @@ export default function AGRegistrationPage() {
                                 modalityName: selectedModality.name,
                                 additionalInstructions: "Sua inscrição na AGE foi aprovada automaticamente. Bem-vindo(a)!",
                                 paymentAmount: selectedModality.price && selectedModality.price > 0 ? 
-                                    new Intl.NumberFormat('pt-BR', {
-                                        style: 'currency',
-                                        currency: 'BRL'
-                                    }).format(selectedModality.price / 100) : undefined,
+                                    selectedModality.price / 100 : undefined,
                                 isPaymentExempt: selectedModality.price === 0,
                             });
                             console.log('✅ AGE approval email sent successfully');
