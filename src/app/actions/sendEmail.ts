@@ -29,7 +29,7 @@ interface RegistrationConfirmationData extends BaseEmailData {
   assemblyDates: string;
   modalityName: string;
   paymentRequired: boolean;
-  paymentAmount?: string;
+  paymentAmount?: number;
   registrationUrl?: string;
   isPaymentExempt?: boolean;
   paymentExemptReason?: string;
@@ -43,7 +43,7 @@ interface RegistrationApprovedData extends BaseEmailData {
   modalityName: string;
   additionalInstructions?: string;
   qrCodeUrl?: string;
-  paymentAmount?: string;
+  paymentAmount?: number;
   isPaymentExempt?: boolean;
   paymentExemptReason?: string;
 }
@@ -60,7 +60,7 @@ interface RegistrationRejectedData extends BaseEmailData {
 interface PaymentReminderData extends BaseEmailData {
   registrationId: string;
   assemblyName: string;
-  paymentAmount: string;
+  paymentAmount: number;
   paymentDeadline: string;
   paymentUrl: string;
   pixKey?: string;
@@ -70,7 +70,7 @@ interface PaymentReminderData extends BaseEmailData {
 interface PaymentConfirmationData extends BaseEmailData {
   registrationId: string;
   assemblyName: string;
-  paymentAmount: string;
+  paymentAmount: number;
   paymentDate: string;
   receiptNumber?: string;
 }
@@ -121,6 +121,17 @@ function sanitizeContent(content: string): string {
     .trim();
 }
 
+// Format currency to BRL
+function formatCurrency(amount: number | undefined): string {
+  if (amount === undefined) {
+    return '';
+  }
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(amount);
+}
+
 // Generate email content based on type
 function generateEmailContent(emailData: EmailData): { subject: string; text: string; html: string } {
   const baseUrl = env.NEXTAUTH_URL;
@@ -147,7 +158,7 @@ ${confirmData.isPaymentExempt ? `
 PAGAMENTO: Isento de Pagamento
 ${confirmData.paymentExemptReason ? `Motivo: ${confirmData.paymentExemptReason}` : ''}
 ` : `
-PAGAMENTO: ${confirmData.paymentAmount}
+PAGAMENTO: ${formatCurrency(confirmData.paymentAmount)}
 Status: Pagamento Necessário
 `}
 ` : 'Sua inscrição será analisada em breve.'}
@@ -475,8 +486,8 @@ Equipe IFMSA Brazil
       </div>
               ` : `
                 <div class="payment-required">
-                  <p><strong>Valor:</strong> ${confirmData.paymentAmount}</p>
-                  <p><strong>Status:</strong> Pagamento Necessário</p>
+                  <p><strong>Valor:</strong> ${formatCurrency(confirmData.paymentAmount)}</p>
+                  <p><strong>Status:</strong> Comprovante de Pagamento enviado</p>
     </div>
               `}
             </div>
@@ -522,7 +533,7 @@ ${approvedData.isPaymentExempt ? `
 PAGAMENTO: Isento de Pagamento
 ${approvedData.paymentExemptReason ? `Motivo: ${approvedData.paymentExemptReason}` : ''}
 ` : `
-PAGAMENTO: ${approvedData.paymentAmount}
+PAGAMENTO: ${formatCurrency(approvedData.paymentAmount)}
 Status: Pagamento Confirmado
 `}
 ` : ''}
@@ -870,7 +881,7 @@ Equipe IFMSA Brazil
                 </div>
               ` : `
                 <div class="payment-required">
-                  <p><strong>Valor:</strong> ${approvedData.paymentAmount}</p>
+                  <p><strong>Valor:</strong> ${formatCurrency(approvedData.paymentAmount)}</p>
                   <p><strong>Status:</strong> Pagamento Confirmado</p>
                 </div>
               `}
@@ -1025,7 +1036,7 @@ Este é um lembrete sobre o pagamento pendente para sua inscrição.
 Detalhes do Pagamento:
 - ID da Inscrição: ${paymentData.registrationId}
 - Assembleia: ${paymentData.assemblyName}
-- Valor: ${paymentData.paymentAmount}
+- Valor: ${formatCurrency(paymentData.paymentAmount)}
 - Prazo: ${paymentData.paymentDeadline}
 
 Para efetuar o pagamento: ${paymentData.paymentUrl}
@@ -1068,7 +1079,7 @@ Equipe IFMSA Brazil
         <h3>Detalhes do Pagamento</h3>
         <p><strong>ID da Inscrição:</strong> ${paymentData.registrationId}</p>
         <p><strong>Assembleia:</strong> ${paymentData.assemblyName}</p>
-        <p><strong>Valor:</strong> ${paymentData.paymentAmount}</p>
+        <p><strong>Valor:</strong> ${formatCurrency(paymentData.paymentAmount)}</p>
         <p><strong>Prazo:</strong> ${paymentData.paymentDeadline}</p>
       </div>
       
@@ -1104,7 +1115,7 @@ Seu pagamento foi confirmado com sucesso!
 Detalhes:
 - ID da Inscrição: ${paymentConfirmData.registrationId}
 - Assembleia: ${paymentConfirmData.assemblyName}
-- Valor Pago: ${paymentConfirmData.paymentAmount}
+- Valor Pago: ${formatCurrency(paymentConfirmData.paymentAmount)}
 - Data do Pagamento: ${paymentConfirmData.paymentDate}
 ${paymentConfirmData.receiptNumber ? `- Número do Recibo: ${paymentConfirmData.receiptNumber}` : ''}
 
@@ -1144,7 +1155,7 @@ Equipe IFMSA Brazil
         <h3>Detalhes do Pagamento</h3>
         <p><strong>ID da Inscrição:</strong> ${paymentConfirmData.registrationId}</p>
         <p><strong>Assembleia:</strong> ${paymentConfirmData.assemblyName}</p>
-        <p><strong>Valor Pago:</strong> ${paymentConfirmData.paymentAmount}</p>
+        <p><strong>Valor Pago:</strong> ${formatCurrency(paymentConfirmData.paymentAmount)}</p>
         <p><strong>Data do Pagamento:</strong> ${paymentConfirmData.paymentDate}</p>
         ${paymentConfirmData.receiptNumber ? `<p><strong>Número do Recibo:</strong> ${paymentConfirmData.receiptNumber}</p>` : ''}
       </div>

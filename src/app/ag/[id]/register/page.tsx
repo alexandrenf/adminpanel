@@ -1308,12 +1308,20 @@ function ModalityOption({ modality, isSelected, onSelect }: {
     isSelected: boolean;
     onSelect: () => void;
 }) {
+    // Fetch modality statistics to get current registration count
+    const modalityStats = useQuery(convexApi.registrationModalities?.getModalityStats, { modalityId: modality._id });
+
     const formatPrice = (priceInCents: number) => {
         return new Intl.NumberFormat('pt-BR', {
             style: 'currency',
             currency: 'BRL'
         }).format(priceInCents / 100);
     };
+
+    // Calculate available spots
+    const currentRegistrations = modalityStats?.currentRegistrations || 0;
+    const maxParticipants = modality.maxParticipants;
+    const availableSpots = maxParticipants ? maxParticipants - currentRegistrations : null;
 
     return (
         <div 
@@ -1351,9 +1359,15 @@ function ModalityOption({ modality, isSelected, onSelect }: {
                         
                         {modality.maxParticipants && (
                             <div>
-                                <span className="text-sm text-gray-500">Vagas: </span>
-                                <span className="font-semibold">
-                                    {modality.maxParticipants}
+                                <span className="text-sm text-gray-500">Vagas disponíveis: </span>
+                                <span className={`font-semibold ${
+                                    availableSpots === 0 ? 'text-red-600' : 
+                                    availableSpots !== null && availableSpots <= 5 ? 'text-orange-600' : 
+                                    'text-gray-900'
+                                }`}>
+                                    {availableSpots !== null ? availableSpots : '∞'}
+                                    {availableSpots === 0 && ' (Esgotado)'}
+                                    {availableSpots !== null && availableSpots > 0 && availableSpots <= 5 && ' (Últimas vagas)'}
                                 </span>
                             </div>
                         )}
