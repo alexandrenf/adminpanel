@@ -50,11 +50,7 @@ export async function handleNewRegistration(registrationData: {
     assemblyDates: assemblyDates,
     modalityName: registrationData.modalityName,
     paymentRequired: registrationData.paymentRequired,
-    paymentAmount: registrationData.paymentAmount ? 
-      new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-      }).format(registrationData.paymentAmount / 100) : undefined,
+    paymentAmount: registrationData.paymentAmount,
     isPaymentExempt: registrationData.isPaymentExempt,
     paymentExemptReason: registrationData.paymentExemptReason,
   });
@@ -80,7 +76,7 @@ export async function handleRegistrationApproval(registrationData: {
   assemblyEndDate: Date;
   modalityName: string;
   additionalInstructions?: string;
-  paymentAmount?: string;
+  paymentAmount?: number;
   isPaymentExempt?: boolean;
   paymentExemptReason?: string;
 }) {
@@ -155,7 +151,7 @@ export async function handlePaymentReminder(registrationData: {
     participantName: registrationData.participantName,
     registrationId: registrationData.registrationId,
     assemblyName: registrationData.assemblyName,
-    paymentAmount: `R$ ${registrationData.paymentAmount.toFixed(2)}`,
+    paymentAmount: registrationData.paymentAmount,
     paymentDeadline: formatDateWithoutTimezone(registrationData.paymentDeadline),
     paymentUrl: `${env.NEXTAUTH_URL}/ag/${registrationData.registrationId}/payment`,
     pixKey: registrationData.pixKey,
@@ -186,7 +182,7 @@ export async function handlePaymentConfirmation(registrationData: {
     participantName: registrationData.participantName,
     registrationId: registrationData.registrationId,
     assemblyName: registrationData.assemblyName,
-    paymentAmount: `R$ ${registrationData.paymentAmount.toFixed(2)}`,
+    paymentAmount: registrationData.paymentAmount,
     paymentDate: formatDateWithoutTimezone(registrationData.paymentDate),
     receiptNumber: registrationData.receiptNumber,
   });
@@ -303,11 +299,7 @@ export async function processRegistrationStatusChange(
         assemblyEndDate: registrationData.assemblyEndDate,
         modalityName: registrationData.modalityName,
         additionalInstructions: registrationData.additionalInstructions,
-        paymentAmount: registrationData.paymentAmount ? 
-          new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-          }).format(registrationData.paymentAmount / 100) : undefined,
+        paymentAmount: registrationData.paymentAmount,
         isPaymentExempt: registrationData.isPaymentExempt,
         paymentExemptReason: registrationData.paymentExemptReason,
       });

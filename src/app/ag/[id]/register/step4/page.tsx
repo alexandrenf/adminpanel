@@ -426,10 +426,7 @@ export default function AGRegistrationStep4Page() {
                             "Sua resubmissão foi aprovada automaticamente. Bem-vindo(a)!" : 
                             "Sua inscrição foi aprovada automaticamente. Bem-vindo(a)!",
                         paymentAmount: selectedModalityData.price > 0 ? 
-                            new Intl.NumberFormat('pt-BR', {
-                                style: 'currency',
-                                currency: 'BRL'
-                            }).format(selectedModalityData.price / 100) : undefined,
+                            selectedModalityData.price / 100 : undefined,
                         isPaymentExempt: isPaymentExempt || selectedModalityData.price === 0,
                         paymentExemptReason: exemptionReason
                     });
