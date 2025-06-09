@@ -694,10 +694,7 @@ export default function AGAdminPage() {
                             paymentAmount: selectedRegistration.modalityId && modalities ? 
                                 (() => {
                                     const modality = modalities.find(m => m._id === selectedRegistration.modalityId);
-                                    return modality?.price ? new Intl.NumberFormat('pt-BR', {
-                                        style: 'currency',
-                                        currency: 'BRL'
-                                    }).format(modality.price / 100) : undefined;
+                                    return modality?.price ? modality.price / 100 : undefined;
                                 })() : undefined,
                             isPaymentExempt: selectedRegistration.isPaymentExempt,
                             paymentExemptReason: selectedRegistration.paymentExemptReason
