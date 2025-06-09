@@ -130,7 +130,7 @@ export async function testRegistrationConfirmation() {
     assemblyDates: '15/03/2024 - 17/03/2024',
     modalityName: 'Participante - Teste',
     paymentRequired: true,
-    paymentAmount: 'R$ 150,00',
+    paymentAmount: 150.00,
     registrationUrl: `${env.NEXTAUTH_URL}/test/payment`,
   };
 
