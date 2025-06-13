@@ -554,26 +554,20 @@ const isDeadlinePassed = (deadline: number): boolean => {
     const deadlineDate = new Date(deadline);
     
     // BSB timezone is UTC-3
-    // We want to allow registration until 23:59:59 BSB time of the deadline day
+    // We want to allow registration until 23:59:59.999 BSB time of the deadline day
     
-    // Get the deadline date and set it to end of day in BSB
-    // First, convert to BSB by subtracting 3 hours from UTC
-    const bsbDeadlineDate = new Date(deadlineDate.getTime() - (3 * 60 * 60 * 1000));
+    // Get the deadline date in UTC and extract date components
+    const year = deadlineDate.getUTCFullYear();
+    const month = deadlineDate.getUTCMonth();
+    const day = deadlineDate.getUTCDate();
     
-    // Set to end of day in BSB (23:59:59.999)
-    const year = bsbDeadlineDate.getUTCFullYear();
-    const month = bsbDeadlineDate.getUTCMonth();
-    const day = bsbDeadlineDate.getUTCDate();
-    
-    // Create end of day in BSB
+    // Create end of day in BSB timezone (23:59:59.999)
+    // Since BSB is UTC-3, we need to create the end of day at UTC+3 hours
     const endOfDayBSB = new Date();
     endOfDayBSB.setUTCFullYear(year, month, day);
-    endOfDayBSB.setUTCHours(23, 59, 59, 999);
+    endOfDayBSB.setUTCHours(23 + 3, 59, 59, 999); // Add 3 hours to convert BSB to UTC
     
-    // Convert back to UTC for comparison (add 3 hours back)
-    const endOfDayUTC = new Date(endOfDayBSB.getTime() + (3 * 60 * 60 * 1000));
-    
-    return now > endOfDayUTC;
+    return now > endOfDayBSB;
 };
 
 export default function AGPage() {

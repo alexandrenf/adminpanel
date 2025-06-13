@@ -13,6 +13,27 @@ const REPO_NAME = "dataifmsabrazil";
 const client = algoliasearch(env.ALGOLIA_APPLICATION_ID, env.ALGOLIA_API_KEY);
 const NOTICIAS_INDEX = 'noticias_index';
 
+// Create an index wrapper to simulate v4 initIndex pattern while using v5 methods
+const index = {
+    saveObject: (object: any) => client.saveObject({
+        indexName: NOTICIAS_INDEX,
+        body: object
+    }),
+    partialUpdateObject: (object: any) => client.partialUpdateObject({
+        indexName: NOTICIAS_INDEX,
+        objectID: object.objectID || object.id?.toString(),
+        attributesToUpdate: object
+    }),
+    deleteObject: (objectID: string) => client.deleteObject({
+        indexName: NOTICIAS_INDEX,
+        objectID
+    }),
+    saveObjects: (objects: any[]) => client.saveObjects({
+        indexName: NOTICIAS_INDEX,
+        objects
+    })
+};
+
 // Helper function to fetch markdown content from a URL
 const fetchMarkdownContent = async (url: string): Promise<string> => {
     try {
@@ -117,10 +138,7 @@ const formatBlogForAlgolia = async (blog: any) => {
 const indexBlogToAlgolia = async (blog: any) => {
     try {
         const formattedBlog = await formatBlogForAlgolia(blog);
-        await client.saveObject({
-            indexName: NOTICIAS_INDEX,
-            body: formattedBlog
-        });
+        await index.saveObject(formattedBlog);
         console.log(`Successfully indexed blog ${blog.id} to Algolia with content`);
     } catch (error) {
         console.error(`Error indexing blog ${blog.id} to Algolia:`, error);
@@ -132,11 +150,7 @@ const indexBlogToAlgolia = async (blog: any) => {
 const updateBlogInAlgolia = async (blog: any) => {
     try {
         const formattedBlog = await formatBlogForAlgolia(blog);
-        await client.partialUpdateObject({
-            indexName: NOTICIAS_INDEX,
-            objectID: blog.id.toString(),
-            attributesToUpdate: formattedBlog
-        });
+        await index.partialUpdateObject(formattedBlog);
         console.log(`Successfully updated blog ${blog.id} in Algolia with content`);
     } catch (error) {
         console.error(`Error updating blog ${blog.id} in Algolia:`, error);
@@ -147,10 +161,7 @@ const updateBlogInAlgolia = async (blog: any) => {
 // Helper function to delete a blog from Algolia
 const deleteBlogFromAlgolia = async (blogId: number) => {
     try {
-        await client.deleteObject({
-            indexName: NOTICIAS_INDEX,
-            objectID: blogId.toString()
-        });
+        await index.deleteObject(blogId.toString());
         console.log(`Successfully deleted blog ${blogId} from Algolia`);
     } catch (error) {
         console.error(`Error deleting blog ${blogId} from Algolia:`, error);
@@ -176,10 +187,7 @@ const reindexAllBlogsToAlgolia = async (blogs: any[]) => {
             formattedBlogs.push(...batchResults);
         }
         
-        await client.saveObjects({
-            indexName: NOTICIAS_INDEX,
-            objects: formattedBlogs
-        });
+        await index.saveObjects(formattedBlogs);
         
         console.log(`Successfully reindexed ${blogs.length} blogs to Algolia with content`);
         return { success: true, count: blogs.length };

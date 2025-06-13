@@ -22,24 +22,26 @@ const formatDateWithoutTimezone = (timestamp: number): string => {
 };
 
 // Helper function to check if current time is past deadline (BSB timezone)
-// This mirrors the same logic used in the backend - memoized
+// This correctly handles BSB timezone (UTC-3) regardless of server location
 const isDeadlinePassed = (deadline: number): boolean => {
   const now = new Date();
   const deadlineDate = new Date(deadline);
   
-  // Create end of day in BSB (23:59:59.999)
-  // First, get the date components in local time
-  const year = deadlineDate.getFullYear();
-  const month = deadlineDate.getMonth();
-  const day = deadlineDate.getDate();
+  // BSB timezone is UTC-3
+  // We want to allow registration until 23:59:59.999 BSB time of the deadline day
   
-  // Create a date at 23:59:59.999 in BSB time
-  const endOfDayBSB = new Date(year, month, day, 23, 59, 59, 999);
+  // Get the deadline date in UTC and extract date components
+  const year = deadlineDate.getUTCFullYear();
+  const month = deadlineDate.getUTCMonth();
+  const day = deadlineDate.getUTCDate();
   
-  // Convert BSB time to UTC by adding 3 hours
-  const endOfDayUTC = new Date(endOfDayBSB.getTime() + (3 * 60 * 60 * 1000));
+  // Create end of day in BSB timezone (23:59:59.999)
+  // Since BSB is UTC-3, we need to create the end of day at UTC+3 hours
+  const endOfDayBSB = new Date();
+  endOfDayBSB.setUTCFullYear(year, month, day);
+  endOfDayBSB.setUTCHours(23 + 3, 59, 59, 999); // Add 3 hours to convert BSB to UTC
   
-  return now > endOfDayUTC;
+  return now > endOfDayBSB;
 };
 
 // Memoized background component
