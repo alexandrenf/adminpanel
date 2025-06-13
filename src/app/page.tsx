@@ -21,6 +21,35 @@ const formatDateWithoutTimezone = (timestamp: number): string => {
   return `${day}/${month}/${year}`;
 };
 
+// Helper function to check if current time is past deadline (BSB timezone)
+// This mirrors the same logic used in the backend
+const isDeadlinePassed = (deadline: number): boolean => {
+  const now = new Date();
+  const deadlineDate = new Date(deadline);
+  
+  // BSB timezone is UTC-3
+  // We want to allow registration until 23:59:59 BSB time of the deadline day
+  
+  // Get the deadline date and set it to end of day in BSB
+  // First, convert to BSB by subtracting 3 hours from UTC
+  const bsbDeadlineDate = new Date(deadlineDate.getTime() - (3 * 60 * 60 * 1000));
+  
+  // Set to end of day in BSB (23:59:59.999)
+  const year = bsbDeadlineDate.getUTCFullYear();
+  const month = bsbDeadlineDate.getUTCMonth();
+  const day = bsbDeadlineDate.getUTCDate();
+  
+  // Create end of day in BSB
+  const endOfDayBSB = new Date();
+  endOfDayBSB.setUTCFullYear(year, month, day);
+  endOfDayBSB.setUTCHours(23, 59, 59, 999);
+  
+  // Convert back to UTC for comparison (add 3 hours back)
+  const endOfDayUTC = new Date(endOfDayBSB.getTime() + (3 * 60 * 60 * 1000));
+  
+  return now > endOfDayUTC;
+};
+
 export default function Home() {
   const { data: session } = useSession();
   const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
@@ -171,11 +200,17 @@ export default function Home() {
                               <p className="text-sm text-gray-700">
                                 <span className="font-medium">Status:</span>{" "}
                                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    nextAssembly.registrationOpen 
+                                    nextAssembly.registrationOpen && (!nextAssembly.registrationDeadline || !isDeadlinePassed(nextAssembly.registrationDeadline))
                                       ? "bg-green-100 text-green-800" 
-                                      : "bg-red-100 text-red-800"
+                                      : nextAssembly.registrationDeadline && isDeadlinePassed(nextAssembly.registrationDeadline)
+                                        ? "bg-orange-100 text-orange-800"
+                                        : "bg-red-100 text-red-800"
                                   }`}>
-                                    {nextAssembly.registrationOpen ? "Inscrições Abertas" : "Inscrições Fechadas"}
+                                    {nextAssembly.registrationOpen && (!nextAssembly.registrationDeadline || !isDeadlinePassed(nextAssembly.registrationDeadline))
+                                      ? "Inscrições Abertas" 
+                                      : nextAssembly.registrationDeadline && isDeadlinePassed(nextAssembly.registrationDeadline)
+                                        ? "Prazo Expirado"
+                                        : "Inscrições Fechadas"}
                                 </span>
                               </p>
                                 {nextAssembly.description && (
@@ -186,7 +221,7 @@ export default function Home() {
                             </div>
                             <div className="mt-4">
                               <Link href="/ag" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
-                                  {nextAssembly.registrationOpen ? "Inscrever-se agora" : "Ver detalhes"}
+                                  {nextAssembly.registrationOpen && (!nextAssembly.registrationDeadline || !isDeadlinePassed(nextAssembly.registrationDeadline)) ? "Inscrever-se agora" : "Ver detalhes"}
                                 <ArrowRight className="w-4 h-4 ml-1" />
                               </Link>
                             </div>

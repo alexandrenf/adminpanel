@@ -547,6 +547,35 @@ const formatDateWithoutTimezone = (timestamp: number): string => {
     return `${day}/${month}/${year}`;
 };
 
+// Helper function to check if current time is past deadline (BSB timezone)
+// This mirrors the same logic used in the backend
+const isDeadlinePassed = (deadline: number): boolean => {
+    const now = new Date();
+    const deadlineDate = new Date(deadline);
+    
+    // BSB timezone is UTC-3
+    // We want to allow registration until 23:59:59 BSB time of the deadline day
+    
+    // Get the deadline date and set it to end of day in BSB
+    // First, convert to BSB by subtracting 3 hours from UTC
+    const bsbDeadlineDate = new Date(deadlineDate.getTime() - (3 * 60 * 60 * 1000));
+    
+    // Set to end of day in BSB (23:59:59.999)
+    const year = bsbDeadlineDate.getUTCFullYear();
+    const month = bsbDeadlineDate.getUTCMonth();
+    const day = bsbDeadlineDate.getUTCDate();
+    
+    // Create end of day in BSB
+    const endOfDayBSB = new Date();
+    endOfDayBSB.setUTCFullYear(year, month, day);
+    endOfDayBSB.setUTCHours(23, 59, 59, 999);
+    
+    // Convert back to UTC for comparison (add 3 hours back)
+    const endOfDayUTC = new Date(endOfDayBSB.getTime() + (3 * 60 * 60 * 1000));
+    
+    return now > endOfDayUTC;
+};
+
 export default function AGPage() {
     const { data: session } = useSession();
     const router = useRouter();
@@ -1077,6 +1106,20 @@ export default function AGPage() {
                 );
             }
 
+            // Check if registration deadline has passed
+            if (assembly.registrationDeadline && isDeadlinePassed(assembly.registrationDeadline)) {
+                return (
+                    <Button 
+                        className="w-full"
+                        disabled
+                        variant="outline"
+                    >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Prazo de Inscrição Expirado
+                    </Button>
+                );
+            }
+
             if (!registrationStatus) {
                 // No registration found - show register button
                 return (
@@ -1201,9 +1244,13 @@ export default function AGPage() {
                         <Badge variant="outline" className="text-xs">
                             {assembly.type === "AG" ? "Presencial" : "Online"}
                         </Badge>
-                        {assembly.registrationOpen ? (
+                        {assembly.registrationOpen && (!assembly.registrationDeadline || !isDeadlinePassed(assembly.registrationDeadline)) ? (
                             <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
                                 Inscrições Abertas
+                            </Badge>
+                        ) : assembly.registrationDeadline && isDeadlinePassed(assembly.registrationDeadline) ? (
+                            <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
+                                Prazo Expirado
                             </Badge>
                         ) : (
                             <Badge variant="outline" className="text-red-600 border-red-200 text-xs">
