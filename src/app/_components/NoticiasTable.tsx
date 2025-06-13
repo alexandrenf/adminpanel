@@ -32,14 +32,22 @@ import {
     Image as ImageIcon,
     Calendar,
     User,
-    FileText
+    FileText,
+    Search,
+    RefreshCw,
+    CheckCircle,
+    XCircle,
+    Info
 } from "lucide-react";
 import { api } from "~/trpc/react";
+import { useToast } from "../../components/ui/use-toast";
 
 export default function NoticiasTable() {
     const router = useRouter();
+    const { toast } = useToast();
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const { data: noticiasData, refetch } = api.noticias.getAll.useQuery();
+    const { data: algoliaStats, refetch: refetchAlgoliaStats } = api.noticias.getAlgoliaStats.useQuery();
 
     // Sort noticias by date (newest first)
     const noticias = noticiasData?.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -56,6 +64,24 @@ export default function NoticiasTable() {
     const deleteAnywayMutation = api.noticias.deleteAnyway.useMutation({
         onSuccess: () => {
             refetch();
+        }
+    });
+
+    const syncToAlgoliaMutation = api.noticias.syncToAlgolia.useMutation({
+        onSuccess: (result) => {
+            toast({
+                title: "Sync Successful",
+                description: result.message,
+                variant: "default",
+            });
+            refetchAlgoliaStats();
+        },
+        onError: (error) => {
+            toast({
+                title: "Sync Failed",
+                description: error.message,
+                variant: "destructive",
+            });
         }
     });
 
@@ -76,6 +102,10 @@ export default function NoticiasTable() {
         router.push("/noticias/create");
     };
 
+    const handleSyncToAlgolia = () => {
+        syncToAlgoliaMutation.mutate();
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -91,14 +121,87 @@ export default function NoticiasTable() {
                         <p className="text-gray-600">Gerencie as notícias do sistema</p>
                     </div>
                 </div>
-                <Button 
-                    onClick={handleAdd}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nova Notícia
-                </Button>
+                <div className="flex items-center space-x-3">
+                    <Button 
+                        onClick={handleSyncToAlgolia}
+                        disabled={syncToAlgoliaMutation.isPending}
+                        variant="outline"
+                        className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200 hover:border-green-300"
+                    >
+                        {syncToAlgoliaMutation.isPending ? (
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                            <Search className="w-4 h-4 mr-2" />
+                        )}
+                        Sincronizar Algolia
+                    </Button>
+                    <Button 
+                        onClick={handleAdd}
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                    >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Nova Notícia
+                    </Button>
+                </div>
             </div>
+
+            {/* Algolia Status Card */}
+            <Card className="shadow-sm border-l-4 border-l-blue-500">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center space-x-2 text-lg">
+                        <Search className="w-5 h-5 text-blue-600" />
+                        <span>Status da Busca Algolia</span>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2">
+                                {algoliaStats?.indexExists ? (
+                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                ) : (
+                                    <XCircle className="w-4 h-4 text-red-600" />
+                                )}
+                                <span className="text-sm font-medium">
+                                    Index: {algoliaStats?.indexName || 'noticias_index'}
+                                </span>
+                            </div>
+                            <Badge variant={algoliaStats?.indexExists ? "default" : "destructive"}>
+                                {algoliaStats?.indexExists ? "Ativo" : "Não Configurado"}
+                            </Badge>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Info className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm">
+                                Total de notícias: <strong>{noticias?.length || 0}</strong>
+                            </span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <FileText className="w-4 h-4 text-purple-600" />
+                            <span className="text-sm">
+                                URL Pattern: <code className="bg-gray-100 px-1 rounded text-xs">
+                                    {algoliaStats?.urlPattern}
+                                </code>
+                            </span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Search className="w-4 h-4 text-green-600" />
+                            <span className="text-sm">
+                                <Badge variant="secondary" className="text-xs">
+                                    Conteúdo Completo
+                                </Badge>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {algoliaStats?.message && (
+                        <div className="text-sm text-gray-600 bg-yellow-50 p-2 rounded border-l-2 border-yellow-400">
+                            <Info className="w-4 h-4 inline mr-1" />
+                            {algoliaStats.message}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* News Table */}
             <Card className="shadow-lg border-0">
@@ -218,7 +321,7 @@ export default function NoticiasTable() {
                                                                         </div>
                                                                     ) : (
                                                                         <>
-                                                                                                                                                         Tem certeza que deseja excluir a notícia <strong>&ldquo;{row.title}&rdquo;</strong>? 
+                                                                            Tem certeza que deseja excluir a notícia <strong>&ldquo;{row.title}&rdquo;</strong>? 
                                                                              Esta ação não pode ser desfeita.
                                                                         </>
                                                                     )}

@@ -12,6 +12,7 @@ import Footer from "./_components/Footer";
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 
+export const viewport = "width=device-width, initial-scale=1";
 
 export const metadata = {
   title: "Portal IFMSA Brazil",
@@ -38,7 +39,12 @@ export default async function RootLayout({
   const session = await getServerAuthSession();
   
   return (
-    <html lang="en" className={`${GeistSans.variable}`}>
+    <html lang="pt-BR" className={`${GeistSans.variable}`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.convex.cloud" />
+      </head>
       <body className="min-h-screen flex flex-col">
         <Providers session={session}>
           <Navbar />
