@@ -2,6 +2,29 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
+// Helper function to check if current time is past deadline (BSB timezone)
+// This correctly handles BSB timezone (UTC-3) regardless of server location
+function isDeadlinePassed(deadline: number): boolean {
+  const now = new Date();
+  const deadlineDate = new Date(deadline);
+  
+  // BSB timezone is UTC-3
+  // We want to allow registration until 23:59:59.999 BSB time of the deadline day
+  
+  // Get the deadline date in UTC and extract date components
+  const year = deadlineDate.getUTCFullYear();
+  const month = deadlineDate.getUTCMonth();
+  const day = deadlineDate.getUTCDate();
+  
+  // Create end of day in BSB timezone (23:59:59.999)
+  // Since BSB is UTC-3, we need to create the end of day at UTC+3 hours
+  const endOfDayBSB = new Date();
+  endOfDayBSB.setUTCFullYear(year, month, day);
+  endOfDayBSB.setUTCHours(23 + 3, 59, 59, 999); // Add 3 hours to convert BSB to UTC
+  
+  return now > endOfDayBSB;
+}
+
 // Get all registrations for an assembly
 export const getByAssembly = query({
   args: { assemblyId: v.id("assemblies") },
@@ -121,7 +144,7 @@ export const register = mutation({
       throw new Error("Registration is closed for this assembly");
     }
 
-    if (assembly.registrationDeadline && Date.now() > assembly.registrationDeadline) {
+    if (assembly.registrationDeadline && isDeadlinePassed(assembly.registrationDeadline)) {
       throw new Error("Registration deadline has passed");
     }
 
@@ -535,7 +558,7 @@ export const createFromForm = mutation({
       throw new Error("Registration is closed for this assembly");
     }
 
-    if (assembly.registrationDeadline && Date.now() > assembly.registrationDeadline) {
+    if (assembly.registrationDeadline && isDeadlinePassed(assembly.registrationDeadline)) {
       throw new Error("Registration deadline has passed");
     }
 
@@ -580,8 +603,11 @@ export const createFromForm = mutation({
       )
       .first();
 
+    // If user already has a registration, we'll update it instead of creating a new one
+    let isUpdatingExisting = false;
     if (existingRegistration) {
-      throw new Error("User is already registered for this assembly");
+      isUpdatingExisting = true;
+      console.log(`Updating existing registration ${existingRegistration._id} for user ${args.userId}`);
     }
 
     // Check overall assembly max participants limit
@@ -740,15 +766,14 @@ export const createFromForm = mutation({
       participantId = args.personalInfo.comiteLocal;
     }
 
-    // Create registration with all detailed information
-    const registrationId = await ctx.db.insert("agRegistrations", {
+    // Prepare registration data
+    const registrationData = {
       assemblyId: args.assemblyId,
       modalityId: args.modalityId,
       participantType: args.personalInfo.role,
       participantId: participantId,
       participantName: participantName,
       participantRole: args.personalInfo.role,
-      registeredAt: Date.now(),
       registeredBy: args.userId,
       status: agConfig?.autoApproval ? "approved" : args.status, // Auto-approve if enabled
       
@@ -796,11 +821,33 @@ export const createFromForm = mutation({
       // Payment information
       isPaymentExempt: args.paymentInfo?.isPaymentExempt,
       paymentExemptReason: args.paymentInfo?.paymentExemptReason,
-    });
+    };
+
+    let registrationId;
+    
+    if (isUpdatingExisting && existingRegistration) {
+      // Update existing registration
+      registrationId = existingRegistration._id;
+      await ctx.db.patch(registrationId, {
+        ...registrationData,
+        // If registration was previously rejected/cancelled, reset it to the new status
+        // But preserve review data if it was approved before
+        ...(existingRegistration.status === "approved" && !agConfig?.autoApproval ? {
+          // Keep existing review data for previously approved registrations unless auto-approving
+        } : {}),
+      });
+    } else {
+      // Create new registration
+      registrationId = await ctx.db.insert("agRegistrations", {
+        ...registrationData,
+        registeredAt: Date.now(),
+      });
+    }
 
     // Return registration ID and additional info for auto-approved registrations
     return {
       registrationId,
+      isUpdated: isUpdatingExisting,
       isAutoApproved: !!agConfig?.autoApproval,
       assemblyData: agConfig?.autoApproval ? {
         name: assembly.name,
@@ -1034,7 +1081,7 @@ export const resubmit = mutation({
       throw new Error("Registration is closed for this assembly");
     }
 
-    if (assembly.registrationDeadline && Date.now() > assembly.registrationDeadline) {
+    if (assembly.registrationDeadline && isDeadlinePassed(assembly.registrationDeadline)) {
       throw new Error("Registration deadline has passed");
     }
 
