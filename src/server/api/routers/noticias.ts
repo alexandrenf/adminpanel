@@ -63,28 +63,51 @@ const formatBlogForAlgolia = async (blog: any) => {
         url: `https://ifmsabrazil.org/arquivo/${blog.id}`,
     };
 
-    // Estimate base size (rough approximation)
-    const baseSize = JSON.stringify(baseFields).length;
-    const maxContentSize = 5000; // Conservative limit to ensure we stay under 10KB total
-
-    // Truncate content to fit within size limit
-    const truncatedContent = markdownContent.substring(0, maxContentSize);
-    const searchableText = `${blog.title} ${blog.summary} ${blog.author} ${truncatedContent}`.substring(0, maxContentSize);
-
+    // Initial record with full content
     const record = {
         ...baseFields,
-        content: truncatedContent,
-        searchableText,
+        content: markdownContent,
+        searchableText: `${blog.title} ${blog.summary} ${blog.author} ${markdownContent}`,
     };
 
-    // Validate total size before returning
-    const totalSize = JSON.stringify(record).length;
-    if (totalSize > 9000) { // Leave 1KB buffer
-        console.warn(`Record ${blog.id} is still too large (${totalSize} bytes). Further truncating...`);
-        // Further truncate content if needed
-        const excess = totalSize - 9000;
-        record.content = record.content.substring(0, record.content.length - excess);
-        record.searchableText = record.searchableText.substring(0, record.searchableText.length - excess);
+    // Function to calculate record size with safety margin for JSON stringification
+    const calculateRecordSize = (record: any) => {
+        // Add 20% buffer for JSON stringification overhead
+        return Math.ceil(JSON.stringify(record).length * 1.2);
+    };
+
+    // Binary search to find the optimal content length
+    let left = 0;
+    let right = markdownContent.length;
+    let optimalLength = right;
+    const targetSize = 9000; // Target size with buffer
+
+    while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        const testRecord = {
+            ...baseFields,
+            content: markdownContent.substring(0, mid),
+            searchableText: `${blog.title} ${blog.summary} ${blog.author} ${markdownContent.substring(0, mid)}`,
+        };
+
+        const currentSize = calculateRecordSize(testRecord);
+
+        if (currentSize <= targetSize) {
+            optimalLength = mid;
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    // Apply the optimal length
+    record.content = markdownContent.substring(0, optimalLength);
+    record.searchableText = `${blog.title} ${blog.summary} ${blog.author} ${record.content}`;
+
+    // Final size check
+    const finalSize = calculateRecordSize(record);
+    if (finalSize > targetSize) {
+        console.warn(`Record ${blog.id} is still too large (${finalSize} bytes) after optimization`);
     }
 
     return record;

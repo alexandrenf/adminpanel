@@ -16,6 +16,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next"
 export const metadata = {
   title: "Portal IFMSA Brazil",
   description: "Criado por @alex.bfilho",
+  viewport: "width=device-width, initial-scale=1",
   icons: [
     { rel: "icon", url: "/favicon.ico" },
     { rel: "apple-touch-icon", url: "/apple-touch-icon.png" },
@@ -38,7 +39,12 @@ export default async function RootLayout({
   const session = await getServerAuthSession();
   
   return (
-    <html lang="en" className={`${GeistSans.variable}`}>
+    <html lang="pt-BR" className={`${GeistSans.variable}`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.convex.cloud" />
+      </head>
       <body className="min-h-screen flex flex-col">
         <Providers session={session}>
           <Navbar />
