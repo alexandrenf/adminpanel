@@ -21,6 +21,8 @@ export const env = createEnv({
     GITHUB_TOKEN: z.string(),
     WEBMASTER_EMAIL: z.string(),
     MAILTRAP_API_TOKEN: z.string(),
+    ALGOLIA_APPLICATION_ID: z.string(),
+    ALGOLIA_API_KEY: z.string(),
   },
 
   /**
@@ -48,6 +50,8 @@ export const env = createEnv({
     NEXT_PUBLIC_GITHUB_TOKEN: process.env.NEXT_PUBLIC_GITHUB_TOKEN,
     WEBMASTER_EMAIL: process.env.WEBMASTER_EMAIL,
     MAILTRAP_API_TOKEN: process.env.MAILTRAP_API_TOKEN,
+    ALGOLIA_APPLICATION_ID: process.env.ALGOLIA_APPLICATION_ID,
+    ALGOLIA_API_KEY: process.env.ALGOLIA_API_KEY,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
