@@ -29,12 +29,6 @@ This project includes Algolia search integration for the noticias (news) system.
 - **URL Pattern**: All indexed articles include the URL pattern `https://ifmsabrazil.org/arquivo/[id]`
 - **Search Fields**: Title, summary, author, date, and full article content are indexed for comprehensive search
 
-### Required Environment Variables:
-```env
-ALGOLIA_APPLICATION_ID="6RE19NWP78"
-ALGOLIA_API_KEY="7ef269a35a7a8f7c5ba6d6316283ac42"
-```
-
 ### Setup:
 1. Add the environment variables to your `.env.local` file
 2. Navigate to the Noticias admin page

@@ -333,26 +333,22 @@ export const noticiasRouter = createTRPCRouter({
     getAlgoliaStats: ifmsaEmailProcedure
         .query(async () => {
             try {
-                // Try to search the index to check if it exists
-                await client.searchSingleIndex({
-                    indexName: NOTICIAS_INDEX,
-                    searchParams: {
-                        query: '',
-                        hitsPerPage: 1
-                    }
-                });
+                const indices = await client.listIndices();
+                const indexExists = indices.items.some(index => index.name === NOTICIAS_INDEX);
+                
                 return {
                     indexName: NOTICIAS_INDEX,
-                    indexExists: true,
+                    indexExists,
                     urlPattern: "https://ifmsabrazil.org/arquivo/[id]",
                     featuresEnabled: ["Full Content Search", "Markdown Content Parsing", "Batch Processing"]
                 };
-            } catch (error) {
+            } catch (error: any) {
+                console.error("Error checking Algolia index:", error);
                 return {
                     indexName: NOTICIAS_INDEX,
                     indexExists: false,
                     urlPattern: "https://ifmsabrazil.org/arquivo/[id]",
-                    message: "Index may not exist yet. Run sync to create it.",
+                    message: "Error checking index existence. Run sync to ensure it exists.",
                     featuresEnabled: ["Full Content Search", "Markdown Content Parsing", "Batch Processing"]
                 };
             }

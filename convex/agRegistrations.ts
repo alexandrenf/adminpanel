@@ -7,24 +7,16 @@ function isDeadlinePassed(deadline: number): boolean {
   const now = new Date();
   const deadlineDate = new Date(deadline);
   
-  // BSB timezone is UTC-3
-  // We want to allow registration until 23:59:59 BSB time of the deadline day
+  // Create end of day in BSB (23:59:59.999)
+  // First, get the date components in local time
+  const year = deadlineDate.getFullYear();
+  const month = deadlineDate.getMonth();
+  const day = deadlineDate.getDate();
   
-  // Get the deadline date and set it to end of day in BSB
-  // First, convert to BSB by subtracting 3 hours from UTC
-  const bsbDeadlineDate = new Date(deadlineDate.getTime() - (3 * 60 * 60 * 1000));
+  // Create a date at 23:59:59.999 in BSB time
+  const endOfDayBSB = new Date(year, month, day, 23, 59, 59, 999);
   
-  // Set to end of day in BSB (23:59:59.999)
-  const year = bsbDeadlineDate.getUTCFullYear();
-  const month = bsbDeadlineDate.getUTCMonth();
-  const day = bsbDeadlineDate.getUTCDate();
-  
-  // Create end of day in BSB
-  const endOfDayBSB = new Date();
-  endOfDayBSB.setUTCFullYear(year, month, day);
-  endOfDayBSB.setUTCHours(23, 59, 59, 999);
-  
-  // Convert back to UTC for comparison (add 3 hours back)
+  // Convert BSB time to UTC by adding 3 hours
   const endOfDayUTC = new Date(endOfDayBSB.getTime() + (3 * 60 * 60 * 1000));
   
   return now > endOfDayUTC;
