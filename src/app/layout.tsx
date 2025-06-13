@@ -12,11 +12,11 @@ import Footer from "./_components/Footer";
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 
+export const viewport = "width=device-width, initial-scale=1";
 
 export const metadata = {
   title: "Portal IFMSA Brazil",
   description: "Criado por @alex.bfilho",
-  viewport: "width=device-width, initial-scale=1",
   icons: [
     { rel: "icon", url: "/favicon.ico" },
     { rel: "apple-touch-icon", url: "/apple-touch-icon.png" },
