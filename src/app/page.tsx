@@ -126,10 +126,17 @@ AuthInfo.displayName = 'AuthInfo';
 
 // Memoized assembly info component
 const AssemblyInfo = memo(({ assembly, session }: { assembly: any; session: any }) => {
+  // Memoize query parameters to prevent unnecessary re-renders
+  const registrationParams = useMemo(() => {
+    return session?.user?.id && assembly?._id 
+      ? { assemblyId: assembly._id, userId: session.user.id } 
+      : "skip";
+  }, [assembly?._id, session?.user?.id]);
+
   // Get user registration status for this assembly if user is logged in
   const registrationStatus = useQuery(
     convexApi.agRegistrations?.getUserRegistrationStatus,
-    session?.user?.id && assembly?._id ? { assemblyId: assembly._id, userId: session.user.id } : "skip"
+    registrationParams
   );
 
   const formattedStartDate = useMemo(() => 
@@ -151,16 +158,38 @@ const AssemblyInfo = memo(({ assembly, session }: { assembly: any; session: any 
     
     // If user has a registration, show their status instead of generic status
     if (registrationStatus) {
-      const userStatusText = registrationStatus.status === "approved" ? "Você está Inscrito" : 
-                            registrationStatus.status === "pending" ? "Sua Inscrição (Pendente)" :
-                            registrationStatus.status === "rejected" ? "Inscrição Rejeitada" : "Sua Inscrição";
+      let userStatusText: string;
+      let statusClassName: string;
+      
+      switch (registrationStatus.status) {
+        case "approved":
+          userStatusText = "Você está Inscrito";
+          statusClassName = "bg-green-100 text-green-800";
+          break;
+        case "pending":
+          userStatusText = "Sua Inscrição (Pendente)";
+          statusClassName = "bg-blue-100 text-blue-800";
+          break;
+        case "pending_review":
+          userStatusText = "Sua Inscrição (Em Análise)";
+          statusClassName = "bg-amber-100 text-amber-800";
+          break;
+        case "rejected":
+          userStatusText = "Inscrição Rejeitada";
+          statusClassName = "bg-red-100 text-red-800";
+          break;
+        default:
+          // Handle unexpected status values
+          console.warn(`Unknown registration status: ${registrationStatus.status}`);
+          userStatusText = `Sua Inscrição (${registrationStatus.status})`;
+          statusClassName = "bg-gray-100 text-gray-800";
+      }
+      
       return {
         isOpen,
         isExpired,
         text: userStatusText,
-        className: registrationStatus.status === "approved" ? "bg-green-100 text-green-800" :
-                   registrationStatus.status === "pending" ? "bg-blue-100 text-blue-800" :
-                   registrationStatus.status === "rejected" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800",
+        className: statusClassName,
         linkText: "Ver detalhes da inscrição"
       };
     }

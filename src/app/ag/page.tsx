@@ -926,6 +926,8 @@ export default function AGPage() {
 
     // Assembly Admin Card Component
     function AssemblyAdminCard({ assembly }: { assembly: Assembly }) {
+        const [isDownloading, setIsDownloading] = useState(false);
+
         const getStatusColor = (status: string) => {
             switch (status) {
                 case "active": return "bg-green-100 text-green-800 border-green-200";
@@ -935,7 +937,14 @@ export default function AGPage() {
         };
 
         const handleDownload = async () => {
-            await handleDownloadReport(assembly);
+            if (isDownloading) return; // Prevent parallel downloads
+            
+            setIsDownloading(true);
+            try {
+                await handleDownloadReport(assembly);
+            } finally {
+                setIsDownloading(false);
+            }
         };
 
         const handleEdit = () => {
@@ -980,9 +989,14 @@ export default function AGPage() {
                                 size="sm"
                                 variant="outline"
                                 onClick={handleDownload}
+                                disabled={isDownloading}
                                 title="Baixar Relatório Completo"
                             >
-                                <Download className="w-3 h-3" />
+                                {isDownloading ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                ) : (
+                                    <Download className="w-3 h-3" />
+                                )}
                             </Button>
                             <Button
                                 size="sm"
