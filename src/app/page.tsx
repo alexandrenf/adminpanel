@@ -125,7 +125,20 @@ const AuthInfo = memo(({ session }: { session: any }) => {
 AuthInfo.displayName = 'AuthInfo';
 
 // Memoized assembly info component
-const AssemblyInfo = memo(({ assembly }: { assembly: any }) => {
+const AssemblyInfo = memo(({ assembly, session }: { assembly: any; session: any }) => {
+  // Memoize query parameters to prevent unnecessary re-renders
+  const registrationParams = useMemo(() => {
+    return session?.user?.id && assembly?._id 
+      ? { assemblyId: assembly._id, userId: session.user.id } 
+      : "skip";
+  }, [assembly?._id, session?.user?.id]);
+
+  // Get user registration status for this assembly if user is logged in
+  const registrationStatus = useQuery(
+    convexApi.agRegistrations?.getUserRegistrationStatus,
+    registrationParams
+  );
+
   const formattedStartDate = useMemo(() => 
     assembly ? formatDateWithoutTimezone(assembly.startDate) : '', 
     [assembly?.startDate]
@@ -136,13 +149,52 @@ const AssemblyInfo = memo(({ assembly }: { assembly: any }) => {
     [assembly?.endDate]
   );
 
-  const registrationStatus = useMemo(() => {
+  const registrationStatusInfo = useMemo(() => {
     if (!assembly) return null;
     
     const isOpen = assembly.registrationOpen && 
       (!assembly.registrationDeadline || !isDeadlinePassed(assembly.registrationDeadline));
     const isExpired = assembly.registrationDeadline && isDeadlinePassed(assembly.registrationDeadline);
     
+    // If user has a registration, show their status instead of generic status
+    if (registrationStatus) {
+      let userStatusText: string;
+      let statusClassName: string;
+      
+      switch (registrationStatus.status) {
+        case "approved":
+          userStatusText = "Você está Inscrito";
+          statusClassName = "bg-green-100 text-green-800";
+          break;
+        case "pending":
+          userStatusText = "Sua Inscrição (Pendente)";
+          statusClassName = "bg-blue-100 text-blue-800";
+          break;
+        case "pending_review":
+          userStatusText = "Sua Inscrição (Em Análise)";
+          statusClassName = "bg-amber-100 text-amber-800";
+          break;
+        case "rejected":
+          userStatusText = "Inscrição Rejeitada";
+          statusClassName = "bg-red-100 text-red-800";
+          break;
+        default:
+          // Handle unexpected status values
+          console.warn(`Unknown registration status: ${registrationStatus.status}`);
+          userStatusText = `Sua Inscrição (${registrationStatus.status})`;
+          statusClassName = "bg-gray-100 text-gray-800";
+      }
+      
+      return {
+        isOpen,
+        isExpired,
+        text: userStatusText,
+        className: statusClassName,
+        linkText: "Ver detalhes da inscrição"
+      };
+    }
+    
+    // Default status for users without registration
     return {
       isOpen,
       isExpired,
@@ -151,7 +203,7 @@ const AssemblyInfo = memo(({ assembly }: { assembly: any }) => {
                  isExpired ? "bg-orange-100 text-orange-800" : "bg-red-100 text-red-800",
       linkText: isOpen ? "Inscrever-se agora" : "Ver detalhes"
     };
-  }, [assembly]);
+  }, [assembly, registrationStatus]);
 
   if (!assembly) {
     return (
@@ -204,8 +256,8 @@ const AssemblyInfo = memo(({ assembly }: { assembly: any }) => {
             </div>
             <p className="text-sm text-gray-700">
               <span className="font-medium">Status:</span>{" "}
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${registrationStatus?.className}`}>
-                {registrationStatus?.text}
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${registrationStatusInfo?.className}`}>
+                {registrationStatusInfo?.text}
               </span>
             </p>
             {assembly.description && (
@@ -216,7 +268,7 @@ const AssemblyInfo = memo(({ assembly }: { assembly: any }) => {
           </div>
           <div className="mt-4">
             <Link href="/ag" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
-              {registrationStatus?.linkText}
+              {registrationStatusInfo?.linkText}
               <ArrowRight className="w-4 h-4 ml-1" />
             </Link>
           </div>
@@ -319,7 +371,7 @@ export default function Home() {
                       <h3 className="text-lg font-semibold text-gray-900 mb-6 text-center">
                         Próxima Assembleia Geral
                       </h3>
-                                             <AssemblyInfo assembly={nextAssembly} />
+                                             <AssemblyInfo assembly={nextAssembly} session={session} />
                     </div>
                   )}
 
