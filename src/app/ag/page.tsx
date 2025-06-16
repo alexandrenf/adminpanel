@@ -934,8 +934,8 @@ export default function AGPage() {
             }
         };
 
-        const handleDownload = () => {
-            handleDownloadReport(assembly);
+        const handleDownload = async () => {
+            await handleDownloadReport(assembly);
         };
 
         const handleEdit = () => {
@@ -1241,6 +1241,11 @@ export default function AGPage() {
                         {assembly.registrationOpen && (!assembly.registrationDeadline || !isDeadlinePassed(assembly.registrationDeadline)) ? (
                             <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
                                 Inscrições Abertas
+                            </Badge>
+                        ) : registrationStatus ? (
+                            // If user has a registration, show their status instead of "Prazo Expirado"
+                            <Badge variant="outline" className="text-blue-600 border-blue-200 text-xs">
+                                {registrationStatus.status === "approved" ? "Você está Inscrito" : "Sua Inscrição"}
                             </Badge>
                         ) : assembly.registrationDeadline && isDeadlinePassed(assembly.registrationDeadline) ? (
                             <Badge variant="outline" className="text-orange-600 border-orange-200 text-xs">
