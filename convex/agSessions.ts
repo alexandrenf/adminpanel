@@ -73,7 +73,7 @@ const initializeSessionAttendance = async (
           sessionId: sessionId as any,
           assemblyId: assemblyId as any,
           participantId: participant.participantId,
-          participantType: "comite_local",
+          participantType: "comite",
           participantName: participant.participantId,
           comiteLocal: participant.participantId,
           attendance: "not-counting",
@@ -301,7 +301,7 @@ export const getSessionAttendance = query({
     const organized = {
       ebs: attendanceRecords.filter(r => r.participantType === "eb").sort((a, b) => a.participantName.localeCompare(b.participantName)),
       crs: attendanceRecords.filter(r => r.participantType === "cr").sort((a, b) => a.participantName.localeCompare(b.participantName)),
-      comites: attendanceRecords.filter(r => r.participantType === "comite_local").sort((a, b) => a.participantName.localeCompare(b.participantName)),
+      comites: attendanceRecords.filter(r => r.participantType === "comite").sort((a, b) => a.participantName.localeCompare(b.participantName)),
       participantes: attendanceRecords.filter(r => r.participantType === "individual").sort((a, b) => a.participantName.localeCompare(b.participantName)),
     };
 
