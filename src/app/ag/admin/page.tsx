@@ -530,7 +530,7 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [toast, agComitesParticipants]);
+    }, [toast, agComitesParticipants, convex]);
 
     // Session creation state
     const [sessionCreationDialogOpen, setSessionCreationDialogOpen] = useState(false);
