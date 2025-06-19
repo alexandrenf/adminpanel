@@ -1090,7 +1090,7 @@ export default function AGPage() {
             if (registrationStatus) {
                 // User has a registration - show appropriate buttons based on status
                 switch (registrationStatus.status) {
-                    case "pending":
+                    case "pending": {
                         // Check if this is a free modality or payment exempt
                         const needsPayment = userModality && userModality.price > 0 && !userRegistration?.isPaymentExempt;
                         
@@ -1115,6 +1115,7 @@ export default function AGPage() {
                                 </Button>
                             );
                         }
+                    }
                     case "pending_review":
                         return (
                             <Button 

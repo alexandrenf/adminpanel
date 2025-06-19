@@ -1121,219 +1121,103 @@ export default function ChamadaAGPage() {
         }
     };
 
-    const downloadExcelReport = () => {
-        // Create workbook
-        const wb = XLSX.utils.book_new();
-        
-        // Helper function to create worksheet from data
-        const createWorksheet = (data: any[], title: string) => {
-            const ws = XLSX.utils.json_to_sheet(data);
-            XLSX.utils.book_append_sheet(wb, ws, title);
-        };
+    const downloadExcelReport = async () => {
+        try {
+            // Import the shared report generator
+            const { generateAGReport, downloadReport } = await import('~/lib/reportGenerator');
 
-        // Determine data source based on session type
-        const isSessionMode = currentSessionType === "plenaria" || currentSessionType === "sessao";
-        
-        let reportData = {
-            ebs: [] as any[],
-            crs: [] as any[],
-            comitesPlenos: [] as any[],
-            comitesNaoPlenos: [] as any[]
-        };
+            // Determine data source based on session type
+            const isSessionMode = currentSessionType === "plenaria" || currentSessionType === "sessao";
+            
+            let result;
 
-        if (isSessionMode && sessionAttendance && currentSessionData) {
-            // Use session attendance data for plenaria/sessao
-            console.log("Excel Report Debug (Session Mode):", {
-                sessionType: currentSessionType,
-                sessionName: currentSessionData.name,
-                sessionAttendanceStructure: sessionAttendance,
-                sessionAttendanceKeys: Object.keys(sessionAttendance || {})
-            });
-
-            // sessionAttendance appears to be an object with arrays, let's handle all its contents
-            if (sessionAttendance && typeof sessionAttendance === 'object') {
-                // If it has specific arrays for different types
-                if ('ebs' in sessionAttendance && Array.isArray((sessionAttendance as any).ebs)) {
-                    reportData.ebs = (sessionAttendance as any).ebs.map((record: any) => ({
+            if (isSessionMode && sessionAttendance && currentSessionData) {
+                // Use session attendance data for plenaria/sessao
+                result = generateAGReport(
+                    { ebs: [], crs: [], comitesPlenos: [], comitesNaoPlenos: [] }, // Empty default data since we're using session data
+                    {
+                        name: currentSessionData.name,
+                        type: currentSessionType,
+                        attendanceRecords: sessionAttendance as any // Pass the session attendance data (object format)
+                    },
+                    currentSessionType,
+                    agComitesParticipants // Pass agComitesParticipants for proper committee status
+                );
+            } else {
+                // Use general attendance data for avulsa mode
+                const reportData = {
+                    ebs: ebMembers.map(member => ({
                         'Tipo': 'EB',
-                        'Nome': record.participantName || record.name || 'N/A',
-                        'Cargo': record.participantRole || record.role || 'N/A',
-                        'Status': record.attendance === "present" ? "Presente" : 
-                                 record.attendance === "absent" ? "Ausente" : 
-                                 record.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
-                    }));
-                }
-                
-                if ('crs' in sessionAttendance && Array.isArray((sessionAttendance as any).crs)) {
-                    reportData.crs = (sessionAttendance as any).crs.map((record: any) => ({
+                        'Nome': member.name,
+                        'Cargo': member.role,
+                        'Status': member.attendance === "present" ? "Presente" : 
+                                 member.attendance === "absent" ? "Ausente" : 
+                                 member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
+                    })),
+                    crs: crMembers.map(member => ({
                         'Tipo': 'CR',
-                        'Nome': record.participantName || record.name || 'N/A',
-                        'Cargo': record.participantRole || record.role || 'N/A',
-                        'Status': record.attendance === "present" ? "Presente" : 
-                                 record.attendance === "absent" ? "Ausente" : 
-                                 record.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
-                    }));
-                }
-                
-                if ('comites' in sessionAttendance && Array.isArray((sessionAttendance as any).comites)) {
-                    (sessionAttendance as any).comites.forEach((record: any) => {
-                        const comiteData = {
-                            'Tipo': record.participantStatus === "Pleno" ? 'Comitê Pleno' : 'Comitê Não-Pleno',
-                            'Nome': record.participantName || record.name || 'N/A',
-                            'Escola': record.participantSchool || record.escola || 'N/A',
-                            'Regional': record.participantRegion || record.regional || 'N/A',
-                            'Localização': record.participantLocation || `${record.cidade || 'N/A'}, ${record.uf || 'N/A'}`,
-                            'Status': record.attendance === "present" ? "Presente" : 
-                                     record.attendance === "absent" ? "Ausente" : 
-                                     record.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
-                        };
+                        'Nome': member.name,
+                        'Cargo': member.role,
+                        'Status': member.attendance === "present" ? "Presente" : 
+                                 member.attendance === "absent" ? "Ausente" : 
+                                 member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
+                    })),
+                    comitesPlenos: comitesPlenos.map(comite => ({
+                        'Tipo': 'Comitê Pleno',
+                        'Nome': comite.name,
+                        'Escola': comite.escola,
+                        'Regional': comite.regional,
+                        'Localização': `${comite.cidade}, ${comite.uf}`,
+                        'Status': comite.attendance === "present" ? "Presente" : 
+                                 comite.attendance === "absent" ? "Ausente" : 
+                                 comite.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
+                    })),
+                    comitesNaoPlenos: comitesNaoPlenos.map(comite => ({
+                        'Tipo': 'Comitê Não-Pleno',
+                        'Nome': comite.name,
+                        'Escola': comite.escola,
+                        'Regional': comite.regional,
+                        'Localização': `${comite.cidade}, ${comite.uf}`,
+                        'Status': comite.attendance === "present" ? "Presente" : 
+                                 comite.attendance === "absent" ? "Ausente" : 
+                                 comite.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
+                    }))
+                };
 
-                        if (record.participantStatus === "Pleno" || record.status === "Pleno") {
-                            reportData.comitesPlenos.push(comiteData);
-                        } else {
-                            reportData.comitesNaoPlenos.push(comiteData);
-                        }
-                    });
-                }
-
-                // Handle individual participants for sessions
-                if ('participantes' in sessionAttendance && Array.isArray((sessionAttendance as any).participantes)) {
-                    // For sessions, we'll create a single worksheet with all individual participants
-                    if (currentSessionType === "sessao") {
-                        const individualParticipants = (sessionAttendance as any).participantes.map((record: any) => ({
-                            'Nome': record.participantName || 'N/A',
-                            'Cargo/Função': record.participantRole || 'Participante',
-                            'Comitê/Instituição': record.comiteLocal || '-',
-                            'ID': record.participantId || '-',
-                            'Status': record.attendance === "present" ? "Presente" : 
-                                     record.attendance === "absent" ? "Ausente" : 
-                                     record.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado",
-                            'Última Atualização': new Date(record.lastUpdated || record.markedAt).toLocaleString('pt-BR')
-                        }));
-
-                        // For sessions, create a single comprehensive worksheet
-                        createWorksheet(individualParticipants, 'Participantes da Sessão');
-                        
-                        // Generate Excel file
-                        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-                        const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                        
-                        // Create download link
-                        const url = URL.createObjectURL(dataBlob);
-                        const link = document.createElement('a');
-                        link.href = url;
-                        
-                        // Add session info to filename
-                        const sessionInfo = currentSessionData?.name ? `-${currentSessionData.name.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
-                        link.download = `relatorio-presenca-sessao${sessionInfo}-${new Date().toISOString().split('T')[0]}.xlsx`;
-                        
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        URL.revokeObjectURL(url);
-
-                        // Show summary in toast
-                        const presentCount = individualParticipants.filter((p: any) => p.Status === "Presente").length;
-                        const totalCount = individualParticipants.length;
-                        
-                        toast({
-                            title: "✅ Relatório gerado com sucesso",
-                            description: `Sessão "${currentSessionData?.name}": ${presentCount} presentes de ${totalCount} participantes (${((presentCount/totalCount)*100).toFixed(1)}% de presença)`,
-                        });
-                        
-                        return; // Exit early for sessions
-                    }
-                }
+                result = generateAGReport(
+                    reportData,
+                    currentSessionData ? {
+                        name: currentSessionData.name,
+                        type: currentSessionType
+                    } : undefined,
+                    currentSessionType || "avulsa"
+                );
             }
-        } else {
-            // Use general attendance data for avulsa mode
-            console.log("Excel Report Debug (Avulsa Mode):", {
-                sessionType: currentSessionType || "avulsa",
-                ebMembersCount: ebMembers.length,
-                crMembersCount: crMembers.length,
-                comitesLocaisCount: comitesLocais.length,
-                comitesPlenosCount: comitesPlenos.length,
-                comitesNaoPlenosCount: comitesNaoPlenos.length,
-                sampleComites: comitesLocais.slice(0, 3).map(c => ({ name: c.name, status: c.status, attendance: c.attendance }))
+
+            // Download the generated report
+            downloadReport(result.buffer, result.filename);
+            
+            // Show summary in toast
+            if (result.stats.type === 'sessao') {
+                toast({
+                    title: "✅ Relatório gerado com sucesso",
+                    description: `Sessão "${result.stats.sessionName}": ${result.stats.present} presentes de ${result.stats.total} participantes`,
+                });
+            } else {
+                const sessionTypeLabel = isSessionMode ? `${getChamadaTypeLabel(currentSessionType)} "${currentSessionData?.name}"` : "Chamada Avulsa";
+                toast({
+                    title: "✅ Relatório gerado com sucesso",
+                    description: `${sessionTypeLabel}: ${result.stats.ebs} EBs, ${result.stats.crs} CRs, ${result.stats.comitesPlenos} Plenos, ${result.stats.comitesNaoPlenos} Não-Plenos (${result.stats.total} total)`,
+                });
+            }
+        } catch (error) {
+            console.error("Error generating report:", error);
+            toast({
+                title: "❌ Erro ao gerar relatório",
+                description: "Erro ao gerar o relatório. Tente novamente.",
+                variant: "destructive",
             });
-
-            // Prepare EB members data
-            reportData.ebs = ebMembers.map(member => ({
-                'Tipo': 'EB',
-                'Nome': member.name,
-                'Cargo': member.role,
-                'Status': member.attendance === "present" ? "Presente" : 
-                         member.attendance === "absent" ? "Ausente" : 
-                         member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
-            }));
-
-            // Prepare CR members data
-            reportData.crs = crMembers.map(member => ({
-                'Tipo': 'CR',
-                'Nome': member.name,
-                'Cargo': member.role,
-                'Status': member.attendance === "present" ? "Presente" : 
-                         member.attendance === "absent" ? "Ausente" : 
-                         member.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
-            }));
-
-            // Prepare Comitês Plenos data
-            reportData.comitesPlenos = comitesPlenos.map(comite => ({
-                'Tipo': 'Comitê Pleno',
-                'Nome': comite.name,
-                'Escola': comite.escola,
-                'Regional': comite.regional,
-                'Localização': `${comite.cidade}, ${comite.uf}`,
-                'Status': comite.attendance === "present" ? "Presente" : 
-                         comite.attendance === "absent" ? "Ausente" : 
-                         comite.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
-            }));
-
-            // Prepare Comitês Não-Plenos data
-            reportData.comitesNaoPlenos = comitesNaoPlenos.map(comite => ({
-                'Tipo': 'Comitê Não-Pleno',
-                'Nome': comite.name,
-                'Escola': comite.escola,
-                'Regional': comite.regional,
-                'Localização': `${comite.cidade}, ${comite.uf}`,
-                'Status': comite.attendance === "present" ? "Presente" : 
-                         comite.attendance === "absent" ? "Ausente" : 
-                         comite.attendance === "excluded" ? "Excluído do quórum" : "Não contabilizado"
-            }));
         }
-
-        // Create worksheets
-        createWorksheet(reportData.ebs, 'Diretoria Executiva');
-        createWorksheet(reportData.crs, 'Coordenadores Regionais');
-        createWorksheet(reportData.comitesPlenos, 'Comitês Plenos');
-        createWorksheet(reportData.comitesNaoPlenos, 'Comitês Não-Plenos');
-
-        // Generate Excel file
-        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        
-        // Create download link
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        
-        // Add session info to filename
-        const sessionInfo = currentSessionData?.name ? `-${currentSessionData.name.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
-        link.download = `relatorio-presenca-ag${sessionInfo}-${new Date().toISOString().split('T')[0]}.xlsx`;
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        // Show summary in toast
-        const totalCount = reportData.ebs.length + reportData.crs.length + reportData.comitesPlenos.length + reportData.comitesNaoPlenos.length;
-        const sessionTypeLabel = isSessionMode ? `${getChamadaTypeLabel(currentSessionType)} "${currentSessionData?.name}"` : "Chamada Avulsa";
-        
-        toast({
-            title: "✅ Relatório gerado com sucesso",
-            description: `${sessionTypeLabel}: ${reportData.ebs.length} EBs, ${reportData.crs.length} CRs, ${reportData.comitesPlenos.length} Plenos, ${reportData.comitesNaoPlenos.length} Não-Plenos (${totalCount} total)`,
-        });
     };
 
     const downloadQRCodes = async () => {
@@ -3027,7 +2911,7 @@ export default function ChamadaAGPage() {
                                                     // Group session attendance by type
                                                     const ebs = sessionAttendance.filter((r: any) => r.participantType === "eb");
                                                     const crs = sessionAttendance.filter((r: any) => r.participantType === "cr");
-                                                    const comites = sessionAttendance.filter((r: any) => r.participantType === "comite_local");
+                                                    const comites = sessionAttendance.filter((r: any) => r.participantType === "comite");
                                                     
                                                     // For sessões, show different grouping
                                                     if (currentSessionType === "sessao") {
