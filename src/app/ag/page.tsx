@@ -1086,6 +1086,114 @@ export default function AGPage() {
         const router = useRouter();
 
         const getRegistrationButton = () => {
+            // First, check if user already has a registration - this takes priority over deadline checks
+            if (registrationStatus) {
+                // User has a registration - show appropriate buttons based on status
+                switch (registrationStatus.status) {
+                    case "pending": {
+                        // Check if this is a free modality or payment exempt
+                        const needsPayment = userModality && userModality.price > 0 && !userRegistration?.isPaymentExempt;
+                        
+                        if (needsPayment && !registrationStatus.hasReceipt) {
+                            return (
+                                <Button 
+                                    className="w-full bg-orange-500 hover:bg-orange-600"
+                                    onClick={() => router.push(`/ag/${assembly._id}/register/payment-info/${registrationStatus.registrationId}`)}
+                                >
+                                    <CreditCard className="w-4 h-4 mr-2" />
+                                    Esperando Pagamento
+                                </Button>
+                            );
+                        } else {
+                            return (
+                                <Button 
+                                    className="w-full bg-amber-500 hover:bg-amber-600"
+                                    disabled
+                                >
+                                    <Clock className="w-4 h-4 mr-2" />
+                                    Em Análise
+                                </Button>
+                            );
+                        }
+                    }
+                    case "pending_review":
+                        return (
+                            <Button 
+                                className="w-full bg-amber-500 hover:bg-amber-600"
+                                disabled
+                            >
+                                <Clock className="w-4 h-4 mr-2" />
+                                Em Análise
+                            </Button>
+                        );
+                    case "approved":
+                        return (
+                            <div className="space-y-2">
+                                <Button 
+                                    className="w-full bg-green-500 hover:bg-green-600"
+                                    onClick={() => router.push(`/ag/${assembly._id}/register/success/${registrationStatus.registrationId}`)}
+                                >
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Ver Comprovante
+                                </Button>
+                                <Button 
+                                    className="w-full bg-blue-500 hover:bg-blue-600"
+                                    onClick={() => router.push(`/ag/${assembly._id}/qr-code?registration=${registrationStatus.registrationId}`)}
+                                    variant="outline"
+                                >
+                                    <QrCode className="w-4 h-4 mr-2" />
+                                    Ver Crachá Digital
+                                </Button>
+                                <Button 
+                                    className="w-full bg-emerald-600 hover:bg-emerald-600 text-white"
+                                    onClick={() => router.push(`/ag/${assembly._id}/attendance`)}
+                                >
+                                    <BarChart3 className="w-4 h-4 mr-2" />
+                                    Ver Dashboard de Presença
+                                </Button>
+                                {userRegistration?.receiptStorageId && receiptFileUrl && (
+                                    <Button 
+                                        className="w-full bg-gray-500 hover:bg-gray-600"
+                                        onClick={() => window.open(receiptFileUrl, '_blank')}
+                                        variant="outline"
+                                    >
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Baixar Comprovante de Pagamento
+                                    </Button>
+                                )}
+                            </div>
+                        );
+                    case "rejected":
+                        return (
+                            <div className="space-y-2">
+                                <Button 
+                                    className="w-full bg-red-500 hover:bg-red-600"
+                                    onClick={() => router.push(`/ag/${assembly._id}/register/resubmit/${registrationStatus.registrationId}`)}
+                                >
+                                    <AlertTriangle className="w-4 h-4 mr-2" />
+                                    Inscrição Rejeitada - Reenviar
+                                </Button>
+                                {registrationStatus.rejectionReason && (
+                                    <p className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                                        <strong>Motivo:</strong> {registrationStatus.rejectionReason}
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    default:
+                        return (
+                            <Button 
+                                className="w-full bg-gray-500 hover:bg-gray-600"
+                                disabled
+                            >
+                                Status Desconhecido
+                            </Button>
+                        );
+                }
+            }
+
+            // User doesn't have a registration - check if they can still register
+            
             // Check if registrations are globally disabled
             if (agConfig && !agConfig.registrationEnabled) {
                 return (
@@ -1128,120 +1236,17 @@ export default function AGPage() {
                 );
             }
 
-            if (!registrationStatus) {
-                // No registration found - show register button
-                return (
-                    <Button 
-                        className="w-full bg-blue-600 hover:bg-blue-700"
-                        onClick={() => router.push(`/ag/${assembly._id}/register`)}
-                    >
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        Inscrever-se
-                    </Button>
-                );
-            }
+            // User can register
+            return (
+                <Button 
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    onClick={() => router.push(`/ag/${assembly._id}/register`)}
+                >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Inscrever-se
+                </Button>
+            );
 
-            // User has a registration
-            switch (registrationStatus.status) {
-                case "pending":
-                    // Check if this is a free modality or payment exempt
-                    const needsPayment = userModality && userModality.price > 0 && !userRegistration?.isPaymentExempt;
-                    
-                    if (needsPayment && !registrationStatus.hasReceipt) {
-                        return (
-                            <Button 
-                                className="w-full bg-orange-500 hover:bg-orange-600"
-                                onClick={() => router.push(`/ag/${assembly._id}/register/payment-info/${registrationStatus.registrationId}`)}
-                            >
-                                <CreditCard className="w-4 h-4 mr-2" />
-                                Esperando Pagamento
-                            </Button>
-                        );
-                    } else {
-                        return (
-                            <Button 
-                                className="w-full bg-amber-500 hover:bg-amber-600"
-                                disabled
-                            >
-                                <Clock className="w-4 h-4 mr-2" />
-                                Em Análise
-                            </Button>
-                        );
-                    }
-                case "pending_review":
-                    return (
-                        <Button 
-                            className="w-full bg-amber-500 hover:bg-amber-600"
-                            disabled
-                        >
-                            <Clock className="w-4 h-4 mr-2" />
-                            Em Análise
-                        </Button>
-                    );
-                case "approved":
-                    return (
-                        <div className="space-y-2">
-                            <Button 
-                                className="w-full bg-green-500 hover:bg-green-600"
-                                onClick={() => router.push(`/ag/${assembly._id}/register/success/${registrationStatus.registrationId}`)}
-                            >
-                                <CheckCircle className="w-4 h-4 mr-2" />
-                                Ver Comprovante
-                            </Button>
-                                <Button 
-                                    className="w-full bg-blue-500 hover:bg-blue-600"
-                                onClick={() => router.push(`/ag/${assembly._id}/qr-code?registration=${registrationStatus.registrationId}`)}
-                                variant="outline"
-                            >
-                                <QrCode className="w-4 h-4 mr-2" />
-                                Ver Crachá Digital
-                            </Button>
-                            <Button 
-                                className="w-full bg-emerald-600 hover:bg-emerald-600 text-white"
-                                onClick={() => router.push(`/ag/${assembly._id}/attendance`)}
-                            >
-                                <BarChart3 className="w-4 h-4 mr-2" />
-                                Ver Dashboard de Presença
-                            </Button>
-                            {userRegistration?.receiptStorageId && receiptFileUrl && (
-                                <Button 
-                                    className="w-full bg-gray-500 hover:bg-gray-600"
-                                    onClick={() => window.open(receiptFileUrl, '_blank')}
-                                    variant="outline"
-                                >
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Baixar Comprovante de Pagamento
-                                </Button>
-                            )}
-                        </div>
-                    );
-                case "rejected":
-                    return (
-                        <div className="space-y-2">
-                            <Button 
-                                className="w-full bg-red-500 hover:bg-red-600"
-                                onClick={() => router.push(`/ag/${assembly._id}/register/resubmit/${registrationStatus.registrationId}`)}
-                            >
-                                <AlertTriangle className="w-4 h-4 mr-2" />
-                                Inscrição Rejeitada - Reenviar
-                            </Button>
-                            {registrationStatus.rejectionReason && (
-                                <p className="text-xs text-red-600 bg-red-50 p-2 rounded">
-                                    <strong>Motivo:</strong> {registrationStatus.rejectionReason}
-                                </p>
-                            )}
-                        </div>
-                    );
-                default:
-                    return (
-                        <Button 
-                            className="w-full bg-gray-500 hover:bg-gray-600"
-                            disabled
-                        >
-                            Status Desconhecido
-                        </Button>
-                    );
-            }
         };
 
         return (

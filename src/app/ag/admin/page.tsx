@@ -51,7 +51,7 @@ import {
     Package,
     ClipboardCheck
 } from "lucide-react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvex } from "convex/react";
 import { useToast } from "~/components/ui/use-toast";
 import { api as convexApi } from "../../../../convex/_generated/api";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
@@ -384,6 +384,7 @@ function ModalityDisplayInfo({ modalityId }: { modalityId: string }) {
 export default function AGAdminPage() {
     const { data: userSession } = useSession();
     const { toast } = useToast();
+    const convex = useConvex();
     
     const [isIfmsaEmail, setIsIfmsaEmail] = useState<boolean | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -442,6 +443,13 @@ export default function AGAdminPage() {
         convexApi.agSessions?.getAllSessions,
         selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
     );
+    
+    // agParticipants data for proper committee status in plenária sessions
+    const agComitesParticipants = useQuery(
+        convexApi.assemblies?.getComitesLocaisWithStatus,
+        selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
+    );
+    
 
     // Add queries for EB and CR data to lookup specific roles
     const ebs = useQuery(convexApi.assemblies?.getEBs) || [];
@@ -473,106 +481,45 @@ export default function AGAdminPage() {
     // Download session report functionality
     const handleDownloadSessionReport = useCallback(async (sessionId: string, sessionName: string, sessionType: string) => {
         try {
-            // Import XLSX dynamically
-            const XLSX = await import('xlsx');
+            // Import the shared report generator
+            const { generateAGReport, downloadReport } = await import('~/lib/reportGenerator');
             
             toast({
                 title: "⏳ Gerando relatório...",
                 description: "Por favor, aguarde enquanto o relatório é gerado.",
             });
+
+            // Fetch session data directly using the convex client
+            const sessionData = await convex.query(convexApi.agSessions.getSessionWithStats, { sessionId: sessionId as any });
             
-            // For now, create a basic report structure
-            // This will generate an Excel file showing the session information
-            const workbook = XLSX.utils.book_new();
-            
-            // Create basic session info sheet
-            const sessionInfo = [
-                [`Relatório de Presença - ${sessionName}`],
-                [''],
-                [`Tipo de sessão: ${sessionType === 'plenaria' ? 'Plenária' : sessionType === 'sessao' ? 'Sessão' : 'Avulsa'}`],
-                [`ID da sessão: ${sessionId}`],
-                [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
-                [''],
-                ['📋 INSTRUÇÕES:'],
-                ['1. Este relatório foi gerado automaticamente'],
-                ['2. Para obter dados de presença em tempo real, acesse a Chamada AG'],
-                ['3. Use este relatório como base para análises de participação'],
-                [''],
-                ['ℹ️ NOTA:'],
-                ['Para relatórios detalhados com dados de presença em tempo real,'],
-                ['utilize a funcionalidade de download na interface da Chamada AG'],
-                ['após finalizar a sessão.']
-            ];
-            
-            const infoSheet = XLSX.utils.aoa_to_sheet(sessionInfo);
-            XLSX.utils.book_append_sheet(workbook, infoSheet, 'Informações da Sessão');
-            
-            // Create template sheets based on session type
-            if (sessionType === 'plenaria') {
-                // Template for plenária participants
-                const plenTemplate = [
-                    ['Template - Diretoria Executiva'],
-                    [''],
-                    ['Nome', 'Cargo', 'Status de Presença', 'Observações'],
-                    ['[Nome do EB]', '[Cargo]', '[Presente/Ausente/Excluído]', '[Obs]'],
-                    [''],
-                    ['💡 DICA: Utilize a Chamada AG para marcar presenças em tempo real']
-                ];
-                const ebSheet = XLSX.utils.aoa_to_sheet(plenTemplate);
-                XLSX.utils.book_append_sheet(workbook, ebSheet, 'Template EBs');
+            if (!sessionData?.attendanceRecords || sessionData.attendanceRecords.length === 0) {
+                console.log("No attendance records found in session data:", {
+                    sessionData,
+                    hasAttendanceRecords: !!sessionData?.attendanceRecords
+                });
                 
-                const crTemplate = [
-                    ['Template - Coordenadores Regionais'],
-                    [''],
-                    ['Nome', 'Regional', 'Status de Presença', 'Observações'],
-                    ['[Nome do CR]', '[Regional]', '[Presente/Ausente/Excluído]', '[Obs]'],
-                    [''],
-                    ['💡 DICA: Utilize a Chamada AG para marcar presenças em tempo real']
-                ];
-                const crSheet = XLSX.utils.aoa_to_sheet(crTemplate);
-                XLSX.utils.book_append_sheet(workbook, crSheet, 'Template CRs');
-                
-                const comiteTemplate = [
-                    ['Template - Comitês Locais'],
-                    [''],
-                    ['Comitê', 'Status', 'Status de Presença', 'Observações'],
-                    ['[Nome do Comitê]', '[Pleno/Não-pleno]', '[Presente/Ausente/Excluído]', '[Obs]'],
-                    [''],
-                    ['💡 DICA: Utilize a Chamada AG para marcar presenças em tempo real']
-                ];
-                const comiteSheet = XLSX.utils.aoa_to_sheet(comiteTemplate);
-                XLSX.utils.book_append_sheet(workbook, comiteSheet, 'Template Comitês');
-                
-            } else if (sessionType === 'sessao') {
-                // Template for sessão participants
-                const participantTemplate = [
-                    ['Template - Participantes da Sessão'],
-                    [''],
-                    ['Nome', 'Comitê/Organização', 'Status de Presença', 'Observações'],
-                    ['[Nome do Participante]', '[Comitê/Org]', '[Presente/Ausente/Excluído]', '[Obs]'],
-                    [''],
-                    ['💡 DICA: Utilize a Chamada AG para marcar presenças em tempo real']
-                ];
-                const participantSheet = XLSX.utils.aoa_to_sheet(participantTemplate);
-                XLSX.utils.book_append_sheet(workbook, participantSheet, 'Template Participantes');
+                toast({
+                    title: "⚠️ Sem dados de presença",
+                    description: "Esta sessão não possui dados de presença registrados.",
+                    variant: "destructive",
+                });
+                return;
             }
 
-            // Generate and download file
-            const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            const fileName = `relatorio-presenca-${sessionType}-${sessionName.replace(/[^a-zA-Z0-9]/g, '_')}-${new Date().toISOString().split('T')[0]}.xlsx`;
-            link.download = fileName;
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Use the shared report generator
+            const result = generateAGReport(
+                { ebs: [], crs: [], comitesPlenos: [], comitesNaoPlenos: [] }, // Empty default data since we're using session data
+                sessionData, // Session data with attendance records
+                sessionType as "avulsa" | "plenaria" | "sessao",
+                agComitesParticipants // Pass agComitesParticipants for proper committee status separation
+            );
+
+            // Download the generated report
+            downloadReport(result.buffer, result.filename);
             
             toast({
                 title: "✅ Relatório baixado",
-                description: `Relatório de presença da ${sessionType === 'plenaria' ? 'plenária' : 'sessão'} "${sessionName}" foi baixado com sucesso.`,
+                description: `${result.stats.type}: ${result.stats.total} participantes registrados`,
             });
             
         } catch (error) {
@@ -583,7 +530,7 @@ export default function AGAdminPage() {
                 variant: "destructive",
             });
         }
-    }, [toast]);
+    }, [toast, agComitesParticipants, convex]);
 
     // Session creation state
     const [sessionCreationDialogOpen, setSessionCreationDialogOpen] = useState(false);
@@ -1427,7 +1374,7 @@ export default function AGAdminPage() {
                                                 <SessionCard 
                                                     key={session._id} 
                                                     session={session}
-                                                    onDownloadReport={handleDownloadSessionReport}
+                                                    onDownloadReport={() => handleDownloadSessionReport(session._id, session.name, session.type)} 
                                                     onDelete={async (sessionId: string) => {
                                                         if (window.confirm("Tem certeza que deseja deletar esta sessão? Esta ação não pode ser desfeita.")) {
                                                             try {
