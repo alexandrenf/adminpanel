@@ -198,7 +198,7 @@ export default defineSchema({
     sessionId: v.id("agSessions"),
     assemblyId: v.optional(v.id("assemblies")), // Optional for avulsa sessions
     participantId: v.string(), // Matches registrationId for individual participants or comiteLocal for groups
-    participantType: v.string(), // "eb" | "cr" | "comite_local" | "individual"
+    participantType: v.string(), // "eb" | "cr" | "comite" | "individual"
     participantName: v.string(),
     participantRole: v.optional(v.string()), // for EBs and CRs
     comiteLocal: v.optional(v.string()), // for group attendance - the comité name
