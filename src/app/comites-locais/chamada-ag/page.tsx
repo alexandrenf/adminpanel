@@ -1728,13 +1728,22 @@ export default function ChamadaAGPage() {
                     </div>
 
                     {/* Session Selection Panel */}
-                    {!currentSessionId && (
                         <Card className="shadow-lg border-0 border-l-4 border-l-blue-500">
                             <CardHeader>
                                 <CardTitle className="flex items-center space-x-2">
                                     <ClipboardCheck className="w-5 h-5 text-blue-600" />
-                                    <span>Iniciar Nova Sessão</span>
+                                <span>{currentSessionId ? "Gerenciar Sessões" : "Iniciar Nova Sessão"}</span>
                                 </CardTitle>
+                            {currentSessionId && currentSessionData && (
+                                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                    <div className="flex items-center space-x-2">
+                                        <CheckCircle className="w-4 h-4 text-green-600" />
+                                        <span className="text-sm font-medium text-green-800">
+                                            Sessão Ativa: {currentSessionData.name}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 {/* Assembly Selection */}
@@ -1784,17 +1793,24 @@ export default function ChamadaAGPage() {
                                                     {activeSessions.map((session) => (
                                                         <Card 
                                                             key={session._id} 
-                                                            className="cursor-pointer hover:bg-blue-50 border-blue-200 transition-colors"
+                                                        className={`cursor-pointer transition-colors ${
+                                                            currentSessionId === session._id 
+                                                                ? "bg-green-50 border-green-300 ring-2 ring-green-200" 
+                                                                : "hover:bg-blue-50 border-blue-200"
+                                                        }`}
                                                             onClick={() => {
+                                                            if (currentSessionId !== session._id) {
                                                                 setCurrentSessionId(session._id);
                                                                 setCurrentSessionType(session.type as "plenaria" | "sessao");
                                                                 toast({
                                                                     title: "✅ Sessão Selecionada",
                                                                     description: `Entrando na ${session.type === "plenaria" ? "plenária" : "sessão"}: ${session.name}`,
                                                                 });
+                                                            }
                                                             }}
                                                         >
                                                             <CardContent className="pt-4">
+                                                            <div className="flex items-center justify-between">
                                                                 <div className="flex items-center space-x-3">
                                                                     {session.type === "plenaria" ? (
                                                                         <Users className="w-5 h-5 text-purple-600" />
@@ -1809,6 +1825,10 @@ export default function ChamadaAGPage() {
                                                                         </p>
                                                                     </div>
                                                                 </div>
+                                                                {currentSessionId === session._id && (
+                                                                    <CheckCircle className="w-5 h-5 text-green-600" />
+                                                                )}
+                                                                </div>
                                                             </CardContent>
                                                         </Card>
                                                     ))}
@@ -1821,7 +1841,7 @@ export default function ChamadaAGPage() {
                                 {/* Create New Session Options */}
                                 <div>
                                     <Label className="text-base font-semibold">
-                                        Ou Criar Nova Sessão
+                                    {currentSessionId ? "Ou Criar Nova Sessão" : "Criar Nova Sessão"}
                                     </Label>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
                                         <Button
@@ -1895,7 +1915,6 @@ export default function ChamadaAGPage() {
                                 </div>
                             </CardContent>
                         </Card>
-                    )}
 
                     {/* Action Buttons */}
                     <Card className="shadow-lg border-0">
