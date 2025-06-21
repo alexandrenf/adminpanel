@@ -210,5 +210,7 @@ export default defineSchema({
   }).index("by_session", ["sessionId"])
     .index("by_assembly", ["assemblyId"])
     .index("by_session_and_participant", ["sessionId", "participantId"])
-    .index("by_session_and_type", ["sessionId", "participantType"]),
+    .index("by_session_and_type", ["sessionId", "participantType"])
+    .index("by_assembly_and_participant", ["assemblyId", "participantId"])
+    .index("by_participant_and_assembly", ["participantId", "assemblyId"]),
 }); 
