@@ -394,15 +394,14 @@ export const markSelfAttendance = mutation({
   },
 });
 
-// Get user's attendance across all sessions for an assembly
+// Get user's attendance across all sessions for an assembly - SUPER OPTIMIZED VERSION
 export const getUserAttendanceStats = query({
   args: { 
     assemblyId: v.id("assemblies"),
     userId: v.string(), // NextAuth user ID
   },
   handler: async (ctx, args) => {
-    // First, find the user's registration(s) for this assembly
-    // This will give us the registration ID used in attendance records
+    // OPTIMIZATION 1: Get user registrations efficiently
     const userRegistrations = await ctx.db
       .query("agRegistrations")
       .withIndex("by_assembly_and_registeredBy", (q: any) => 
@@ -410,52 +409,36 @@ export const getUserAttendanceStats = query({
       )
       .collect();
 
-    // Get all sessions for this assembly
-    const sessions = await ctx.db
-      .query("agSessions")
-      .withIndex("by_assembly", (q: any) => q.eq("assemblyId", args.assemblyId))
-      .collect();
+    if (userRegistrations.length === 0) {
+      // No registrations found, check for direct user attendance only
+      const directUserRecords = await ctx.db
+        .query("agSessionAttendance")
+        .withIndex("by_assembly_and_participant", (q: any) => 
+          q.eq("assemblyId", args.assemblyId).eq("participantId", args.userId)
+        )
+        .filter((q: any) => q.eq(q.field("participantType"), "user"))
+        .collect();
 
-    // Get all attendance records for all sessions in a single query
-    const allAttendanceRecords = await ctx.db
-      .query("agSessionAttendance")
-      .withIndex("by_assembly", (q: any) => q.eq("assemblyId", args.assemblyId))
-      .collect();
-
-    // Create a map of session ID to attendance records for quick lookup
-    const attendanceBySession = new Map();
-    for (const record of allAttendanceRecords) {
-      if (!attendanceBySession.has(record.sessionId)) {
-        attendanceBySession.set(record.sessionId, []);
-      }
-      attendanceBySession.get(record.sessionId).push(record);
-    }
-
-    const attendanceData = [];
-    let totalSessions = 0;
-    let attendedSessions = 0;
-
-    // Get registration IDs for quick lookup
-    const registrationIds = new Set(userRegistrations.map(r => r._id.toString()));
-
-    for (const session of sessions) {
-      const sessionRecords = attendanceBySession.get(session._id) || [];
-      
-      // First, try to find a record matching any of the user's registrations
-      let attendanceRecord = sessionRecords.find((record: { participantId: string; participantType: string }) => 
-        registrationIds.has(record.participantId)
-      );
-
-      // If no registration-based record is found, look for a user-based record
-      if (!attendanceRecord) {
-        attendanceRecord = sessionRecords.find((record: { participantId: string; participantType: string }) => 
-          record.participantType === "user" && record.participantId === args.userId
-        );
+      if (directUserRecords.length === 0) {
+        return {
+          sessions: [],
+          stats: {
+            totalSessions: 0,
+            attendedSessions: 0,
+            attendancePercentage: 0,
+          },
+        };
       }
 
-      if (attendanceRecord) {
-        totalSessions++;
-        const isPresent = attendanceRecord.attendance === "present";
+      // Process direct user records
+      const attendanceData = [];
+      let attendedSessions = 0;
+
+      for (const record of directUserRecords) {
+        const session = await ctx.db.get(record.sessionId);
+        if (!session) continue;
+
+        const isPresent = record.attendance === "present";
         if (isPresent) attendedSessions++;
 
         attendanceData.push({
@@ -463,10 +446,81 @@ export const getUserAttendanceStats = query({
           sessionName: session.name,
           sessionType: session.type,
           sessionStatus: session.status,
-          attendance: attendanceRecord.attendance,
-          markedAt: attendanceRecord.markedAt,
+          attendance: record.attendance,
+          markedAt: record.markedAt,
         });
       }
+
+      const attendancePercentage = attendanceData.length > 0 ? (attendedSessions / attendanceData.length) * 100 : 0;
+
+      return {
+        sessions: attendanceData,
+        stats: {
+          totalSessions: attendanceData.length,
+          attendedSessions,
+          attendancePercentage: Math.round(attendancePercentage * 100) / 100,
+        },
+      };
+    }
+
+    // OPTIMIZATION 2: Use the new optimized index to get attendance records efficiently
+    const userAttendanceRecords = [];
+    
+    // Query by registration IDs using the optimized index
+    for (const registration of userRegistrations) {
+      const records = await ctx.db
+        .query("agSessionAttendance")
+        .withIndex("by_assembly_and_participant", (q: any) => 
+          q.eq("assemblyId", args.assemblyId).eq("participantId", registration._id.toString())
+        )
+        .collect();
+      userAttendanceRecords.push(...records);
+    }
+
+    // Also query by user ID directly for self-marked attendance
+    const directUserRecords = await ctx.db
+      .query("agSessionAttendance")
+      .withIndex("by_assembly_and_participant", (q: any) => 
+        q.eq("assemblyId", args.assemblyId).eq("participantId", args.userId)
+      )
+      .filter((q: any) => q.eq(q.field("participantType"), "user"))
+      .collect();
+    
+    userAttendanceRecords.push(...directUserRecords);
+
+    // OPTIMIZATION 3: Batch fetch sessions to minimize database calls
+    const sessionIds = [...new Set(userAttendanceRecords.map(record => record.sessionId))];
+    const sessions = await Promise.all(
+      sessionIds.map(sessionId => ctx.db.get(sessionId))
+    );
+    
+    // Create session lookup map
+    const sessionMap = new Map();
+    sessions.forEach(session => {
+      if (session) sessionMap.set(session._id, session);
+    });
+
+    // OPTIMIZATION 4: Process attendance data efficiently
+    const attendanceData = [];
+    let totalSessions = 0;
+    let attendedSessions = 0;
+
+    for (const record of userAttendanceRecords) {
+      const session = sessionMap.get(record.sessionId);
+      if (!session) continue;
+
+      totalSessions++;
+      const isPresent = record.attendance === "present";
+      if (isPresent) attendedSessions++;
+
+      attendanceData.push({
+        sessionId: session._id,
+        sessionName: session.name,
+        sessionType: session.type,
+        sessionStatus: session.status,
+        attendance: record.attendance,
+        markedAt: record.markedAt,
+      });
     }
 
     const attendancePercentage = totalSessions > 0 ? (attendedSessions / totalSessions) * 100 : 0;
