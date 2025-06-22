@@ -595,6 +595,12 @@ export default function AGPage() {
     // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
     
+    // Query to get user's registrations across all assemblies (for user view)
+    const userRegistrations = useQuery(
+        convexApi.agRegistrations?.getUserRegistrations,
+        session?.user?.id && !isAdminView ? { userId: session.user.id } : "skip"
+    );
+    
     const createAssembly = useMutation(convexApi.assemblies?.create);
     const updateAssembly = useMutation(convexApi.assemblies?.update);
     const deleteAssembly = useMutation(convexApi.assemblies?.deleteWithRelatedData);
@@ -1275,6 +1281,12 @@ export default function AGPage() {
                                 Inscrições Fechadas
                             </Badge>
                         )}
+                        {/* Show indicator if assembly is finished but user can still access */}
+                        {assembly.status !== "active" && registrationStatus && (
+                            <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                AG Finalizada
+                            </Badge>
+                        )}
                         {registrationStatus && (
                             <Badge variant="outline" className="text-xs">
                                 {registrationStatus.status === "pending" && !registrationStatus.hasReceipt && "Pag. Pendente"}
@@ -1314,6 +1326,65 @@ export default function AGPage() {
                     </div>
                 </CardContent>
             </Card>
+        );
+    }
+
+    // User View Component  
+    function UserView() {
+        // Get assemblies to show to user: active assemblies + assemblies where user has registrations
+        const assembliesToShow = useMemo(() => {
+            if (!assemblies || !activeAssemblies) return [];
+            
+            // If user has no registrations, just show active assemblies
+            if (!userRegistrations || userRegistrations.length === 0) {
+                return activeAssemblies;
+            }
+            
+            // Get assembly IDs where user has registrations
+            const userRegisteredAssemblyIds = new Set(
+                userRegistrations.map(reg => reg.assemblyId)
+            );
+            
+            // Get all assemblies (to include finished ones where user was registered)
+            const registeredAssemblies = assemblies.filter(assembly => 
+                userRegisteredAssemblyIds.has(assembly._id)
+            );
+            
+            // Combine active assemblies with user's registered assemblies (remove duplicates)
+            const allRelevantAssemblies = [...activeAssemblies];
+            registeredAssemblies.forEach(assembly => {
+                if (!allRelevantAssemblies.find(a => a._id === assembly._id)) {
+                    allRelevantAssemblies.push(assembly);
+                }
+            });
+            
+            // Sort by start date (most recent first)
+            return allRelevantAssemblies.sort((a, b) => b.startDate - a.startDate);
+        }, [assemblies, activeAssemblies, userRegistrations]);
+
+        return (
+            <div className="space-y-6">
+                {/* Available Assemblies */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {assembliesToShow?.map((assembly) => (
+                        <AssemblyUserCard key={assembly._id} assembly={assembly as Assembly} agConfig={agConfig} />
+                    ))}
+                </div>
+
+                {assembliesToShow?.length === 0 && (
+                    <Card className="shadow-lg border-0">
+                        <CardContent className="text-center py-12">
+                            <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                Nenhuma AG disponível
+                            </h3>
+                            <p className="text-gray-600">
+                                Não há assembleias abertas para inscrição no momento.
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
         );
     }
 
@@ -1447,34 +1518,6 @@ export default function AGPage() {
                             </h3>
                             <p className="text-gray-600">
                                 Clique em &quot;Nova AG&quot; para criar sua primeira assembleia geral.
-                            </p>
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
-        );
-    }
-
-    // User View Component  
-    function UserView() {
-        return (
-            <div className="space-y-6">
-                {/* Available Assemblies */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {activeAssemblies?.map((assembly) => (
-                        <AssemblyUserCard key={assembly._id} assembly={assembly as Assembly} agConfig={agConfig} />
-                    ))}
-                </div>
-
-                {activeAssemblies?.length === 0 && (
-                    <Card className="shadow-lg border-0">
-                        <CardContent className="text-center py-12">
-                            <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                Nenhuma AG disponível
-                            </h3>
-                            <p className="text-gray-600">
-                                Não há assembleias abertas para inscrição no momento.
                             </p>
                         </CardContent>
                     </Card>

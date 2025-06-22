@@ -900,21 +900,19 @@ export const updatePaymentReceipt = mutation({
   },
 });
 
-// Get user registration status for an assembly
+// Get user registration status for an assembly - OPTIMIZED FOR BANDWIDTH
 export const getUserRegistrationStatus = query({
   args: { 
     assemblyId: v.id("assemblies"),
     userId: v.string(),
   },
   handler: async (ctx, args) => {
+    // OPTIMIZATION: Use composite index instead of filtering
+    // This directly finds the user's registration without loading all assembly registrations
     const registration = await ctx.db
       .query("agRegistrations")
-      .withIndex("by_assembly")
-      .filter((q) => 
-        q.and(
-          q.eq(q.field("assemblyId"), args.assemblyId),
-          q.eq(q.field("registeredBy"), args.userId)
-        )
+      .withIndex("by_assembly_and_registeredBy", (q: any) => 
+        q.eq("assemblyId", args.assemblyId).eq("registeredBy", args.userId)
       )
       .first();
 
@@ -929,6 +927,18 @@ export const getUserRegistrationStatus = query({
       hasReceipt: !!registration.receiptStorageId,
       rejectionReason: registration.status === "rejected" ? registration.reviewNotes : undefined,
     };
+  },
+});
+
+// Get all registrations for a user across all assemblies - OPTIMIZED FOR BANDWIDTH
+export const getUserRegistrations = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    // OPTIMIZATION: Use dedicated index for registeredBy instead of filtering all records
+    return await ctx.db
+      .query("agRegistrations")
+      .withIndex("by_registeredBy", (q: any) => q.eq("registeredBy", args.userId))
+      .collect();
   },
 });
 
