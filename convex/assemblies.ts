@@ -877,6 +877,7 @@ export const getRegistrationAnalytics = query({
         totalPredefinedParticipants: totalPredefined,
         totalRegisteredPredefined: totalRegisteredPredefined,
         totalActiveRegistrations: activeRegistrations.length,
+        totalOtherRegistrations: otherRegistrations.length,
         overallRegistrationRate: totalPredefined > 0 ? (totalRegisteredPredefined / totalPredefined * 100) : 0,
       },
       // Include details for frontend compatibility
