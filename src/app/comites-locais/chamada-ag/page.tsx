@@ -289,7 +289,7 @@ export default function ChamadaAGPage() {
         selectedAssemblyId ? { assemblyId: selectedAssemblyId as any } : "skip"
     );
     const currentSessionData = useQuery(
-        convexApi.agSessions?.getSessionWithStats,
+        currentSessionType === "sessao" ? convexApi.agSessions?.getSessionWithEnrichedData : convexApi.agSessions?.getSessionWithStats,
         currentSessionId ? { sessionId: currentSessionId as any } : "skip"
     );
     const sessionAttendance = useQuery(

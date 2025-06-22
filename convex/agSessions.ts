@@ -534,4 +534,82 @@ export const getUserAttendanceStats = query({
       },
     };
   },
+});
+
+// Get session details with enriched registration data for report generation
+export const getSessionWithEnrichedData = query({
+  args: { sessionId: v.id("agSessions") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return null;
+
+    const attendanceRecords = await ctx.db
+      .query("agSessionAttendance")
+      .withIndex("by_session", (q: any) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    // For sessão type sessions, enrich individual participant data with registration info
+    if (session.type === "sessao") {
+      const enrichedAttendanceRecords = [];
+      
+      for (const record of attendanceRecords) {
+        if (record.participantType === "individual") {
+          // Get registration data for this participant using the participantId as registration ID
+          try {
+            const registration = await ctx.db.get(record.participantId as any);
+            
+            if (registration && 'email' in registration) {
+              enrichedAttendanceRecords.push({
+                ...record,
+                // Add registration data fields
+                email: registration.email,
+                emailSolar: registration.emailSolar,
+                cpf: registration.cpf,
+                celular: registration.celular,
+                cidade: registration.cidade,
+                uf: registration.uf,
+                escola: registration.escola,
+                comiteLocal: registration.comiteLocal,
+                participantRole: registration.participantRole || record.participantRole,
+              });
+            } else {
+              // Keep original record if no registration found or invalid registration
+              enrichedAttendanceRecords.push(record);
+            }
+          } catch (error) {
+            // Keep original record if there's an error fetching registration
+            enrichedAttendanceRecords.push(record);
+          }
+        } else {
+          // For non-individual participants, keep original record
+          enrichedAttendanceRecords.push(record);
+        }
+      }
+
+      const stats = {
+        total: enrichedAttendanceRecords.length,
+        present: enrichedAttendanceRecords.filter(r => r.attendance === "present").length,
+        absent: enrichedAttendanceRecords.filter(r => r.attendance === "absent").length,
+      };
+
+      return {
+        ...session,
+        attendanceStats: stats,
+        attendanceRecords: enrichedAttendanceRecords,
+      };
+    }
+
+    // For non-sessão sessions, return normal data
+    const stats = {
+      total: attendanceRecords.length,
+      present: attendanceRecords.filter(r => r.attendance === "present").length,
+      absent: attendanceRecords.filter(r => r.attendance === "absent").length,
+    };
+
+    return {
+      ...session,
+      attendanceStats: stats,
+      attendanceRecords,
+    };
+  },
 }); 
