@@ -490,7 +490,10 @@ export default function AGAdminPage() {
             });
 
             // Fetch session data directly using the convex client
-            const sessionData = await convex.query(convexApi.agSessions.getSessionWithStats, { sessionId: sessionId as any });
+            // Use enriched data for sessão type sessions to get CPF, email, and emailSolar
+            const sessionData = sessionType === "sessao" 
+                ? await convex.query(convexApi.agSessions.getSessionWithEnrichedData, { sessionId: sessionId as any })
+                : await convex.query(convexApi.agSessions.getSessionWithStats, { sessionId: sessionId as any });
             
             if (!sessionData?.attendanceRecords || sessionData.attendanceRecords.length === 0) {
                 console.log("No attendance records found in session data:", {

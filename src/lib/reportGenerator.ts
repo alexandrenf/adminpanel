@@ -231,6 +231,12 @@ export const generateAGReport = (
                         'Nome': record.participantName || 'N/A',
                         'Cargo/Função': record.participantRole || 'Participante',
                         'Comitê/Instituição': record.comiteLocal || '-',
+                        'Email': record.email || '-',
+                        'Email Solar': record.emailSolar || '-',
+                        'CPF': record.cpf || '-',
+                        'Celular': record.celular || '-',
+                        'Cidade': record.cidade || '-',
+                        'UF': record.uf || '-',
                         'ID': record.participantId || '-',
                         'Status': record.attendance === "present" ? "Presente" : 
                                  record.attendance === "absent" ? "Ausente" : 
