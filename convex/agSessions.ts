@@ -536,6 +536,52 @@ export const getUserAttendanceStats = query({
   },
 });
 
+// Type definitions for better type safety
+interface RegistrationData {
+  _id: string;
+  email?: string;
+  emailSolar?: string;
+  cpf?: string;
+  celular?: string;
+  cidade?: string;
+  uf?: string;
+  escola?: string;
+  comiteLocal?: string;
+  participantRole?: string;
+  participantName?: string;
+}
+
+interface EnrichedAttendanceRecord {
+  sessionId: string;
+  assemblyId?: string;
+  participantId: string;
+  participantType: string;
+  participantName: string;
+  participantRole?: string;
+  comiteLocal?: string;
+  attendance: string;
+  markedAt: number;
+  markedBy: string;
+  lastUpdated: number;
+  lastUpdatedBy: string;
+  // Enriched fields
+  email?: string;
+  emailSolar?: string;
+  cpf?: string;
+  celular?: string;
+  cidade?: string;
+  uf?: string;
+  escola?: string;
+}
+
+// Type guard to validate registration data
+const isValidRegistration = (obj: any): obj is RegistrationData => {
+  return obj && 
+         typeof obj === 'object' && 
+         '_id' in obj &&
+         (obj.email !== undefined || obj.emailSolar !== undefined || obj.cpf !== undefined);
+};
+
 // Get session details with enriched registration data for report generation
 export const getSessionWithEnrichedData = query({
   args: { sessionId: v.id("agSessions") },
@@ -550,53 +596,102 @@ export const getSessionWithEnrichedData = query({
 
     // For sessão type sessions, enrich individual participant data with registration info
     if (session.type === "sessao") {
-      const enrichedAttendanceRecords = [];
+      // Separate individual participants from other types
+      const individualRecords = attendanceRecords.filter(record => record.participantType === "individual");
+      const nonIndividualRecords = attendanceRecords.filter(record => record.participantType !== "individual");
       
-      for (const record of attendanceRecords) {
-        if (record.participantType === "individual") {
-          // Get registration data for this participant using the participantId as registration ID
-          try {
-            const registration = await ctx.db.get(record.participantId as any);
-            
-            if (registration && 'email' in registration) {
-              enrichedAttendanceRecords.push({
-                ...record,
-                // Add registration data fields
-                email: registration.email,
-                emailSolar: registration.emailSolar,
-                cpf: registration.cpf,
-                celular: registration.celular,
-                cidade: registration.cidade,
-                uf: registration.uf,
-                escola: registration.escola,
-                comiteLocal: registration.comiteLocal,
-                participantRole: registration.participantRole || record.participantRole,
-              });
-            } else {
-              // Keep original record if no registration found or invalid registration
-              enrichedAttendanceRecords.push(record);
-            }
-          } catch (error) {
-            // Keep original record if there's an error fetching registration
-            enrichedAttendanceRecords.push(record);
-          }
-        } else {
-          // For non-individual participants, keep original record
-          enrichedAttendanceRecords.push(record);
-        }
+      if (individualRecords.length === 0) {
+        // No individual participants, return as-is
+        const stats = {
+          total: attendanceRecords.length,
+          present: attendanceRecords.filter(r => r.attendance === "present").length,
+          absent: attendanceRecords.filter(r => r.attendance === "absent").length,
+        };
+
+        return {
+          ...session,
+          attendanceStats: stats,
+          attendanceRecords,
+        };
       }
 
-      const stats = {
-        total: enrichedAttendanceRecords.length,
-        present: enrichedAttendanceRecords.filter(r => r.attendance === "present").length,
-        absent: enrichedAttendanceRecords.filter(r => r.attendance === "absent").length,
-      };
+      // Extract participant IDs for batch query
+      const participantIds = individualRecords
+        .map(record => record.participantId)
+        .filter((id, index, array) => array.indexOf(id) === index); // Remove duplicates
 
-      return {
-        ...session,
-        attendanceStats: stats,
-        attendanceRecords: enrichedAttendanceRecords,
-      };
+      try {
+        // Batch fetch all registrations in a single query
+        const registrations = await ctx.db
+          .query("agRegistrations")
+          .collect()
+          .then(allRegistrations => 
+            allRegistrations.filter(reg => participantIds.includes(reg._id))
+          );
+
+        // Create lookup map for O(1) registration access
+        const registrationMap = new Map<string, RegistrationData>();
+        registrations.forEach(reg => {
+          if (isValidRegistration(reg)) {
+            registrationMap.set(reg._id, reg);
+          }
+        });
+
+        // Enrich individual records with registration data
+        const enrichedIndividualRecords: EnrichedAttendanceRecord[] = individualRecords.map(record => {
+          const registration = registrationMap.get(record.participantId);
+          
+          if (registration) {
+            return {
+              ...record,
+              // Add registration data fields with fallbacks
+              email: registration.email,
+              emailSolar: registration.emailSolar,
+              cpf: registration.cpf,
+              celular: registration.celular,
+              cidade: registration.cidade,
+              uf: registration.uf,
+              escola: registration.escola,
+              comiteLocal: registration.comiteLocal || record.comiteLocal,
+              participantRole: registration.participantRole || record.participantRole,
+            };
+          } else {
+            // Log missing registration for debugging
+            console.warn("No registration found for participantId:", record.participantId);
+            return record as EnrichedAttendanceRecord;
+          }
+        });
+
+        // Combine all records
+        const enrichedAttendanceRecords = [...enrichedIndividualRecords, ...nonIndividualRecords];
+
+        const stats = {
+          total: enrichedAttendanceRecords.length,
+          present: enrichedAttendanceRecords.filter(r => r.attendance === "present").length,
+          absent: enrichedAttendanceRecords.filter(r => r.attendance === "absent").length,
+        };
+
+        return {
+          ...session,
+          attendanceStats: stats,
+          attendanceRecords: enrichedAttendanceRecords,
+        };
+
+      } catch (error) {
+        console.error("Error batch fetching registration data:", error);
+        // Fallback to original attendance records if batch fetch fails
+        const stats = {
+          total: attendanceRecords.length,
+          present: attendanceRecords.filter(r => r.attendance === "present").length,
+          absent: attendanceRecords.filter(r => r.attendance === "absent").length,
+        };
+
+        return {
+          ...session,
+          attendanceStats: stats,
+          attendanceRecords,
+        };
+      }
     }
 
     // For non-sessão sessions, return normal data
