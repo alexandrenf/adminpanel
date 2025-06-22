@@ -1,10 +1,16 @@
+"use client";
+
 import Link from "next/link";
 import React from "react";
+import { usePathname } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Shield, LogIn } from "lucide-react";
 
 const PrecisaLoginCL: React.FC = () => {
+    const pathname = usePathname();
+    const callbackUrl = encodeURIComponent(pathname || '/');
+
     return (
         <div className="container mx-auto flex flex-col items-center justify-center px-6 py-12">
             <Card className="w-full max-w-2xl mx-auto bg-white/95 backdrop-blur-xl border-0 shadow-2xl shadow-black/20 rounded-3xl overflow-hidden">
@@ -45,7 +51,7 @@ const PrecisaLoginCL: React.FC = () => {
 
                         {/* Action button */}
                         <div className="text-center">
-                            <Link href="/api/auth/signin" passHref legacyBehavior>
+                            <Link href={`/api/auth/signin?callbackUrl=${callbackUrl}`} passHref legacyBehavior>
                                 <Button 
                                     asChild 
                                     size="lg" 
