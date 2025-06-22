@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -16,6 +16,7 @@ import QRCodeLib from 'qrcode';
 export default function SelfAttendancePage() {
     const { sessionId } = useParams() as { sessionId: string };
     const router = useRouter();
+    const pathname = usePathname();
     const { data: session } = useSession();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
@@ -323,7 +324,7 @@ export default function SelfAttendancePage() {
                                         Você precisa estar logado para marcar presença.
                                     </p>
                                     <Button
-                                        onClick={() => router.push("/api/auth/signin")}
+                                        onClick={() => router.push(`/api/auth/signin?callbackUrl=${encodeURIComponent(pathname || '/')}`)}
                                         className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                                     >
                                         Fazer Login

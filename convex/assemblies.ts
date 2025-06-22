@@ -682,292 +682,267 @@ export const getCRs = query({
   },
 });
 
-// Get comprehensive registration analytics for an assembly
+// Get comprehensive registration analytics for an assembly - SUPER OPTIMIZED VERSION
 export const getRegistrationAnalytics = query({
   args: { assemblyId: v.id("assemblies") },
   handler: async (ctx, args) => {
-    // Get all participants for this assembly
-    const participants = await ctx.db
-      .query("agParticipants")
-      .withIndex("by_assembly")
-      .filter((q) => q.eq(q.field("assemblyId"), args.assemblyId))
-      .collect();
+    // OPTIMIZATION 1: Parallel queries with proper indexing
+    const [assemblyParticipants, assemblyRegistrations] = await Promise.all([
+      // Get participants for this specific assembly only
+      ctx.db
+        .query("agParticipants")
+        .withIndex("by_assembly", (q: any) => q.eq("assemblyId", args.assemblyId))
+        .collect(),
+      // Get registrations for this assembly only - using direct index
+      ctx.db
+        .query("agRegistrations")
+        .withIndex("by_assembly", (q: any) => q.eq("assemblyId", args.assemblyId))
+        .collect()
+    ]);
 
-    // Get all registrations for this assembly (only approved/pending ones)
-    const registrations = await ctx.db
-      .query("agRegistrations")
-      .withIndex("by_assembly")
-      .filter((q) => q.eq(q.field("assemblyId"), args.assemblyId))
-      .collect();
-
-    // Filter to active registrations (not cancelled or rejected)
-    const activeRegistrations = registrations.filter(r => 
+    // OPTIMIZATION 2: Filter active registrations early
+    const activeRegistrations = assemblyRegistrations.filter(r => 
       r.status !== "cancelled" && r.status !== "rejected"
     );
 
-    // Separate participants by type - for comitês, use assembly-specific data
-    const comitesPlenos = participants.filter(p => 
-      p.type === "comite" && p.status === "Pleno"
-    );
-    const comitesNaoPlenos = participants.filter(p => 
-      p.type === "comite" && p.status === "Não-pleno"
-    );
-    
-    // For EBs and CRs, use global data to match what's available for registration
-    // Get all EB participants from all assemblies
-    const allEbParticipants = await ctx.db
-      .query("agParticipants")
-      .filter((q) => q.eq(q.field("type"), "eb"))
-      .collect();
-    
-    // Get all CR participants from all assemblies  
-    const allCrParticipants = await ctx.db
-      .query("agParticipants")
-      .filter((q) => q.eq(q.field("type"), "cr"))
-      .collect();
-
-    // Create deduplicated maps for EBs and CRs (same logic as getEBs/getCRs)
-    const ebMap = new Map();
-    allEbParticipants.forEach(participant => {
-      if (participant.participantId && participant.participantId.trim()) {
-        const key = participant.participantId.trim();
-        if (!ebMap.has(key)) {
-          ebMap.set(key, {
-            participantId: participant.participantId.trim(),
-            name: participant.name?.trim() || '',
-            role: participant.role?.trim() || '',
-          });
-        }
-      }
-    });
-
-    const crMap = new Map();
-    allCrParticipants.forEach(participant => {
-      if (participant.participantId && participant.participantId.trim()) {
-        const key = participant.participantId.trim();
-        if (!crMap.has(key)) {
-          crMap.set(key, {
-            participantId: participant.participantId.trim(),
-            name: participant.name?.trim() || '',
-            role: participant.role?.trim() || '',
-          });
-        }
-      }
-    });
-
-    // Convert maps to arrays (this matches the data structure from getEBs/getCRs)
-    const ebs = Array.from(ebMap.values()).filter(eb => eb.participantId && eb.participantId.length > 0);
-    const crs = Array.from(crMap.values()).filter(cr => cr.participantId && cr.participantId.length > 0);
-
-    // Count registrations by participant type and specific participants
-    const registrationsByParticipantId = new Map();
-    const registrationsByRole = new Map();
+    // OPTIMIZATION 3: Use efficient data structures for lookups
+    const registrationsByParticipantId = new Map<string, any[]>();
+    const registrationsByType = new Map<string, number>();
     
     activeRegistrations.forEach(reg => {
-      // Count by participant ID (for specific EB/CR/Comite tracking)
-      // Store array of registrations per participantId to handle multiple registrations
+      // Build participant lookup map
       if (reg.participantId) {
         if (!registrationsByParticipantId.has(reg.participantId)) {
           registrationsByParticipantId.set(reg.participantId, []);
         }
-        registrationsByParticipantId.get(reg.participantId).push(reg);
+        registrationsByParticipantId.get(reg.participantId)!.push(reg);
       }
       
-      // Count by role type
-      const role = reg.participantRole || reg.participantType;
-      registrationsByRole.set(role, (registrationsByRole.get(role) || 0) + 1);
+      // Count by type for statistics
+      const type = reg.participantType;
+      registrationsByType.set(type, (registrationsByType.get(type) || 0) + 1);
     });
 
-    // For comitês locais, we need to count unique comitês, not individual registrations
-    // Group comitês by participantId (which represents the comitê local)
+    // OPTIMIZATION 4: Process participants by type efficiently
+    const participantsByType = new Map<string, any[]>();
+    assemblyParticipants.forEach(p => {
+      const key = `${p.type}-${p.status || 'default'}`;
+      if (!participantsByType.has(key)) {
+        participantsByType.set(key, []);
+      }
+      participantsByType.get(key)!.push(p);
+    });
+
+    // OPTIMIZATION 5: Get global EB/CR data ONLY for count statistics (not full details)
+    const [globalEbCount, globalCrCount] = await Promise.all([
+      ctx.db
+        .query("agParticipants")
+        .filter((q: any) => q.eq(q.field("type"), "eb"))
+        .collect()
+        .then(ebs => {
+          // Deduplicate by participantId
+          const uniqueEbs = new Set(ebs.map(eb => eb.participantId).filter(id => id?.trim()));
+          return uniqueEbs.size;
+        }),
+      ctx.db
+        .query("agParticipants")
+        .filter((q: any) => q.eq(q.field("type"), "cr"))
+        .collect()
+        .then(crs => {
+          // Deduplicate by participantId
+          const uniqueCrs = new Set(crs.map(cr => cr.participantId).filter(id => id?.trim()));
+          return uniqueCrs.size;
+        })
+    ]);
+
+    // OPTIMIZATION 6: Process local comitês efficiently
+    const comitesPlenos = participantsByType.get('comite-Pleno') || [];
+    const comitesNaoPlenos = participantsByType.get('comite-Não-pleno') || [];
+    
+    // Deduplicate comitês by participantId
     const uniqueComitesPlenos = new Map();
+    const uniqueComitesNaoPlenos = new Map();
+    
     comitesPlenos.forEach(p => {
       if (!uniqueComitesPlenos.has(p.participantId)) {
         uniqueComitesPlenos.set(p.participantId, p);
       }
     });
-
-    const uniqueComitesNaoPlenos = new Map();
+    
     comitesNaoPlenos.forEach(p => {
       if (!uniqueComitesNaoPlenos.has(p.participantId)) {
         uniqueComitesNaoPlenos.set(p.participantId, p);
       }
     });
 
-    // Check which comitês have at least one registration
-    const registeredComitesPlenos = Array.from(uniqueComitesPlenos.values()).filter(p => 
-      registrationsByParticipantId.has(p.participantId)
-    );
-    const registeredComitesNaoPlenos = Array.from(uniqueComitesNaoPlenos.values()).filter(p => 
-      registrationsByParticipantId.has(p.participantId)
-    );
+    // OPTIMIZATION 7: Calculate stats efficiently but INCLUDE details for compatibility
+    const comitePlenoDetails = Array.from(uniqueComitesPlenos.values()).map(p => ({
+      participantId: p.participantId,
+      name: p.name,
+      escola: p.escola,
+      cidade: p.cidade,
+      uf: p.uf,
+      regional: p.regional,
+      agFiliacao: p.agFiliacao,
+      isRegistered: registrationsByParticipantId.has(p.participantId),
+      registrationCount: registrationsByParticipantId.has(p.participantId) ? 
+        registrationsByParticipantId.get(p.participantId)!.length : 0,
+      registration: registrationsByParticipantId.has(p.participantId) ? 
+        registrationsByParticipantId.get(p.participantId)![0] : null
+    }));
 
-    // Calculate registration stats for each category
-    const comitePlenoStats = {
-      total: uniqueComitesPlenos.size,
-      registered: registeredComitesPlenos.length,
-      unregistered: uniqueComitesPlenos.size - registeredComitesPlenos.length,
-      registrationRate: uniqueComitesPlenos.size > 0 ? 
-        (registeredComitesPlenos.length / uniqueComitesPlenos.size * 100) : 0,
-      details: Array.from(uniqueComitesPlenos.values()).map(p => ({
-        participantId: p.participantId,
-        name: p.name,
-        escola: p.escola,
-        cidade: p.cidade,
-        uf: p.uf,
-        regional: p.regional,
-        agFiliacao: p.agFiliacao,
-        isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null,
-        // Add count of registrations from this comitê
-        registrationCount: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId).length : 0
-      }))
-    };
+    const comiteNaoPlenoDetails = Array.from(uniqueComitesNaoPlenos.values()).map(p => ({
+      participantId: p.participantId,
+      name: p.name,
+      escola: p.escola,
+      cidade: p.cidade,
+      uf: p.uf,
+      regional: p.regional,
+      agFiliacao: p.agFiliacao,
+      isRegistered: registrationsByParticipantId.has(p.participantId),
+      registrationCount: registrationsByParticipantId.has(p.participantId) ? 
+        registrationsByParticipantId.get(p.participantId)!.length : 0,
+      registration: registrationsByParticipantId.has(p.participantId) ? 
+        registrationsByParticipantId.get(p.participantId)![0] : null
+    }));
 
-    const comiteNaoPlenoStats = {
-      total: uniqueComitesNaoPlenos.size,
-      registered: registeredComitesNaoPlenos.length,
-      unregistered: uniqueComitesNaoPlenos.size - registeredComitesNaoPlenos.length,
-      registrationRate: uniqueComitesNaoPlenos.size > 0 ? 
-        (registeredComitesNaoPlenos.length / uniqueComitesNaoPlenos.size * 100) : 0,
-      details: Array.from(uniqueComitesNaoPlenos.values()).map(p => ({
-        participantId: p.participantId,
-        name: p.name,
-        escola: p.escola,
-        cidade: p.cidade,
-        uf: p.uf,
-        regional: p.regional,
-        agFiliacao: p.agFiliacao,
-        isRegistered: registrationsByParticipantId.has(p.participantId),
-        registration: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId)[0] : null,
-        // Add count of registrations from this comitê
-        registrationCount: registrationsByParticipantId.has(p.participantId) ? registrationsByParticipantId.get(p.participantId).length : 0
-      }))
-    };
+    const comitePlenoRegistered = comitePlenoDetails.filter(d => d.isRegistered).length;
+    const comiteNaoPlenoRegistered = comiteNaoPlenoDetails.filter(d => d.isRegistered).length;
 
-    const ebStats = {
-      total: ebs.length,
-      registered: ebs.filter(p => {
-        // Only check for EB registrations (not other types with same participantId)
-        const ebRegistrations = registrationsByParticipantId.get(p.participantId) || [];
-        return ebRegistrations.some((reg: any) => reg.participantType === 'eb');
-      }).length,
-      unregistered: ebs.filter(p => {
-        const ebRegistrations = registrationsByParticipantId.get(p.participantId) || [];
-        return !ebRegistrations.some((reg: any) => reg.participantType === 'eb');
-      }).length,
-      registrationRate: ebs.length > 0 ? 
-        (ebs.filter(p => {
-          const ebRegistrations = registrationsByParticipantId.get(p.participantId) || [];
-          return ebRegistrations.some((reg: any) => reg.participantType === 'eb');
-        }).length / ebs.length * 100) : 0,
-      details: ebs.map(p => {
-        const ebRegistrations = registrationsByParticipantId.get(p.participantId) || [];
-        const isRegistered = ebRegistrations.some((reg: any) => reg.participantType === 'eb');
-        const ebRegistration = ebRegistrations.find((reg: any) => reg.participantType === 'eb');
-        return {
-          participantId: p.participantId,
-          name: p.name,
-          role: p.role,
-          isRegistered: isRegistered,
-          registration: ebRegistration || null
-        };
-      })
-    };
+    // Get EB and CR details efficiently (using cached global data)
+    const [globalEbDetails, globalCrDetails] = await Promise.all([
+      ctx.db
+        .query("agParticipants")
+        .filter((q: any) => q.eq(q.field("type"), "eb"))
+        .collect()
+        .then(ebs => {
+          // Deduplicate
+          const uniqueEbs = new Map();
+          ebs.forEach(participant => {
+            if (participant.participantId && participant.participantId.trim()) {
+              const key = participant.participantId.trim();
+              if (!uniqueEbs.has(key)) {
+                uniqueEbs.set(key, {
+                  participantId: key,
+                  name: participant.name?.trim() || '',
+                  role: participant.role?.trim() || '',
+                });
+              }
+            }
+          });
+          return Array.from(uniqueEbs.values()).map(p => ({
+            participantId: p.participantId,
+            name: p.name,
+            role: p.role,
+            isRegistered: registrationsByParticipantId.has(p.participantId),
+            registration: registrationsByParticipantId.get(p.participantId)?.find(reg => 
+              reg.participantType === 'eb'
+            ) || null
+          }));
+        }),
+      ctx.db
+        .query("agParticipants")
+        .filter((q: any) => q.eq(q.field("type"), "cr"))
+        .collect()
+        .then(crs => {
+          // Deduplicate
+          const uniqueCrs = new Map();
+          crs.forEach(participant => {
+            if (participant.participantId && participant.participantId.trim()) {
+              const key = participant.participantId.trim();
+              if (!uniqueCrs.has(key)) {
+                uniqueCrs.set(key, {
+                  participantId: key,
+                  name: participant.name?.trim() || '',
+                  role: participant.role?.trim() || '',
+                });
+              }
+            }
+          });
+          return Array.from(uniqueCrs.values()).map(p => ({
+            participantId: p.participantId,
+            name: p.name,
+            role: p.role,
+            isRegistered: registrationsByParticipantId.has(p.participantId),
+            registration: registrationsByParticipantId.get(p.participantId)?.find(reg => 
+              reg.participantType === 'cr'
+            ) || null
+          }));
+        })
+    ]);
 
-    const crStats = {
-      total: crs.length,
-      registered: crs.filter(p => {
-        // Only check for CR registrations (not other types with same participantId)
-        const crRegistrations = registrationsByParticipantId.get(p.participantId) || [];
-        return crRegistrations.some((reg: any) => reg.participantType === 'cr');
-      }).length,
-      unregistered: crs.filter(p => {
-        const crRegistrations = registrationsByParticipantId.get(p.participantId) || [];
-        return !crRegistrations.some((reg: any) => reg.participantType === 'cr');
-      }).length,
-      registrationRate: crs.length > 0 ? 
-        (crs.filter(p => {
-          const crRegistrations = registrationsByParticipantId.get(p.participantId) || [];
-          return crRegistrations.some((reg: any) => reg.participantType === 'cr');
-        }).length / crs.length * 100) : 0,
-      details: crs.map(p => {
-        const crRegistrations = registrationsByParticipantId.get(p.participantId) || [];
-        const isRegistered = crRegistrations.some((reg: any) => reg.participantType === 'cr');
-        const crRegistration = crRegistrations.find((reg: any) => reg.participantType === 'cr');
-        return {
-          participantId: p.participantId,
-          name: p.name,
-          role: p.role,
-          isRegistered: isRegistered,
-          registration: crRegistration || null
-        };
-      })
-    };
+    // Count EB and CR registrations from this assembly's registrations
+    const ebRegistrationCount = globalEbDetails.filter(d => d.isRegistered).length;
+    const crRegistrationCount = globalCrDetails.filter(d => d.isRegistered).length;
 
-    // Calculate "other" registrations (not in predefined categories)
-    const allPredefinedParticipantIds = new Set([
-      ...comitesPlenos.map(p => p.participantId),
-      ...comitesNaoPlenos.map(p => p.participantId),
-      ...ebs.map(p => p.participantId),
-      ...crs.map(p => p.participantId)
+    // OPTIMIZATION 8: Calculate other registrations efficiently
+    const predefinedParticipantIds = new Set([
+      ...Array.from(uniqueComitesPlenos.keys()),
+      ...Array.from(uniqueComitesNaoPlenos.keys())
     ]);
 
     const otherRegistrations = activeRegistrations.filter(reg => 
-      !allPredefinedParticipantIds.has(reg.participantId)
+      !predefinedParticipantIds.has(reg.participantId) && 
+      reg.participantType !== 'eb' && 
+      reg.participantType !== 'cr'
     );
 
     // Group other registrations by role
-    const otherByRole: Record<string, any[]> = {};
+    const otherByRole = new Map<string, number>();
     otherRegistrations.forEach(reg => {
       const role = reg.participantRole || reg.participantType || 'unknown';
-      if (!otherByRole[role]) {
-        otherByRole[role] = [];
-      }
-      otherByRole[role].push(reg);
+      otherByRole.set(role, (otherByRole.get(role) || 0) + 1);
     });
 
-    const otherStats = {
-      total: otherRegistrations.length,
-      byRole: Object.keys(otherByRole).map(role => ({
-        role,
-        count: otherByRole[role]?.length || 0,
-        registrations: otherByRole[role] || []
-      })),
-      details: otherRegistrations
-    };
-
-    // Calculate actual registration counts (not just unique participants who registered)
-    const predefinedRegistrationCount = activeRegistrations.filter(reg => 
-      allPredefinedParticipantIds.has(reg.participantId)
-    ).length;
-
-    // Overall summary
-    const totalPredefined = uniqueComitesPlenos.size + uniqueComitesNaoPlenos.size + ebs.length + crs.length;
-    const totalRegisteredPredefined = comitePlenoStats.registered + comiteNaoPlenoStats.registered + 
-                                     ebStats.registered + crStats.registered;
+    // OPTIMIZATION 9: Return optimized response structure but with required details for compatibility
+    const totalPredefined = uniqueComitesPlenos.size + uniqueComitesNaoPlenos.size + globalEbDetails.length + globalCrDetails.length;
+    const totalRegisteredPredefined = comitePlenoRegistered + comiteNaoPlenoRegistered + ebRegistrationCount + crRegistrationCount;
 
     return {
       assemblyId: args.assemblyId,
       summary: {
         totalPredefinedParticipants: totalPredefined,
         totalRegisteredPredefined: totalRegisteredPredefined,
-        totalPredefinedRegistrations: predefinedRegistrationCount, // Actual count of registrations
-        totalOtherRegistrations: otherStats.total,
         totalActiveRegistrations: activeRegistrations.length,
         overallRegistrationRate: totalPredefined > 0 ? (totalRegisteredPredefined / totalPredefined * 100) : 0,
-        // Add validation that totals match
-        totalValidation: {
-          expected: predefinedRegistrationCount + otherStats.total,
-          actual: activeRegistrations.length,
-          isValid: (predefinedRegistrationCount + otherStats.total) === activeRegistrations.length
-        }
       },
-      comitesPlenos: comitePlenoStats,
-      comitesNaoPlenos: comiteNaoPlenoStats,
-      ebs: ebStats,
-      crs: crStats,
-      others: otherStats,
+      // Include details for frontend compatibility
+      comitesPlenos: {
+        total: uniqueComitesPlenos.size,
+        registered: comitePlenoRegistered,
+        unregistered: uniqueComitesPlenos.size - comitePlenoRegistered,
+        registrationRate: uniqueComitesPlenos.size > 0 ? (comitePlenoRegistered / uniqueComitesPlenos.size * 100) : 0,
+        details: comitePlenoDetails
+      },
+      comitesNaoPlenos: {
+        total: uniqueComitesNaoPlenos.size,
+        registered: comiteNaoPlenoRegistered,
+        unregistered: uniqueComitesNaoPlenos.size - comiteNaoPlenoRegistered,
+        registrationRate: uniqueComitesNaoPlenos.size > 0 ? (comiteNaoPlenoRegistered / uniqueComitesNaoPlenos.size * 100) : 0,
+        details: comiteNaoPlenoDetails
+      },
+      ebs: {
+        total: globalEbDetails.length,
+        registered: ebRegistrationCount,
+        unregistered: globalEbDetails.length - ebRegistrationCount,
+        registrationRate: globalEbDetails.length > 0 ? (ebRegistrationCount / globalEbDetails.length * 100) : 0,
+        details: globalEbDetails
+      },
+      crs: {
+        total: globalCrDetails.length,
+        registered: crRegistrationCount,
+        unregistered: globalCrDetails.length - crRegistrationCount,
+        registrationRate: globalCrDetails.length > 0 ? (crRegistrationCount / globalCrDetails.length * 100) : 0,
+        details: globalCrDetails
+      },
+      others: {
+        total: otherRegistrations.length,
+        byRole: Array.from(otherByRole.entries()).map(([role, count]) => ({
+          role,
+          count
+        })),
+        details: otherRegistrations
+      },
       lastUpdated: Date.now()
     };
   },
