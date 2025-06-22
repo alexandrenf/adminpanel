@@ -707,7 +707,6 @@ export const getRegistrationAnalytics = query({
 
     // OPTIMIZATION 3: Use efficient data structures for lookups
     const registrationsByParticipantId = new Map<string, any[]>();
-    const registrationsByType = new Map<string, number>();
     
     activeRegistrations.forEach(reg => {
       // Build participant lookup map
@@ -717,10 +716,6 @@ export const getRegistrationAnalytics = query({
         }
         registrationsByParticipantId.get(reg.participantId)!.push(reg);
       }
-      
-      // Count by type for statistics
-      const type = reg.participantType;
-      registrationsByType.set(type, (registrationsByType.get(type) || 0) + 1);
     });
 
     // OPTIMIZATION 4: Process participants by type efficiently
@@ -733,29 +728,7 @@ export const getRegistrationAnalytics = query({
       participantsByType.get(key)!.push(p);
     });
 
-    // OPTIMIZATION 5: Get global EB/CR data ONLY for count statistics (not full details)
-    const [globalEbCount, globalCrCount] = await Promise.all([
-      ctx.db
-        .query("agParticipants")
-        .filter((q: any) => q.eq(q.field("type"), "eb"))
-        .collect()
-        .then(ebs => {
-          // Deduplicate by participantId
-          const uniqueEbs = new Set(ebs.map(eb => eb.participantId).filter(id => id?.trim()));
-          return uniqueEbs.size;
-        }),
-      ctx.db
-        .query("agParticipants")
-        .filter((q: any) => q.eq(q.field("type"), "cr"))
-        .collect()
-        .then(crs => {
-          // Deduplicate by participantId
-          const uniqueCrs = new Set(crs.map(cr => cr.participantId).filter(id => id?.trim()));
-          return uniqueCrs.size;
-        })
-    ]);
-
-    // OPTIMIZATION 6: Process local comitês efficiently
+    // OPTIMIZATION 5: Process local comitês efficiently
     const comitesPlenos = participantsByType.get('comite-Pleno') || [];
     const comitesNaoPlenos = participantsByType.get('comite-Não-pleno') || [];
     
@@ -775,7 +748,7 @@ export const getRegistrationAnalytics = query({
       }
     });
 
-    // OPTIMIZATION 7: Calculate stats efficiently but INCLUDE details for compatibility
+    // OPTIMIZATION 6: Calculate stats efficiently but INCLUDE details for compatibility
     const comitePlenoDetails = Array.from(uniqueComitesPlenos.values()).map(p => ({
       participantId: p.participantId,
       name: p.name,
@@ -809,7 +782,7 @@ export const getRegistrationAnalytics = query({
     const comitePlenoRegistered = comitePlenoDetails.filter(d => d.isRegistered).length;
     const comiteNaoPlenoRegistered = comiteNaoPlenoDetails.filter(d => d.isRegistered).length;
 
-    // Get EB and CR details efficiently (using cached global data)
+    // OPTIMIZATION 7: Get EB and CR details efficiently (single query with full processing)
     const [globalEbDetails, globalCrDetails] = await Promise.all([
       ctx.db
         .query("agParticipants")
