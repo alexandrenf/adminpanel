@@ -36,6 +36,88 @@ const generateUniqueRandomString = async (db: any): Promise<string> => {
     throw new Error('Failed to generate unique random string after maximum attempts');
 };
 
+// Helper function to assign blog ID to images and move files from "new" directory
+const assignBlogIdAndMoveImages = async (
+    db: any,
+    blogId: number,
+    imageIds: number[] = []
+): Promise<{ updatedCount: number; movedImages: number }> => {
+    // Update images that were uploaded for "new" noticia
+    // Only update if we have specific image IDs to prevent race conditions
+    const updatedImages = imageIds.length > 0 
+        ? await db.noticiaImage.updateMany({
+            where: {
+                AND: [
+                    { blogId: null },
+                    { id: { in: imageIds } }
+                ]
+            },
+            data: {
+                blogId,
+            },
+        })
+        : { count: 0 };
+    
+    // Move files in GitHub from "new" directory to the actual blog ID directory
+    const imagesToMove = await db.noticiaImage.findMany({
+        where: {
+            blogId,
+            filePath: { startsWith: 'noticias/new/' }
+        },
+    });
+    
+    for (const image of imagesToMove) {
+        try {
+            // Get the file content from GitHub
+            const oldGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${image.filePath}`;
+            const fileData = await fetchFileContent(oldGithubUrl);
+            
+            // Create new file path
+            const filename = image.filePath.split('/').pop();
+            const newFilePath = `noticias/${blogId}/images/${filename}`;
+            const newGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${newFilePath}`;
+            const newUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${newFilePath}`;
+            
+            // Upload to new location
+            await fetch(newGithubUrl, {
+                method: "PUT",
+                headers: {
+                    Authorization: `token ${GITHUB_TOKEN}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    message: `Move image to blog ${blogId}: ${image.originalName}`,
+                    content: fileData.content,
+                    committer: {
+                        name: "Admin Panel",
+                        email: "admin@ifmsabrazil.org",
+                    },
+                }),
+            });
+            
+            // Delete old file
+            await deleteFileFromGitHub(image.filePath);
+            
+            // Update database record
+            await db.noticiaImage.update({
+                where: { id: image.id },
+                data: {
+                    filePath: newFilePath,
+                    url: newUrl,
+                },
+            });
+        } catch (error) {
+            console.error(`Error moving image ${image.id}:`, error);
+            // Continue with other images even if one fails
+        }
+    }
+    
+    return {
+        updatedCount: updatedImages.count,
+        movedImages: imagesToMove.length
+    };
+};
+
 // Define a type for the GitHub API response
 interface GitHubFileResponse {
     sha: string;
@@ -392,77 +474,12 @@ export const noticiaImagesRouter = createTRPCRouter({
             const { blogId, imageIds } = input;
             
             try {
-                // Update images that were uploaded for "new" noticia
-                const updatedImages = await ctx.db.noticiaImage.updateMany({
-                    where: {
-                        AND: [
-                            { blogId: null },
-                            imageIds.length > 0 ? { id: { in: imageIds } } : {}
-                        ]
-                    },
-                    data: {
-                        blogId,
-                    },
-                });
-                
-                // Move files in GitHub from "new" directory to the actual blog ID directory
-                const imagesToMove = await ctx.db.noticiaImage.findMany({
-                    where: {
-                        blogId,
-                        filePath: { startsWith: 'noticias/new/' }
-                    },
-                });
-                
-                for (const image of imagesToMove) {
-                    try {
-                        // Get the file content from GitHub
-                        const oldGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${image.filePath}`;
-                        const fileData = await fetchFileContent(oldGithubUrl);
-                        
-                        // Create new file path
-                        const filename = image.filePath.split('/').pop();
-                        const newFilePath = `noticias/${blogId}/images/${filename}`;
-                        const newGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${newFilePath}`;
-                        const newUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${newFilePath}`;
-                        
-                        // Upload to new location
-                        await fetch(newGithubUrl, {
-                            method: "PUT",
-                            headers: {
-                                Authorization: `token ${GITHUB_TOKEN}`,
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                                message: `Move image to blog ${blogId}: ${image.originalName}`,
-                                content: fileData.content,
-                                committer: {
-                                    name: "Admin Panel",
-                                    email: "admin@ifmsabrazil.org",
-                                },
-                            }),
-                        });
-                        
-                        // Delete old file
-                        await deleteFileFromGitHub(image.filePath);
-                        
-                        // Update database record
-                        await ctx.db.noticiaImage.update({
-                            where: { id: image.id },
-                            data: {
-                                filePath: newFilePath,
-                                url: newUrl,
-                            },
-                        });
-                    } catch (error) {
-                        console.error(`Error moving image ${image.id}:`, error);
-                        // Continue with other images even if one fails
-                    }
-                }
+                const result = await assignBlogIdAndMoveImages(ctx.db, blogId, imageIds);
                 
                 return { 
                     success: true, 
-                    updatedCount: updatedImages.count,
-                    movedImages: imagesToMove.length
+                    updatedCount: result.updatedCount,
+                    movedImages: result.movedImages
                 };
             } catch (error) {
                 console.error("Error assigning blog ID to images:", error);

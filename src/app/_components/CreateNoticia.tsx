@@ -100,51 +100,35 @@ const CreateNoticia = () => {
     
     const assignBlogIdToImages = api.noticiaImages.assignBlogIdToImages.useMutation();
     
+    // Helper function to handle post-creation/update operations
+    const handleBlogPostSuccess = async (blog: { id: number }) => {
+        // If using extended authors, associate them with the blog
+        if (useExtendedAuthors && selectedAuthors.length > 0) {
+            await associateAuthors.mutateAsync({
+                blogId: blog.id,
+                authorIds: selectedAuthors.map(a => a.id),
+            });
+        }
+        
+        // Assign blog ID to any images that might have been uploaded
+        try {
+            await assignBlogIdToImages.mutateAsync({
+                blogId: blog.id,
+            });
+        } catch (error) {
+            console.error("Error assigning blog ID to images:", error);
+            // Don't fail the whole operation if image assignment fails
+        }
+        
+        router.push("/noticias");
+    };
+    
     const createNoticia = api.noticias.create.useMutation({
-        onSuccess: async (newBlog) => {
-            // If using extended authors, associate them with the blog
-            if (useExtendedAuthors && selectedAuthors.length > 0) {
-                await associateAuthors.mutateAsync({
-                    blogId: newBlog.id,
-                    authorIds: selectedAuthors.map(a => a.id),
-                });
-            }
-            
-            // Assign the new blog ID to any images uploaded for "new" noticia
-            try {
-                await assignBlogIdToImages.mutateAsync({
-                    blogId: newBlog.id,
-                });
-            } catch (error) {
-                console.error("Error assigning blog ID to images:", error);
-                // Don't fail the whole operation if image assignment fails
-            }
-            
-            router.push("/noticias");
-        },
+        onSuccess: handleBlogPostSuccess,
     });
+    
     const updateNoticia = api.noticias.update.useMutation({
-        onSuccess: async (updatedBlog) => {
-            // If using extended authors, update associations
-            if (useExtendedAuthors) {
-                await associateAuthors.mutateAsync({
-                    blogId: updatedBlog.id,
-                    authorIds: selectedAuthors.map(a => a.id),
-                });
-            }
-            
-            // Assign blog ID to any new images that might have been uploaded
-            try {
-                await assignBlogIdToImages.mutateAsync({
-                    blogId: updatedBlog.id,
-                });
-            } catch (error) {
-                console.error("Error assigning blog ID to images:", error);
-                // Don't fail the whole operation if image assignment fails
-            }
-            
-            router.push("/noticias");
-        },
+        onSuccess: handleBlogPostSuccess,
     });
     
     const { data: noticiaData } = api.noticias.getOne.useQuery(
