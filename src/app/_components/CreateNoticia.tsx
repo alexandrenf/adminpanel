@@ -25,7 +25,8 @@ import {
     User,
     UserPlus,
     X,
-    Edit3
+    Edit3,
+    Image as ImageIcon
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import "react-datepicker/dist/react-datepicker.css";
@@ -43,6 +44,7 @@ import {
 } from "../../components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
 import AuthorSelector from "./AuthorSelector";
+import NoticiaImageManager from "./NoticiaImageManager";
 
 // Dynamic import for MDEditor
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -82,6 +84,9 @@ const CreateNoticia = () => {
     const [forcarPaginaInicial, setForcarPaginaInicial] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [noticiaId, setNoticiaId] = useState<number | null>(null);
+    
+    // Image manager modal state
+    const [isImageManagerOpen, setIsImageManagerOpen] = useState(false);
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchParams = useSearchParams();
@@ -93,29 +98,37 @@ const CreateNoticia = () => {
     // Author-related queries
     const associateAuthors = api.authors.associateWithBlog.useMutation();
     
+    const assignBlogIdToImages = api.noticiaImages.assignBlogIdToImages.useMutation();
+    
+    // Helper function to handle post-creation/update operations
+    const handleBlogPostSuccess = async (blog: { id: number }) => {
+        // If using extended authors, associate them with the blog
+        if (useExtendedAuthors && selectedAuthors.length > 0) {
+            await associateAuthors.mutateAsync({
+                blogId: blog.id,
+                authorIds: selectedAuthors.map(a => a.id),
+            });
+        }
+        
+        // Assign blog ID to any images that might have been uploaded
+        try {
+            await assignBlogIdToImages.mutateAsync({
+                blogId: blog.id,
+            });
+        } catch (error) {
+            console.error("Error assigning blog ID to images:", error);
+            // Don't fail the whole operation if image assignment fails
+        }
+        
+        router.push("/noticias");
+    };
+    
     const createNoticia = api.noticias.create.useMutation({
-        onSuccess: async (newBlog) => {
-            // If using extended authors, associate them with the blog
-            if (useExtendedAuthors && selectedAuthors.length > 0) {
-                await associateAuthors.mutateAsync({
-                    blogId: newBlog.id,
-                    authorIds: selectedAuthors.map(a => a.id),
-                });
-            }
-            router.push("/noticias");
-        },
+        onSuccess: handleBlogPostSuccess,
     });
+    
     const updateNoticia = api.noticias.update.useMutation({
-        onSuccess: async (updatedBlog) => {
-            // If using extended authors, update associations
-            if (useExtendedAuthors) {
-                await associateAuthors.mutateAsync({
-                    blogId: updatedBlog.id,
-                    authorIds: selectedAuthors.map(a => a.id),
-                });
-            }
-            router.push("/noticias");
-        },
+        onSuccess: handleBlogPostSuccess,
     });
     
     const { data: noticiaData } = api.noticias.getOne.useQuery(
@@ -456,6 +469,19 @@ const CreateNoticia = () => {
                                     <div className="border rounded-md overflow-hidden">
                                         <MDEditor value={markdown} onChange={(value) => setMarkdown(value || "")} />
                                     </div>
+                                    
+                                    {/* Image Manager Button */}
+                                    <div className="flex justify-end mt-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setIsImageManagerOpen(true)}
+                                            className="flex items-center space-x-2"
+                                        >
+                                            <ImageIcon className="w-4 h-4" />
+                                            <span>Gerenciar Imagens</span>
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 {/* Image Upload */}
@@ -541,6 +567,13 @@ const CreateNoticia = () => {
                     </Card>
                 </div>
             </div>
+            
+            {/* Image Manager Modal */}
+            <NoticiaImageManager
+                isOpen={isImageManagerOpen}
+                onClose={() => setIsImageManagerOpen(false)}
+                noticiaId={isEditMode && noticiaId ? noticiaId.toString() : "new"}
+            />
         </main>
     );
 };
