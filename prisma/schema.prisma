@@ -85,8 +85,29 @@ model Blog {
 
     user            User     @relation(fields: [userId], references: [id])
     authors         BlogAuthor[] // New relationship for extended author info
+    images          NoticiaImage[] // Relationship to noticia images
 
     @@index([title])
+}
+
+// Noticia Image Management
+model NoticiaImage {
+    id              Int      @id @default(autoincrement())
+    originalName    String   // Original filename from user upload
+    randomString    String   @unique // Random string used as actual filename
+    url             String   // Full CDN URL to the image
+    filePath        String   // GitHub file path
+    blogId          Int?     // Can be null for images uploaded to "new" noticias
+    fileSize        Int?     // File size in bytes
+    mimeType        String?  // MIME type of the image
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+    
+    blog            Blog?    @relation(fields: [blogId], references: [id], onDelete: Cascade)
+    
+    @@index([randomString])
+    @@index([blogId])
+    @@index([createdAt])
 }
 
 // Extended Author Information
