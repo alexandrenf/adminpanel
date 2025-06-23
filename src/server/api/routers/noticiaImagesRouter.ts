@@ -67,48 +67,69 @@ const assignBlogIdAndMoveImages = async (
     });
     
     for (const image of imagesToMove) {
-        try {
-            // Get the file content from GitHub
-            const oldGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${image.filePath}`;
-            const fileData = await fetchFileContent(oldGithubUrl);
-            
-            // Create new file path
-            const filename = image.filePath.split('/').pop();
-            const newFilePath = `noticias/${blogId}/images/${filename}`;
-            const newGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${newFilePath}`;
-            const newUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${newFilePath}`;
-            
-            // Upload to new location
-            await fetch(newGithubUrl, {
-                method: "PUT",
-                headers: {
-                    Authorization: `token ${GITHUB_TOKEN}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    message: `Move image to blog ${blogId}: ${image.originalName}`,
-                    content: fileData.content,
-                    committer: {
-                        name: "Admin Panel",
-                        email: "admin@ifmsabrazil.org",
+        const maxRetries = 3;
+        let success = false;
+        
+        for (let attempt = 1; attempt <= maxRetries && !success; attempt++) {
+            try {
+                // Get the file content from GitHub (always fetch fresh to get latest SHA)
+                const oldGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${image.filePath}`;
+                const fileData = await fetchFileContent(oldGithubUrl);
+                
+                // Create new file path
+                const filename = image.filePath.split('/').pop();
+                const newFilePath = `noticias/${blogId}/images/${filename}`;
+                const newGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${newFilePath}`;
+                const newUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${newFilePath}`;
+                
+                // Upload to new location
+                const uploadResponse = await fetch(newGithubUrl, {
+                    method: "PUT",
+                    headers: {
+                        Authorization: `token ${GITHUB_TOKEN}`,
+                        "Content-Type": "application/json",
                     },
-                }),
-            });
-            
-            // Delete old file
-            await deleteFileFromGitHub(image.filePath);
-            
-            // Update database record
-            await db.noticiaImage.update({
-                where: { id: image.id },
-                data: {
-                    filePath: newFilePath,
-                    url: newUrl,
-                },
-            });
-        } catch (error) {
-            console.error(`Error moving image ${image.id}:`, error);
-            // Continue with other images even if one fails
+                    body: JSON.stringify({
+                        message: `Move image to blog ${blogId}: ${image.originalName}`,
+                        content: fileData.content,
+                        committer: {
+                            name: "Admin Panel",
+                            email: "admin@ifmsabrazil.org",
+                        },
+                    }),
+                });
+                
+                if (!uploadResponse.ok) {
+                    if (uploadResponse.status === 409 && attempt < maxRetries) {
+                        console.log(`Conflict uploading ${image.filePath}, retrying attempt ${attempt + 1}...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        continue;
+                    }
+                    throw new Error(`Upload failed with status ${uploadResponse.status}`);
+                }
+                
+                // Delete old file
+                await deleteFileFromGitHub(image.filePath);
+                
+                // Update database record
+                await db.noticiaImage.update({
+                    where: { id: image.id },
+                    data: {
+                        filePath: newFilePath,
+                        url: newUrl,
+                    },
+                });
+                
+                success = true;
+            } catch (error) {
+                if (attempt === maxRetries) {
+                    console.error(`Error moving image ${image.id} after ${maxRetries} attempts:`, error);
+                    // Continue with other images even if one fails
+                } else {
+                    console.log(`Error moving image ${image.id}, retrying attempt ${attempt + 1}...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                }
+            }
         }
     }
     
@@ -141,48 +162,70 @@ const fetchFileContent = async (url: string) => {
     return data;
 };
 
-const deleteFileFromGitHub = async (filePath: string) => {
-    try {
-        const githubApiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`;
-        
-        // First get the file's SHA
-        const response = await fetch(githubApiUrl, {
-            method: "GET",
-            headers: {
-                Authorization: `token ${GITHUB_TOKEN}`,
-                "Content-Type": "application/json",
-            },
-        });
-
-        if (!response.ok) {
-            console.error("Failed to fetch file metadata for deletion");
-            return;
-        }
-
-        const data: GitHubFileResponse = await response.json() as GitHubFileResponse;
-        
-        // Delete the file
-        const deleteResponse = await fetch(githubApiUrl, {
-            method: "DELETE",
-            headers: {
-                Authorization: `token ${GITHUB_TOKEN}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                message: `Delete noticia image: ${filePath}`,
-                sha: data.sha,
-                committer: {
-                    name: "Admin Panel",
-                    email: "admin@ifmsabrazil.org",
+const deleteFileFromGitHub = async (filePath: string, maxRetries: number = 3) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const githubApiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`;
+            
+            // First get the file's SHA
+            const response = await fetch(githubApiUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `token ${GITHUB_TOKEN}`,
+                    "Content-Type": "application/json",
                 },
-            }),
-        });
+            });
 
-        if (!deleteResponse.ok) {
-            console.error("Failed to delete file from GitHub");
+            if (!response.ok) {
+                if (response.status === 404) {
+                    // File already deleted, consider it successful
+                    console.log(`File ${filePath} already deleted`);
+                    return;
+                }
+                console.error("Failed to fetch file metadata for deletion");
+                return;
+            }
+
+            const data: GitHubFileResponse = await response.json() as GitHubFileResponse;
+            
+            // Delete the file
+            const deleteResponse = await fetch(githubApiUrl, {
+                method: "DELETE",
+                headers: {
+                    Authorization: `token ${GITHUB_TOKEN}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    message: `Delete noticia image: ${filePath}`,
+                    sha: data.sha,
+                    committer: {
+                        name: "Admin Panel",
+                        email: "admin@ifmsabrazil.org",
+                    },
+                }),
+            });
+
+            if (deleteResponse.ok) {
+                return; // Success
+            }
+
+            if (deleteResponse.status === 409 && attempt < maxRetries) {
+                console.log(`Conflict deleting ${filePath}, retrying attempt ${attempt + 1}...`);
+                // Wait a bit before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                continue;
+            }
+
+            console.error(`Failed to delete file from GitHub: ${deleteResponse.status}`);
+            return;
+        } catch (error) {
+            if (attempt === maxRetries) {
+                console.error(`Error deleting file ${filePath} after ${maxRetries} attempts:`, error);
+            } else {
+                console.log(`Error deleting file ${filePath}, retrying attempt ${attempt + 1}...`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
         }
-    } catch (error) {
-        console.error(`Error deleting file ${filePath}:`, error);
     }
 };
 
@@ -227,30 +270,48 @@ export const noticiaImagesRouter = createTRPCRouter({
             const imageContent = Buffer.from(image, "base64").toString("base64");
             
             try {
-                // Upload the image file to GitHub
-                const imageResponse = await fetch(githubApiUrl, {
-                    method: "PUT",
-                    headers: {
-                        Authorization: `token ${GITHUB_TOKEN}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        message: `Add noticia image: ${originalFilename}`,
-                        content: imageContent,
-                        committer: {
-                            name: "Admin Panel",
-                            email: "admin@ifmsabrazil.org",
+                // Upload the image file to GitHub with retry logic
+                const maxRetries = 3;
+                let lastError: string = "";
+                
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    const imageResponse = await fetch(githubApiUrl, {
+                        method: "PUT",
+                        headers: {
+                            Authorization: `token ${GITHUB_TOKEN}`,
+                            "Content-Type": "application/json",
                         },
-                    }),
-                });
-
-                if (!imageResponse.ok) {
-                    const imageResponseData = await imageResponse.text();
-                    console.error("Image response error:", imageResponseData);
-                    throw new TRPCError({
-                        code: 'INTERNAL_SERVER_ERROR',
-                        message: `GitHub API responded with status ${imageResponse.status}`,
+                        body: JSON.stringify({
+                            message: `Add noticia image: ${originalFilename}`,
+                            content: imageContent,
+                            committer: {
+                                name: "Admin Panel",
+                                email: "admin@ifmsabrazil.org",
+                            },
+                        }),
                     });
+
+                    if (imageResponse.ok) {
+                        break; // Success, exit the retry loop
+                    }
+
+                    if (imageResponse.status === 409 && attempt < maxRetries) {
+                        console.log(`Conflict uploading image, retrying attempt ${attempt + 1}...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        continue;
+                    }
+
+                    // If we get here, either it's not a 409 or we've exhausted retries
+                    const imageResponseData = await imageResponse.text();
+                    lastError = imageResponseData;
+                    console.error("Image response error:", imageResponseData);
+                    
+                    if (attempt === maxRetries) {
+                        throw new TRPCError({
+                            code: 'INTERNAL_SERVER_ERROR',
+                            message: `GitHub API responded with status ${imageResponse.status}`,
+                        });
+                    }
                 }
 
                 const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${filePath}`;
@@ -406,29 +467,47 @@ export const noticiaImagesRouter = createTRPCRouter({
                 
                 const imageContent = Buffer.from(newImage, "base64").toString("base64");
                 
-                const imageResponse = await fetch(githubApiUrl, {
-                    method: "PUT",
-                    headers: {
-                        Authorization: `token ${GITHUB_TOKEN}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        message: `Update noticia image: ${newOriginalFilename}`,
-                        content: imageContent,
-                        committer: {
-                            name: "Admin Panel",
-                            email: "admin@ifmsabrazil.org",
+                // Upload with retry logic for conflicts
+                const maxRetries = 3;
+                let updateSuccess = false;
+                
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    const imageResponse = await fetch(githubApiUrl, {
+                        method: "PUT",
+                        headers: {
+                            Authorization: `token ${GITHUB_TOKEN}`,
+                            "Content-Type": "application/json",
                         },
-                    }),
-                });
+                        body: JSON.stringify({
+                            message: `Update noticia image: ${newOriginalFilename}`,
+                            content: imageContent,
+                            committer: {
+                                name: "Admin Panel",
+                                email: "admin@ifmsabrazil.org",
+                            },
+                        }),
+                    });
 
-                if (!imageResponse.ok) {
+                    if (imageResponse.ok) {
+                        updateSuccess = true;
+                        break;
+                    }
+
+                    if (imageResponse.status === 409 && attempt < maxRetries) {
+                        console.log(`Conflict updating image, retrying attempt ${attempt + 1}...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        continue;
+                    }
+
                     const imageResponseData = await imageResponse.text();
                     console.error("Image response error:", imageResponseData);
-                    throw new TRPCError({
-                        code: 'INTERNAL_SERVER_ERROR',
-                        message: `GitHub API responded with status ${imageResponse.status}`,
-                    });
+                    
+                    if (attempt === maxRetries) {
+                        throw new TRPCError({
+                            code: 'INTERNAL_SERVER_ERROR',
+                            message: `GitHub API responded with status ${imageResponse.status}`,
+                        });
+                    }
                 }
 
                 const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${newFilePath}`;
