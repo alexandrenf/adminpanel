@@ -132,21 +132,37 @@ export const arquivoRouter = createTRPCRouter({
                 let imageUrl = PLACEHOLDER_IMAGE_URL;
 
                 if (imageContent) {
+                    // Check if file already exists and get SHA if it does
+                    let existingSha: string | undefined;
+                    try {
+                        const existingFile = await fetchFileContent(GITHUB_API_URL_IMAGE);
+                        existingSha = existingFile.sha;
+                    } catch (error) {
+                        // File doesn't exist, which is fine for new uploads
+                    }
+
                     // Upload the image file
+                    const requestBody: any = {
+                        message: `Add image for ${id}`,
+                        content: imageContent,
+                        committer: {
+                            name: "Your Name",
+                            email: "your-email@example.com",
+                        },
+                    };
+
+                    // Add SHA if file exists (for updates)
+                    if (existingSha) {
+                        requestBody.sha = existingSha;
+                    }
+
                     const imageResponse = await fetch(GITHUB_API_URL_IMAGE, {
                         method: "PUT",
                         headers: {
                             Authorization: `token ${GITHUB_TOKEN}`,
                             "Content-Type": "application/json",
                         },
-                        body: JSON.stringify({
-                            message: `Add image for ${id}`,
-                            content: imageContent,
-                            committer: {
-                                name: "Your Name",
-                                email: "your-email@example.com",
-                            },
-                        }),
+                        body: JSON.stringify(requestBody),
                     });
 
                     if (!imageResponse.ok) {
@@ -207,21 +223,37 @@ export const arquivoRouter = createTRPCRouter({
                 let imageUrl = imageLink;
 
                 if (imageContent) {
+                    // Check if file already exists and get SHA if it does
+                    let existingSha: string | undefined;
+                    try {
+                        const existingFile = await fetchFileContent(GITHUB_API_URL_IMAGE(imageFilename || ''));
+                        existingSha = existingFile.sha;
+                    } catch (error) {
+                        // File doesn't exist, which is fine for new uploads
+                    }
+
                     // Upload the new image file
+                    const requestBody: any = {
+                        message: `Update image for ${id}`,
+                        content: imageContent,
+                        committer: {
+                            name: "Your Name",
+                            email: "your-email@example.com",
+                        },
+                    };
+
+                    // Add SHA if file exists (for updates)
+                    if (existingSha) {
+                        requestBody.sha = existingSha;
+                    }
+
                     const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
                         method: "PUT",
                         headers: {
                             Authorization: `token ${GITHUB_TOKEN}`,
                             "Content-Type": "application/json",
                         },
-                        body: JSON.stringify({
-                            message: `Update image for ${id}`,
-                            content: imageContent,
-                            committer: {
-                                name: "Your Name",
-                                email: "your-email@example.com",
-                            },
-                        }),
+                        body: JSON.stringify(requestBody),
                     });
 
                     if (!imageResponse.ok) {
