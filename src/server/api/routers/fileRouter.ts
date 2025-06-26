@@ -116,22 +116,38 @@ export const fileRouter = createTRPCRouter({
       const fileContent = Buffer.from(markdown).toString("base64");
       const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
 
-      try {
+        try {
+        // Check if markdown file already exists and get SHA if it does
+        let markdownSha: string | undefined;
+        try {
+          const existingMarkdownFile = await fetchFileContent(GITHUB_API_URL_MARKDOWN(markdownFilename));
+          markdownSha = existingMarkdownFile.sha;
+        } catch (error) {
+          // File doesn't exist, which is fine for new uploads
+        }
+
         // Upload the markdown file
+        const markdownRequestBody: any = {
+          message: COMMIT_MESSAGE,
+          content: fileContent,
+          committer: {
+            name: "Your Name",
+            email: "your-email@example.com",
+          },
+        };
+
+        // Add SHA if file exists (for updates)
+        if (markdownSha) {
+          markdownRequestBody.sha = markdownSha;
+        }
+
         const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
           method: "PUT",
           headers: {
             Authorization: `token ${GITHUB_TOKEN}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            message: COMMIT_MESSAGE,
-            content: fileContent,
-            committer: {
-              name: "Your Name",
-              email: "your-email@example.com",
-            },
-          }),
+          body: JSON.stringify(markdownRequestBody),
         });
 
         if (!markdownResponse.ok) {
@@ -146,21 +162,37 @@ export const fileRouter = createTRPCRouter({
         let imageUrl = PLACEHOLDER_IMAGE_URL;
 
         if (imageContent) {
+          // Check if image file already exists and get SHA if it does
+          let imageSha: string | undefined;
+          try {
+            const existingImageFile = await fetchFileContent(GITHUB_API_URL_IMAGE(imageFilename || ''));
+            imageSha = existingImageFile.sha;
+          } catch (error) {
+            // File doesn't exist, which is fine for new uploads
+          }
+
           // Upload the image file
+          const imageRequestBody: any = {
+            message: `Add image for ${id}`,
+            content: imageContent,
+            committer: {
+              name: "Your Name",
+              email: "your-email@example.com",
+            },
+          };
+
+          // Add SHA if file exists (for updates)
+          if (imageSha) {
+            imageRequestBody.sha = imageSha;
+          }
+
           const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
             method: "PUT",
             headers: {
               Authorization: `token ${GITHUB_TOKEN}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              message: `Add image for ${id}`,
-              content: imageContent,
-              committer: {
-                name: "Your Name",
-                email: "your-email@example.com",
-              },
-            }),
+            body: JSON.stringify(imageRequestBody),
           });
 
           if (!imageResponse.ok) {
@@ -225,21 +257,37 @@ export const fileRouter = createTRPCRouter({
         const markdownFilename = `content_${editCount}.md`;
         const imageFilename = imageContent ? `cover_${editCount}.png` : null;
 
+        // Check if markdown file already exists and get SHA if it does
+        let markdownSha: string | undefined;
+        try {
+          const existingMarkdownFile = await fetchFileContent(GITHUB_API_URL_MARKDOWN(markdownFilename));
+          markdownSha = existingMarkdownFile.sha;
+        } catch (error) {
+          // File doesn't exist, which is fine for new uploads
+        }
+
         // Upload the new markdown file
+        const markdownRequestBody: any = {
+          message: COMMIT_MESSAGE,
+          content: fileContent,
+          committer: {
+            name: "Your Name",
+            email: "your-email@example.com",
+          },
+        };
+
+        // Add SHA if file exists (for updates)
+        if (markdownSha) {
+          markdownRequestBody.sha = markdownSha;
+        }
+
         const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
           method: "PUT",
           headers: {
             Authorization: `token ${GITHUB_TOKEN}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            message: COMMIT_MESSAGE,
-            content: fileContent,
-            committer: {
-              name: "Your Name",
-              email: "your-email@example.com",
-            },
-          }),
+          body: JSON.stringify(markdownRequestBody),
         });
 
         if (!markdownResponse.ok) {
@@ -254,21 +302,37 @@ export const fileRouter = createTRPCRouter({
         let imageUrl = imageLink;
 
         if (imageContent) {
+          // Check if image file already exists and get SHA if it does
+          let imageSha: string | undefined;
+          try {
+            const existingImageFile = await fetchFileContent(GITHUB_API_URL_IMAGE(imageFilename || ''));
+            imageSha = existingImageFile.sha;
+          } catch (error) {
+            // File doesn't exist, which is fine for new uploads
+          }
+
           // Upload the new image file
+          const imageRequestBody: any = {
+            message: `Update image for ${id}`,
+            content: imageContent,
+            committer: {
+              name: "Your Name",
+              email: "your-email@example.com",
+            },
+          };
+
+          // Add SHA if file exists (for updates)
+          if (imageSha) {
+            imageRequestBody.sha = imageSha;
+          }
+
           const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
             method: "PUT",
             headers: {
               Authorization: `token ${GITHUB_TOKEN}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              message: `Update image for ${id}`,
-              content: imageContent,
-              committer: {
-                name: "Your Name",
-                email: "your-email@example.com",
-              },
-            }),
+            body: JSON.stringify(imageRequestBody),
           });
 
           if (!imageResponse.ok) {
