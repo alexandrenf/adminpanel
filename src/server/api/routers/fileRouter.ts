@@ -41,7 +41,7 @@ const convertJsDelivrToGitHubUrl = (jsDelivrUrl: string) => {
     // Versioned pattern with branch/tag
     /https:\/\/cdn\.jsdelivr\.net\/gh\/([^\/]+)\/([^\/]+)@[^\/]+\/noticias\/([^\/]+)\/([^\/]+)/,
     // Alternative CDN patterns
-    /https:\/\/cdn\.jsdelivr\.net\/gh\/([^\/]+)\/([^\/]+)\/noticias\/([^\/]+)\/(.+)/
+    /https:\/\/cdn\.jsdelivr\.net\/gh\/([^\/]+)\/([^\/]+)\/noticias\/([^\/]+)\/([^\/]+)/
   ];
 
   for (const pattern of patterns) {
