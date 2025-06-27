@@ -32,23 +32,45 @@ const fetchFileContent = async (url: string) => {
   return data;
 };
 
-const deleteOldFile = async (url: string) => {
-  try {
-    const convertJsDelivrToGitHubUrl = (jsDelivrUrl: string) => {
-      const regex = /https:\/\/cdn.jsdelivr.net\/gh\/([^\/]+)\/([^\/]+)\/noticias\/([^\/]+)\/([^\/]+)/;
-      const match = jsDelivrUrl.match(regex);
-      if (!match) return null;
+// Improved URL conversion with better error handling
+const convertJsDelivrToGitHubUrl = (jsDelivrUrl: string) => {
+  // Try different patterns for noticias
+  const patterns = [
+    // Standard pattern: noticias/ID/filename
+    /https:\/\/cdn\.jsdelivr\.net\/gh\/([^\/]+)\/([^\/]+)\/noticias\/([^\/]+)\/([^\/]+)/,
+    // Versioned pattern with branch/tag
+    /https:\/\/cdn\.jsdelivr\.net\/gh\/([^\/]+)\/([^\/]+)@[^\/]+\/noticias\/([^\/]+)\/([^\/]+)/,
+    // Alternative CDN patterns
+    /https:\/\/cdn\.jsdelivr\.net\/gh\/([^\/]+)\/([^\/]+)\/noticias\/([^\/]+)\/([^\/]+)/
+  ];
 
+  for (const pattern of patterns) {
+    const match = jsDelivrUrl.match(pattern);
+    if (match) {
       const [_, owner, repo, id, filename] = match;
       return `https://api.github.com/repos/${owner}/${repo}/contents/noticias/${id}/${filename}`;
-    };
+    }
+  }
 
+  // Log the URL that failed to match for debugging
+  console.error("Failed to convert jsDelivr URL to GitHub API URL:", jsDelivrUrl);
+  return null;
+};
+
+// Improved delete function with better error handling and verification
+const deleteOldFile = async (url: string): Promise<boolean> => {
+  try {
+    console.log(`Attempting to delete old file: ${url}`);
+    
     const githubUrl = convertJsDelivrToGitHubUrl(url);
     if (!githubUrl) {
-      console.error("Invalid jsDelivr URL:", url);
-      return;
+      console.error("Invalid jsDelivr URL - cannot convert to GitHub API URL:", url);
+      return false;
     }
 
+    console.log(`Converted to GitHub API URL: ${githubUrl}`);
+
+    // First, check if the file exists and get its SHA
     const response = await fetch(githubUrl, {
       method: "GET",
       headers: {
@@ -58,15 +80,19 @@ const deleteOldFile = async (url: string) => {
     });
 
     if (!response.ok) {
+      if (response.status === 404) {
+        console.log("File not found - may have already been deleted:", url);
+        return true; // Consider this success since the file doesn't exist
+      }
       const responseData = await response.text();
       console.error("Failed to fetch file metadata:", responseData);
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `GitHub API responded with status ${response.status}`,
-      });
+      throw new Error(`GitHub API responded with status ${response.status}: ${responseData}`);
     }
 
     const data: GitHubFileResponse = await response.json() as GitHubFileResponse;
+    console.log(`Found file with SHA: ${data.sha}`);
+
+    // Now delete the file
     const deleteResponse = await fetch(githubUrl, {
       method: "DELETE",
       headers: {
@@ -74,11 +100,11 @@ const deleteOldFile = async (url: string) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        message: `Delete old file for ${url}`,
+        message: `Delete old file: ${url}`,
         sha: data.sha,
         committer: {
-          name: "Your Name",
-          email: "your-email@example.com",
+          name: "Admin Panel",
+          email: "admin@ifmsabrazil.org",
         },
       }),
     });
@@ -86,13 +112,69 @@ const deleteOldFile = async (url: string) => {
     if (!deleteResponse.ok) {
       const deleteResponseData = await deleteResponse.text();
       console.error("Delete response error:", deleteResponseData);
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `GitHub API responded with status ${deleteResponse.status}`,
-      });
+      throw new Error(`Failed to delete file: ${deleteResponse.status} - ${deleteResponseData}`);
     }
+
+    console.log(`Successfully deleted file: ${url}`);
+    return true;
   } catch (error) {
     console.error(`Error deleting old file ${url}:`, error);
+    // Return false to indicate failure
+    return false;
+  }
+};
+
+// Generic helper to get file SHA if it exists, with proper error handling and type safety
+const getFileShaIfExists = async (githubApiUrl: string): Promise<string | undefined> => {
+  try {
+    const existingFile = await fetchFileContent(githubApiUrl);
+    return existingFile.sha;
+  } catch (error) {
+    // File doesn't exist or other error occurred - return undefined for graceful handling
+    return undefined;
+  }
+};
+
+// Helper to create upload request body with proper typing
+interface UploadRequestBody {
+  message: string;
+  content: string;
+  sha?: string;
+  committer: {
+    name: string;
+    email: string;
+  };
+}
+
+const createUploadRequestBody = (
+  message: string, 
+  content: string, 
+  sha?: string
+): UploadRequestBody => {
+  const body: UploadRequestBody = {
+    message,
+    content,
+    committer: {
+      name: "Admin Panel",
+      email: "admin@ifmsabrazil.org",
+    },
+  };
+
+  if (sha) {
+    body.sha = sha;
+  }
+
+  return body;
+};
+
+// Verify file exists by checking if we can fetch it
+const verifyFileExists = async (url: string): Promise<boolean> => {
+  try {
+    const response = await fetch(url);
+    return response.ok;
+  } catch (error) {
+    console.error(`Error verifying file existence: ${url}`, error);
+    return false;
   }
 };
 
@@ -118,28 +200,14 @@ export const fileRouter = createTRPCRouter({
 
         try {
         // Check if markdown file already exists and get SHA if it does
-        let markdownSha: string | undefined;
-        try {
-          const existingMarkdownFile = await fetchFileContent(GITHUB_API_URL_MARKDOWN(markdownFilename));
-          markdownSha = existingMarkdownFile.sha;
-        } catch (error) {
-          // File doesn't exist, which is fine for new uploads
-        }
+        const markdownSha = await getFileShaIfExists(GITHUB_API_URL_MARKDOWN(markdownFilename));
 
         // Upload the markdown file
-        const markdownRequestBody: any = {
-          message: COMMIT_MESSAGE,
-          content: fileContent,
-          committer: {
-            name: "Your Name",
-            email: "your-email@example.com",
-          },
-        };
-
-        // Add SHA if file exists (for updates)
-        if (markdownSha) {
-          markdownRequestBody.sha = markdownSha;
-        }
+        const markdownRequestBody = createUploadRequestBody(
+          COMMIT_MESSAGE,
+          fileContent,
+          markdownSha
+        );
 
         const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
           method: "PUT",
@@ -163,28 +231,14 @@ export const fileRouter = createTRPCRouter({
 
         if (imageContent) {
           // Check if image file already exists and get SHA if it does
-          let imageSha: string | undefined;
-          try {
-            const existingImageFile = await fetchFileContent(GITHUB_API_URL_IMAGE(imageFilename || ''));
-            imageSha = existingImageFile.sha;
-          } catch (error) {
-            // File doesn't exist, which is fine for new uploads
-          }
+          const imageSha = await getFileShaIfExists(GITHUB_API_URL_IMAGE(imageFilename));
 
           // Upload the image file
-          const imageRequestBody: any = {
-            message: `Add image for ${id}`,
-            content: imageContent,
-            committer: {
-              name: "Your Name",
-              email: "your-email@example.com",
-            },
-          };
-
-          // Add SHA if file exists (for updates)
-          if (imageSha) {
-            imageRequestBody.sha = imageSha;
-          }
+          const imageRequestBody = createUploadRequestBody(
+            `Add image for ${id}`,
+            imageContent,
+            imageSha
+          );
 
           const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
             method: "PUT",
@@ -239,157 +293,196 @@ export const fileRouter = createTRPCRouter({
       const fileContent = Buffer.from(markdown).toString("base64");
       const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
 
-      const randomSuffix = () => Math.floor(100 + Math.random() * 900).toString();
-
       try {
+        console.log(`Starting update for noticia ${id}`);
+        
         // Handle edit.txt to keep track of edit count
         let editCount = 1;
-        let editSha: string | undefined;
+        const editSha = await getFileShaIfExists(GITHUB_API_URL_EDIT);
 
-        try {
-          const existingEditFile = await fetchFileContent(GITHUB_API_URL_EDIT);
-          editCount = parseInt(Buffer.from(existingEditFile.content ?? '', 'base64').toString('utf-8'), 10) + 1;
-          editSha = existingEditFile.sha;
-        } catch (error) {
-          console.error("Edit file not found, creating a new one.");
+        if (editSha) {
+          try {
+            const existingEditFile = await fetchFileContent(GITHUB_API_URL_EDIT);
+            editCount = parseInt(Buffer.from(existingEditFile.content ?? '', 'base64').toString('utf-8'), 10) + 1;
+            console.log(`Current edit count: ${editCount - 1}, new count will be: ${editCount}`);
+          } catch (error) {
+            console.log("Edit file exists but couldn't parse content, using count 1.");
+          }
+        } else {
+          console.log("Edit file not found, creating a new one with count 1.");
         }
 
         const markdownFilename = `content_${editCount}.md`;
         const imageFilename = imageContent ? `cover_${editCount}.png` : null;
 
-        // Check if markdown file already exists and get SHA if it does
-        let markdownSha: string | undefined;
-        try {
-          const existingMarkdownFile = await fetchFileContent(GITHUB_API_URL_MARKDOWN(markdownFilename));
-          markdownSha = existingMarkdownFile.sha;
-        } catch (error) {
-          // File doesn't exist, which is fine for new uploads
-        }
+        console.log(`Creating new files: ${markdownFilename}${imageFilename ? `, ${imageFilename}` : ''}`);
 
-        // Upload the new markdown file
-        const markdownRequestBody: any = {
-          message: COMMIT_MESSAGE,
-          content: fileContent,
-          committer: {
-            name: "Your Name",
-            email: "your-email@example.com",
-          },
-        };
+                 // Upload the new markdown file first
+         const newMarkdownRequestBody = createUploadRequestBody(
+           COMMIT_MESSAGE,
+           fileContent
+         );
 
-        // Add SHA if file exists (for updates)
-        if (markdownSha) {
-          markdownRequestBody.sha = markdownSha;
-        }
-
-        const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
-          method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(markdownRequestBody),
-        });
+         const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
+           method: "PUT",
+           headers: {
+             Authorization: `token ${GITHUB_TOKEN}`,
+             "Content-Type": "application/json",
+           },
+           body: JSON.stringify(newMarkdownRequestBody),
+         });
 
         if (!markdownResponse.ok) {
           const markdownResponseData = await markdownResponse.text();
           console.error("Markdown response error:", markdownResponseData);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: `GitHub API responded with status ${markdownResponse.status}`,
+            message: `Failed to upload new markdown file: ${markdownResponse.status}`,
           });
         }
 
+        console.log(`Successfully uploaded new markdown file: ${markdownFilename}`);
+
         let imageUrl = imageLink;
+        let newImageUploaded = false;
 
         if (imageContent) {
-          // Check if image file already exists and get SHA if it does
-          let imageSha: string | undefined;
-          try {
-            const existingImageFile = await fetchFileContent(GITHUB_API_URL_IMAGE(imageFilename || ''));
-            imageSha = existingImageFile.sha;
-          } catch (error) {
-            // File doesn't exist, which is fine for new uploads
-          }
+                     // Upload the new image file
+           const newImageRequestBody = createUploadRequestBody(
+             `Update image for ${id}`,
+             imageContent
+           );
 
-          // Upload the new image file
-          const imageRequestBody: any = {
-            message: `Update image for ${id}`,
-            content: imageContent,
-            committer: {
-              name: "Your Name",
-              email: "your-email@example.com",
-            },
-          };
-
-          // Add SHA if file exists (for updates)
-          if (imageSha) {
-            imageRequestBody.sha = imageSha;
-          }
-
-          const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
-            method: "PUT",
-            headers: {
-              Authorization: `token ${GITHUB_TOKEN}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(imageRequestBody),
-          });
+           const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
+             method: "PUT",
+             headers: {
+               Authorization: `token ${GITHUB_TOKEN}`,
+               "Content-Type": "application/json",
+             },
+             body: JSON.stringify(newImageRequestBody),
+           });
 
           if (!imageResponse.ok) {
             const imageResponseData = await imageResponse.text();
             console.error("Image response error:", imageResponseData);
+                         // Try to clean up the markdown file we just created
+             try {
+               const newMarkdownUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${markdownFilename}`;
+               const markdownShaToDelete = await getFileShaIfExists(newMarkdownUrl);
+               
+               if (markdownShaToDelete) {
+                 const cleanupRequestBody = createUploadRequestBody(
+                   `Cleanup: Delete failed markdown upload for ${id}`,
+                   "", // Empty content for delete operation (though content isn't used for DELETE)
+                   markdownShaToDelete
+                 );
+                 
+                 await fetch(newMarkdownUrl, {
+                   method: "DELETE",
+                   headers: {
+                     Authorization: `token ${GITHUB_TOKEN}`,
+                     "Content-Type": "application/json",
+                   },
+                   body: JSON.stringify({
+                     message: cleanupRequestBody.message,
+                     sha: cleanupRequestBody.sha,
+                     committer: cleanupRequestBody.committer,
+                   }),
+                 });
+               }
+             } catch (cleanupError) {
+               console.error("Failed to cleanup markdown file after image upload failure:", cleanupError);
+             }
+            
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
-              message: `GitHub API responded with status ${imageResponse.status}`,
+              message: `Failed to upload new image file: ${imageResponse.status}`,
             });
           }
 
           imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${imageFilename}`;
-
-          // Delete the old image file
-          await deleteOldFile(imageLink);
+          newImageUploaded = true;
+          console.log(`Successfully uploaded new image file: ${imageFilename}`);
         }
 
-        // Delete the old markdown file
-        await deleteOldFile(contentLink);
+                 // Update the edit.txt file with the new edit count
+         const editRequestBody = createUploadRequestBody(
+           `Update edit count for ${id}`,
+           Buffer.from(editCount.toString()).toString("base64"),
+           editSha
+         );
 
-        // Upload the edit.txt file with the updated edit count
-        const editFileResponse = await fetch(GITHUB_API_URL_EDIT, {
-          method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: `Update edit count for ${id}`,
-            content: Buffer.from(editCount.toString()).toString("base64"),
-            sha: editSha,
-            committer: {
-              name: "Your Name",
-              email: "your-email@example.com",
-            },
-          }),
-        });
+         const editFileResponse = await fetch(GITHUB_API_URL_EDIT, {
+           method: "PUT",
+           headers: {
+             Authorization: `token ${GITHUB_TOKEN}`,
+             "Content-Type": "application/json",
+           },
+           body: JSON.stringify(editRequestBody),
+         });
 
         if (!editFileResponse.ok) {
           const editFileResponseData = await editFileResponse.text();
           console.error("Edit file response error:", editFileResponseData);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: `GitHub API responded with status ${editFileResponse.status}`,
-          });
+          // This is not critical enough to fail the whole operation
+          console.warn("Failed to update edit count, but continuing with file operations");
+        } else {
+          console.log(`Successfully updated edit count to: ${editCount}`);
         }
 
+        // Verify new files exist before deleting old ones
+        const newMarkdownUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${markdownFilename}`;
+        console.log("Verifying new markdown file exists...");
+        
+        // Wait a bit for CDN to update
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const markdownExists = await verifyFileExists(newMarkdownUrl);
+        if (!markdownExists) {
+          console.error("New markdown file not accessible via CDN, but continuing...");
+        } else {
+          console.log("New markdown file verified via CDN");
+        }
+
+        if (newImageUploaded) {
+          console.log("Verifying new image file exists...");
+          const imageExists = await verifyFileExists(imageUrl);
+          if (!imageExists) {
+            console.error("New image file not accessible via CDN, but continuing...");
+          } else {
+            console.log("New image file verified via CDN");
+          }
+        }
+
+        // Now try to delete old files
+        console.log("Attempting to delete old files...");
+        
+        // Delete the old image file first (if we uploaded a new one)
+        if (newImageUploaded && imageLink !== PLACEHOLDER_IMAGE_URL) {
+          const imageDeleted = await deleteOldFile(imageLink);
+          if (!imageDeleted) {
+            console.error("Failed to delete old image file, but continuing...");
+          }
+        }
+
+        // Delete the old markdown file
+        const markdownDeleted = await deleteOldFile(contentLink);
+        if (!markdownDeleted) {
+          console.error("Failed to delete old markdown file, but continuing...");
+        }
+
+        console.log(`Update completed for noticia ${id}`);
+
         return {
-          markdownUrl: `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${markdownFilename}`,
+          markdownUrl: newMarkdownUrl,
           imageUrl,
           editCount
         };
       } catch (error) {
-        console.error("Error uploading file:", error);
+        console.error("Error updating file:", error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: "Error uploading file",
+          message: `Error updating file: ${error instanceof Error ? error.message : 'Unknown error'}`,
         });
       }
     }),
