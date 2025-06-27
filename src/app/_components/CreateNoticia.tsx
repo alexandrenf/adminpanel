@@ -87,6 +87,11 @@ const CreateNoticia = () => {
     
     // Image manager modal state
     const [isImageManagerOpen, setIsImageManagerOpen] = useState(false);
+    
+    // Track if data has been initially loaded to prevent overwriting user changes
+    const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+    const [initialMarkdownUrl, setInitialMarkdownUrl] = useState<string | null>(null);
+    
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchParams = useSearchParams();
@@ -135,6 +140,10 @@ const CreateNoticia = () => {
         { id: noticiaId ?? -1 },
         {
             enabled: isEditMode && noticiaId !== null,
+            // Reduce automatic refetching while user is editing
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: false,
+            staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
         }
     );
     
@@ -143,6 +152,10 @@ const CreateNoticia = () => {
         { blogId: noticiaId ?? -1 },
         {
             enabled: isEditMode && noticiaId !== null,
+            // Reduce automatic refetching while user is editing
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: false,
+            staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
         }
     );
 
@@ -153,14 +166,23 @@ const CreateNoticia = () => {
         if (id) {
             setIsEditMode(true);
             setNoticiaId(parseInt(id, 10));
+            // Reset data loading state when switching to a different noticia
+            setHasLoadedInitialData(false);
+            setInitialMarkdownUrl(null);
+        } else {
+            // Reset state when going to create mode
+            setIsEditMode(false);
+            setNoticiaId(null);
+            setHasLoadedInitialData(false);
+            setInitialMarkdownUrl(null);
         }
     }, [searchParams]);
 
     useEffect(() => {
-        if (noticiaData) {
+        if (noticiaData && !hasLoadedInitialData) {
+            // Only load data on initial fetch, not on subsequent refetches
             setTitle(noticiaData.title);
             setDate(new Date(noticiaData.date));
-            fetchMarkdownFile(noticiaData.link);
             setResumo(noticiaData.summary);
             
             // Handle legacy author format
@@ -173,8 +195,16 @@ const CreateNoticia = () => {
             }
             setImageSrc(noticiaData.imageLink);
             setForcarPaginaInicial(noticiaData.forceHomePage);
+            
+            // Fetch markdown only on initial load
+            if (initialMarkdownUrl !== noticiaData.link) {
+                setInitialMarkdownUrl(noticiaData.link);
+                fetchMarkdownFile(noticiaData.link);
+            }
+            
+            setHasLoadedInitialData(true);
         }
-    }, [noticiaData]);
+    }, [noticiaData, hasLoadedInitialData, initialMarkdownUrl]);
 
     useEffect(() => {
         if (extendedAuthorInfo && extendedAuthorInfo.hasExtendedInfo && extendedAuthorInfo.authors) {

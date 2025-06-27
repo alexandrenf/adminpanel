@@ -124,6 +124,49 @@ const deleteOldFile = async (url: string): Promise<boolean> => {
   }
 };
 
+// Generic helper to get file SHA if it exists, with proper error handling and type safety
+const getFileShaIfExists = async (githubApiUrl: string): Promise<string | undefined> => {
+  try {
+    const existingFile = await fetchFileContent(githubApiUrl);
+    return existingFile.sha;
+  } catch (error) {
+    // File doesn't exist or other error occurred - return undefined for graceful handling
+    return undefined;
+  }
+};
+
+// Helper to create upload request body with proper typing
+interface UploadRequestBody {
+  message: string;
+  content: string;
+  sha?: string;
+  committer: {
+    name: string;
+    email: string;
+  };
+}
+
+const createUploadRequestBody = (
+  message: string, 
+  content: string, 
+  sha?: string
+): UploadRequestBody => {
+  const body: UploadRequestBody = {
+    message,
+    content,
+    committer: {
+      name: "Admin Panel",
+      email: "admin@ifmsabrazil.org",
+    },
+  };
+
+  if (sha) {
+    body.sha = sha;
+  }
+
+  return body;
+};
+
 // Verify file exists by checking if we can fetch it
 const verifyFileExists = async (url: string): Promise<boolean> => {
   try {
@@ -157,28 +200,14 @@ export const fileRouter = createTRPCRouter({
 
         try {
         // Check if markdown file already exists and get SHA if it does
-        let markdownSha: string | undefined;
-        try {
-          const existingMarkdownFile = await fetchFileContent(GITHUB_API_URL_MARKDOWN(markdownFilename));
-          markdownSha = existingMarkdownFile.sha;
-        } catch (error) {
-          // File doesn't exist, which is fine for new uploads
-        }
+        const markdownSha = await getFileShaIfExists(GITHUB_API_URL_MARKDOWN(markdownFilename));
 
         // Upload the markdown file
-        const markdownRequestBody: any = {
-          message: COMMIT_MESSAGE,
-          content: fileContent,
-          committer: {
-            name: "Admin Panel",
-            email: "admin@ifmsabrazil.org",
-          },
-        };
-
-        // Add SHA if file exists (for updates)
-        if (markdownSha) {
-          markdownRequestBody.sha = markdownSha;
-        }
+        const markdownRequestBody = createUploadRequestBody(
+          COMMIT_MESSAGE,
+          fileContent,
+          markdownSha
+        );
 
         const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
           method: "PUT",
@@ -202,28 +231,14 @@ export const fileRouter = createTRPCRouter({
 
         if (imageContent) {
           // Check if image file already exists and get SHA if it does
-          let imageSha: string | undefined;
-          try {
-            const existingImageFile = await fetchFileContent(GITHUB_API_URL_IMAGE(imageFilename || ''));
-            imageSha = existingImageFile.sha;
-          } catch (error) {
-            // File doesn't exist, which is fine for new uploads
-          }
+          const imageSha = await getFileShaIfExists(GITHUB_API_URL_IMAGE(imageFilename));
 
           // Upload the image file
-          const imageRequestBody: any = {
-            message: `Add image for ${id}`,
-            content: imageContent,
-            committer: {
-              name: "Admin Panel",
-              email: "admin@ifmsabrazil.org",
-            },
-          };
-
-          // Add SHA if file exists (for updates)
-          if (imageSha) {
-            imageRequestBody.sha = imageSha;
-          }
+          const imageRequestBody = createUploadRequestBody(
+            `Add image for ${id}`,
+            imageContent,
+            imageSha
+          );
 
           const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
             method: "PUT",
@@ -283,14 +298,17 @@ export const fileRouter = createTRPCRouter({
         
         // Handle edit.txt to keep track of edit count
         let editCount = 1;
-        let editSha: string | undefined;
+        const editSha = await getFileShaIfExists(GITHUB_API_URL_EDIT);
 
-        try {
-          const existingEditFile = await fetchFileContent(GITHUB_API_URL_EDIT);
-          editCount = parseInt(Buffer.from(existingEditFile.content ?? '', 'base64').toString('utf-8'), 10) + 1;
-          editSha = existingEditFile.sha;
-          console.log(`Current edit count: ${editCount - 1}, new count will be: ${editCount}`);
-        } catch (error) {
+        if (editSha) {
+          try {
+            const existingEditFile = await fetchFileContent(GITHUB_API_URL_EDIT);
+            editCount = parseInt(Buffer.from(existingEditFile.content ?? '', 'base64').toString('utf-8'), 10) + 1;
+            console.log(`Current edit count: ${editCount - 1}, new count will be: ${editCount}`);
+          } catch (error) {
+            console.log("Edit file exists but couldn't parse content, using count 1.");
+          }
+        } else {
           console.log("Edit file not found, creating a new one with count 1.");
         }
 
@@ -299,22 +317,20 @@ export const fileRouter = createTRPCRouter({
 
         console.log(`Creating new files: ${markdownFilename}${imageFilename ? `, ${imageFilename}` : ''}`);
 
-        // Upload the new markdown file first
-        const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
-          method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: COMMIT_MESSAGE,
-            content: fileContent,
-            committer: {
-              name: "Admin Panel",
-              email: "admin@ifmsabrazil.org",
-            },
-          }),
-        });
+                 // Upload the new markdown file first
+         const newMarkdownRequestBody = createUploadRequestBody(
+           COMMIT_MESSAGE,
+           fileContent
+         );
+
+         const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
+           method: "PUT",
+           headers: {
+             Authorization: `token ${GITHUB_TOKEN}`,
+             "Content-Type": "application/json",
+           },
+           body: JSON.stringify(newMarkdownRequestBody),
+         });
 
         if (!markdownResponse.ok) {
           const markdownResponseData = await markdownResponse.text();
@@ -331,48 +347,52 @@ export const fileRouter = createTRPCRouter({
         let newImageUploaded = false;
 
         if (imageContent) {
-          // Upload the new image file
-          const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
-            method: "PUT",
-            headers: {
-              Authorization: `token ${GITHUB_TOKEN}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              message: `Update image for ${id}`,
-              content: imageContent,
-              committer: {
-                name: "Admin Panel",
-                email: "admin@ifmsabrazil.org",
-              },
-            }),
-          });
+                     // Upload the new image file
+           const newImageRequestBody = createUploadRequestBody(
+             `Update image for ${id}`,
+             imageContent
+           );
+
+           const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
+             method: "PUT",
+             headers: {
+               Authorization: `token ${GITHUB_TOKEN}`,
+               "Content-Type": "application/json",
+             },
+             body: JSON.stringify(newImageRequestBody),
+           });
 
           if (!imageResponse.ok) {
             const imageResponseData = await imageResponse.text();
             console.error("Image response error:", imageResponseData);
-            // Try to clean up the markdown file we just created
-            try {
-              const newMarkdownUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${markdownFilename}`;
-              const markdownToDelete = await fetchFileContent(newMarkdownUrl);
-              await fetch(newMarkdownUrl, {
-                method: "DELETE",
-                headers: {
-                  Authorization: `token ${GITHUB_TOKEN}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  message: `Cleanup: Delete failed markdown upload for ${id}`,
-                  sha: markdownToDelete.sha,
-                  committer: {
-                    name: "Admin Panel",
-                    email: "admin@ifmsabrazil.org",
-                  },
-                }),
-              });
-            } catch (cleanupError) {
-              console.error("Failed to cleanup markdown file after image upload failure:", cleanupError);
-            }
+                         // Try to clean up the markdown file we just created
+             try {
+               const newMarkdownUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${markdownFilename}`;
+               const markdownShaToDelete = await getFileShaIfExists(newMarkdownUrl);
+               
+               if (markdownShaToDelete) {
+                 const cleanupRequestBody = createUploadRequestBody(
+                   `Cleanup: Delete failed markdown upload for ${id}`,
+                   "", // Empty content for delete operation (though content isn't used for DELETE)
+                   markdownShaToDelete
+                 );
+                 
+                 await fetch(newMarkdownUrl, {
+                   method: "DELETE",
+                   headers: {
+                     Authorization: `token ${GITHUB_TOKEN}`,
+                     "Content-Type": "application/json",
+                   },
+                   body: JSON.stringify({
+                     message: cleanupRequestBody.message,
+                     sha: cleanupRequestBody.sha,
+                     committer: cleanupRequestBody.committer,
+                   }),
+                 });
+               }
+             } catch (cleanupError) {
+               console.error("Failed to cleanup markdown file after image upload failure:", cleanupError);
+             }
             
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -385,23 +405,21 @@ export const fileRouter = createTRPCRouter({
           console.log(`Successfully uploaded new image file: ${imageFilename}`);
         }
 
-        // Update the edit.txt file with the new edit count
-        const editFileResponse = await fetch(GITHUB_API_URL_EDIT, {
-          method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: `Update edit count for ${id}`,
-            content: Buffer.from(editCount.toString()).toString("base64"),
-            sha: editSha,
-            committer: {
-              name: "Admin Panel",
-              email: "admin@ifmsabrazil.org",
-            },
-          }),
-        });
+                 // Update the edit.txt file with the new edit count
+         const editRequestBody = createUploadRequestBody(
+           `Update edit count for ${id}`,
+           Buffer.from(editCount.toString()).toString("base64"),
+           editSha
+         );
+
+         const editFileResponse = await fetch(GITHUB_API_URL_EDIT, {
+           method: "PUT",
+           headers: {
+             Authorization: `token ${GITHUB_TOKEN}`,
+             "Content-Type": "application/json",
+           },
+           body: JSON.stringify(editRequestBody),
+         });
 
         if (!editFileResponse.ok) {
           const editFileResponseData = await editFileResponse.text();
