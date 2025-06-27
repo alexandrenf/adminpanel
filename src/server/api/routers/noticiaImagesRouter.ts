@@ -43,20 +43,27 @@ const assignBlogIdAndMoveImages = async (
     imageIds: number[] = []
 ): Promise<{ updatedCount: number; movedImages: number }> => {
     // Update images that were uploaded for "new" noticia
-    // Only update if we have specific image IDs to prevent race conditions
-    const updatedImages = imageIds.length > 0 
-        ? await db.noticiaImage.updateMany({
-            where: {
-                AND: [
-                    { blogId: null },
-                    { id: { in: imageIds } }
-                ]
-            },
-            data: {
-                blogId,
-            },
-        })
-        : { count: 0 };
+    // If no specific image IDs provided, update ALL images with null blogId that are in "new" directory
+    const whereCondition = imageIds.length > 0 
+        ? {
+            AND: [
+                { blogId: null },
+                { id: { in: imageIds } }
+            ]
+        }
+        : {
+            AND: [
+                { blogId: null },
+                { filePath: { startsWith: 'noticias/new/' } }
+            ]
+        };
+    
+    const updatedImages = await db.noticiaImage.updateMany({
+        where: whereCondition,
+        data: {
+            blogId,
+        },
+    });
     
     // Move files in GitHub from "new" directory to the actual blog ID directory
     const imagesToMove = await db.noticiaImage.findMany({
@@ -82,21 +89,37 @@ const assignBlogIdAndMoveImages = async (
                 const newGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${newFilePath}`;
                 const newUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${newFilePath}`;
                 
+                // Check if file already exists at new location and get SHA if it does
+                let existingSha: string | undefined;
+                try {
+                    const existingFile = await fetchFileContent(newGithubUrl);
+                    existingSha = existingFile.sha;
+                } catch (error) {
+                    // File doesn't exist, which is fine for new uploads
+                }
+
                 // Upload to new location
+                const requestBody: any = {
+                    message: `Move image to blog ${blogId}: ${image.originalName}`,
+                    content: fileData.content,
+                    committer: {
+                        name: "Admin Panel",
+                        email: "admin@ifmsabrazil.org",
+                    },
+                };
+
+                // Add SHA if file exists (for updates)
+                if (existingSha) {
+                    requestBody.sha = existingSha;
+                }
+
                 const uploadResponse = await fetch(newGithubUrl, {
                     method: "PUT",
                     headers: {
                         Authorization: `token ${GITHUB_TOKEN}`,
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({
-                        message: `Move image to blog ${blogId}: ${image.originalName}`,
-                        content: fileData.content,
-                        committer: {
-                            name: "Admin Panel",
-                            email: "admin@ifmsabrazil.org",
-                        },
-                    }),
+                    body: JSON.stringify(requestBody),
                 });
                 
                 if (!uploadResponse.ok) {
@@ -275,20 +298,37 @@ export const noticiaImagesRouter = createTRPCRouter({
                 let lastError: string = "";
                 
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    // Check if file already exists and get SHA if it does
+                    let existingSha: string | undefined;
+                    try {
+                        const existingFile = await fetchFileContent(githubApiUrl);
+                        existingSha = existingFile.sha;
+                    } catch (error) {
+                        // File doesn't exist, which is fine for new uploads
+                    }
+
+                    // Prepare request body
+                    const requestBody: any = {
+                        message: `Add noticia image: ${originalFilename}`,
+                        content: imageContent,
+                        committer: {
+                            name: "Admin Panel",
+                            email: "admin@ifmsabrazil.org",
+                        },
+                    };
+
+                    // Add SHA if file exists (for updates)
+                    if (existingSha) {
+                        requestBody.sha = existingSha;
+                    }
+
                     const imageResponse = await fetch(githubApiUrl, {
                         method: "PUT",
                         headers: {
                             Authorization: `token ${GITHUB_TOKEN}`,
                             "Content-Type": "application/json",
                         },
-                        body: JSON.stringify({
-                            message: `Add noticia image: ${originalFilename}`,
-                            content: imageContent,
-                            committer: {
-                                name: "Admin Panel",
-                                email: "admin@ifmsabrazil.org",
-                            },
-                        }),
+                        body: JSON.stringify(requestBody),
                     });
 
                     if (imageResponse.ok) {
