@@ -84,8 +84,8 @@ async function createMySQLDump(): Promise<Buffer> {
 export const createDatabaseBackup = internalAction({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; fileName: string; fileSize: number; deletedOldBackups: number }> => {
-    const backupDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-    const fileName = `database_backup_${backupDate}_${Date.now()}.sql.gz`;
+    const backupDate: string = new Date().toISOString().split('T')[0]!; // YYYY-MM-DD format
+    const fileName: string = `database_backup_${backupDate}_${Date.now()}.sql.gz`;
     
     try {
       console.log("Starting database backup process...");
