@@ -236,6 +236,7 @@ export default function NoticiasTable() {
                                         <TableHead className="font-semibold">Autor</TableHead>
                                         <TableHead className="font-semibold">Título</TableHead>
                                         <TableHead className="font-semibold">Resumo</TableHead>
+                                        <TableHead className="font-semibold">Status</TableHead>
                                         <TableHead className="font-semibold">Imagem</TableHead>
                                         <TableHead className="font-semibold text-right">Ações</TableHead>
                                     </TableRow>
@@ -270,6 +271,14 @@ export default function NoticiasTable() {
                                                         {row.summary}
                                                     </p>
                                                 </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge 
+                                                    variant={row.rascunho ? "secondary" : "default"}
+                                                    className={row.rascunho ? "bg-orange-100 text-orange-700 hover:bg-orange-200" : "bg-green-100 text-green-700 hover:bg-green-200"}
+                                                >
+                                                    {row.rascunho ? "Rascunho" : "Publicado"}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell>
                                                 {row.imageLink ? (

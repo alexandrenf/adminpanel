@@ -82,6 +82,7 @@ const CreateNoticia = () => {
     const [image, setImage] = useState<string | null>(null);
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [forcarPaginaInicial, setForcarPaginaInicial] = useState(false);
+    const [rascunho, setRascunho] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [noticiaId, setNoticiaId] = useState<number | null>(null);
     
@@ -195,6 +196,7 @@ const CreateNoticia = () => {
             }
             setImageSrc(noticiaData.imageLink);
             setForcarPaginaInicial(noticiaData.forceHomePage);
+            setRascunho(noticiaData.rascunho ?? false);
             
             // Fetch markdown only on initial load
             if (initialMarkdownUrl !== noticiaData.link) {
@@ -298,6 +300,7 @@ const CreateNoticia = () => {
                     link: uploadResult.markdownUrl,
                     imageLink: uploadResult.imageUrl,
                     forceHomePage: forcarPaginaInicial,
+                    rascunho: rascunho,
                 });
             } catch (error) {
                 console.error("Error updating noticia:", error);
@@ -331,6 +334,7 @@ const CreateNoticia = () => {
                     link: uploadResult.markdownUrl,
                     imageLink: uploadResult.imageUrl,
                     forceHomePage: forcarPaginaInicial,
+                    rascunho: rascunho,
                 });
             } catch (error) {
                 console.error("Error creating noticia:", error);
@@ -559,16 +563,29 @@ const CreateNoticia = () => {
                                     </div>
                                 </div>
 
-                                {/* Checkbox */}
-                                <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id="forcarPaginaInicial"
-                                        checked={forcarPaginaInicial}
-                                        onCheckedChange={(checked) => setForcarPaginaInicial(checked === true)}
-                                    />
-                                    <Label htmlFor="forcarPaginaInicial" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                        Forçar Página Inicial
-                                    </Label>
+                                {/* Checkboxes */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="forcarPaginaInicial"
+                                            checked={forcarPaginaInicial}
+                                            onCheckedChange={(checked) => setForcarPaginaInicial(checked === true)}
+                                        />
+                                        <Label htmlFor="forcarPaginaInicial" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                            Forçar Página Inicial
+                                        </Label>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="rascunho"
+                                            checked={rascunho}
+                                            onCheckedChange={(checked) => setRascunho(checked === true)}
+                                        />
+                                        <Label htmlFor="rascunho" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                            Salvar como Rascunho
+                                        </Label>
+                                    </div>
                                 </div>
 
                                 {/* Submit Button */}
