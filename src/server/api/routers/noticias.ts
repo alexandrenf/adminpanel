@@ -81,6 +81,7 @@ const formatBlogForAlgolia = async (blog: any) => {
         link: blog.link,
         imageLink: blog.imageLink,
         forceHomePage: blog.forceHomePage,
+        rascunho: blog.rascunho || false,
         url: `https://ifmsabrazil.org/arquivo/${blog.id}`,
     };
 
@@ -267,6 +268,7 @@ export const noticiasRouter = createTRPCRouter({
             link: z.string(),
             imageLink: z.string().optional(),
             forceHomePage: z.boolean(),
+            rascunho: z.boolean().default(false),
         }))
         .mutation(async ({ ctx, input }) => {
             // Validate userId
@@ -284,6 +286,7 @@ export const noticiasRouter = createTRPCRouter({
                     link: input.link,
                     imageLink: input.imageLink,
                     forceHomePage: input.forceHomePage,
+                    rascunho: input.rascunho,
                     user: { connect: { id: user.id } },
                 },
             });
@@ -311,6 +314,7 @@ export const noticiasRouter = createTRPCRouter({
             link: z.string(),
             imageLink: z.string().optional(),
             forceHomePage: z.boolean(),
+            rascunho: z.boolean().default(false),
         }))
         .mutation(async ({ ctx, input }) => {
             const updatedBlog = await ctx.db.blog.update({
@@ -323,6 +327,7 @@ export const noticiasRouter = createTRPCRouter({
                     link: input.link,
                     imageLink: input.imageLink,
                     forceHomePage: input.forceHomePage,
+                    rascunho: input.rascunho,
                 },
             });
 

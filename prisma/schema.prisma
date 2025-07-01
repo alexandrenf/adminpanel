@@ -82,6 +82,7 @@ model Blog {
     imageLink       String?
     forceHomePage   Boolean
     userId          String
+    rascunho        Boolean?
 
     user            User     @relation(fields: [userId], references: [id])
     authors         BlogAuthor[] // New relationship for extended author info
