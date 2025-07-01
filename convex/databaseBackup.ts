@@ -35,7 +35,7 @@ async function createMySQLDump(): Promise<Buffer> {
         password: password,
         database: database,
       },
-      dumpToFile: false, // We want the dump as a string, not written to file
+      // dumpToFile: false, // We want the dump as a string, not written to file
       compressFile: false, // We'll handle compression ourselves
       dump: {
         schema: {
@@ -59,7 +59,21 @@ async function createMySQLDump(): Promise<Buffer> {
     });
 
     console.log("MySQL dump completed successfully");
-    return Buffer.from(result.dump.schema + result.dump.data + result.dump.trigger, 'utf8');
+    
+    // Safely concatenate dump parts, handling cases where they might be null/undefined
+    const parts: string[] = [];
+    if (result.dump.schema) {
+      parts.push(result.dump.schema);
+    }
+    if (result.dump.data) {
+      parts.push(result.dump.data);
+    }
+    if (result.dump.trigger) {
+      parts.push(result.dump.trigger);
+    }
+    
+    const sqlDumpContent = parts.join('\n');
+    return Buffer.from(sqlDumpContent, 'utf8');
   } catch (error) {
     console.error("MySQL dump failed:", error);
     throw new Error(`MySQL dump failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -69,7 +83,7 @@ async function createMySQLDump(): Promise<Buffer> {
 // Main backup action
 export const createDatabaseBackup = internalAction({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<{ success: boolean; fileName: string; fileSize: number; deletedOldBackups: number }> => {
     const backupDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
     const fileName = `database_backup_${backupDate}_${Date.now()}.sql.gz`;
     
@@ -104,7 +118,7 @@ export const createDatabaseBackup = internalAction({
       
       // Cleanup old backups
       console.log("Cleaning up old backups...");
-      const deletedCount = await ctx.runMutation(internal.databaseBackupMutations.cleanupOldBackups, {});
+      const deletedCount: number = await ctx.runMutation(internal.databaseBackupMutations.cleanupOldBackups, {});
       
       console.log(`Database backup completed successfully: ${fileName}`);
       return { success: true, fileName, fileSize: compressedDump.length, deletedOldBackups: deletedCount };

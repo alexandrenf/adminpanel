@@ -19,6 +19,7 @@ import type * as agSessions from "../agSessions.js";
 import type * as assemblies from "../assemblies.js";
 import type * as attendance from "../attendance.js";
 import type * as backupUtils from "../backupUtils.js";
+import type * as crons from "../crons.js";
 import type * as databaseBackup from "../databaseBackup.js";
 import type * as databaseBackupMutations from "../databaseBackupMutations.js";
 import type * as files from "../files.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   assemblies: typeof assemblies;
   attendance: typeof attendance;
   backupUtils: typeof backupUtils;
+  crons: typeof crons;
   databaseBackup: typeof databaseBackup;
   databaseBackupMutations: typeof databaseBackupMutations;
   files: typeof files;

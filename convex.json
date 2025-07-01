@@ -5,12 +5,5 @@
       "mysqldump",
       "mysql2"
     ]
-  },
-  "crons": [
-    {
-      "name": "Daily Database Backup",
-      "spec": "0 0 * * *",
-      "functionHandle": "databaseBackup:createDatabaseBackup"
-    }
-  ]
+  }
 }

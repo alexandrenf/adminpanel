@@ -33,19 +33,22 @@ Contains the main backup functionality:
 - **`getBackupHistory`**: Query to retrieve backup history
 - **`getBackupById`**: Internal query to get a specific backup
 
-### 3. Cron Job Configuration (`convex.json`)
-Configured to run daily at midnight:
+### 3. Cron Job Configuration (`convex/crons.ts`)
+Configured to run daily at midnight UTC using Convex's cron jobs API:
 
-```json
-{
-  "crons": [
-    {
-      "name": "Daily Database Backup",
-      "spec": "0 0 * * *",
-      "functionHandle": "databaseBackup:createDatabaseBackup"
-    }
-  ]
-}
+```typescript
+import { cronJobs } from "convex/server";
+import { internal } from "./_generated/api";
+
+const crons = cronJobs();
+
+crons.daily(
+  "daily database backup",
+  { hourUTC: 0, minuteUTC: 0 }, // Every day at midnight UTC
+  internal.databaseBackup.createDatabaseBackup,
+);
+
+export default crons;
 ```
 
 ### 4. Utility Functions (`convex/backupUtils.ts`)
@@ -54,7 +57,7 @@ Helper functions for manual backup management (available after API generation).
 ## How It Works
 
 1. **Daily Execution**: Every day at midnight (00:00), the cron job triggers the backup process
-2. **SQL Dump Creation**: Uses `mysqldump` to create a complete database dump
+2. **SQL Dump Creation**: Uses the `mysqldump` npm package to create a complete database dump
 3. **Compression**: Compresses the SQL dump using gzip to save storage space
 4. **Storage**: Stores the compressed backup in Convex file storage
 5. **Metadata**: Records backup information in the `databaseBackups` table
@@ -64,9 +67,9 @@ Helper functions for manual backup management (available after API generation).
 ## Requirements
 
 ### System Requirements
-- `mysqldump` utility must be available in the system PATH
-- Node.js environment with access to spawn child processes
+- Node.js environment with `mysqldump` and `mysql2` npm packages
 - Convex deployment with file storage enabled
+- MySQL database accessible via network connection
 
 ### Environment Variables
 - `DATABASE_URL`: MySQL connection string used by Prisma
@@ -79,23 +82,30 @@ The MySQL user must have sufficient permissions to:
 
 ## Setup Instructions
 
-1. **Deploy the Convex Functions**:
+1. **Install Required Packages**:
+   ```bash
+   npm install mysqldump mysql2
+   # or if using bun:
+   bun install mysqldump mysql2
+   ```
+
+2. **Deploy the Convex Functions**:
    ```bash
    npx convex deploy
    ```
 
-2. **Verify Cron Job**:
-   After deployment, check the Convex dashboard to ensure the cron job is registered and active.
+3. **Verify Cron Job**:
+   After deployment, check the Convex dashboard under "Cron Jobs" to ensure the daily backup job is registered and active.
 
-3. **Test Manual Backup** (after API generation):
+4. **Test Manual Backup** (after API generation):
    ```javascript
    // In your application or Convex dashboard
    await convex.action(api.backupUtils.manualDatabaseBackup, {});
    ```
 
-4. **Monitor Backup History**:
+5. **Monitor Backup History**:
    ```javascript
-   const backups = await convex.query(api.databaseBackup.getBackupHistory, {});
+   const backups = await convex.query(api.databaseBackupMutations.getBackupHistory, {});
    ```
 
 ## File Naming Convention
@@ -125,7 +135,7 @@ const recentBackups = await convex.query(api.databaseBackup.getBackupHistory, {}
 
 ### Common Issues
 
-1. **mysqldump not found**: Ensure `mysqldump` is installed and in PATH
+1. **Package issues**: Ensure `mysqldump` and `mysql2` npm packages are installed
 2. **Database connection issues**: Verify `DATABASE_URL` is correct and accessible
 3. **Permission issues**: Ensure the database user has appropriate permissions
 4. **Storage issues**: Check Convex storage limits and usage
@@ -154,7 +164,7 @@ To restore from a backup:
 ## Performance Impact
 
 - Backups run at midnight to minimize impact on production systems
-- Uses `--single-transaction` for consistency without locking tables
+- Uses `lockTables: false` to avoid locking tables during backup
 - Compression reduces storage requirements significantly
 - Automatic cleanup prevents unlimited storage growth
 
