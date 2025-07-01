@@ -1,7 +1,9 @@
 {
   "node": {
     "externalPackages": [
-      "@prisma/client"
+      "@prisma/client",
+      "mysqldump",
+      "mysql2"
     ]
   }
 }

@@ -214,4 +214,18 @@ export default defineSchema({
     .index("by_session_and_type", ["sessionId", "participantType"])
     .index("by_assembly_and_participant", ["assemblyId", "participantId"])
     .index("by_participant_and_assembly", ["participantId", "assemblyId"]),
+
+  // Database backup management
+  databaseBackups: defineTable({
+    fileName: v.string(), // Name of the backup file
+    storageId: v.string(), // Convex storage ID for the compressed backup file
+    fileSize: v.number(), // Size of the compressed backup file in bytes
+    createdAt: v.number(), // timestamp when backup was created
+    backupDate: v.string(), // formatted date string for the backup (YYYY-MM-DD)
+    compressionType: v.string(), // "gzip" - compression format used
+    status: v.string(), // "success" | "failed" | "in_progress"
+    errorMessage: v.optional(v.string()), // Error message if backup failed
+  }).index("by_created_at", ["createdAt"])
+    .index("by_status", ["status"])
+    .index("by_backup_date", ["backupDate"]),
 }); 
