@@ -1,7 +1,16 @@
 {
   "node": {
     "externalPackages": [
-      "@prisma/client"
+      "@prisma/client",
+      "mysqldump",
+      "mysql2"
     ]
-  }
+  },
+  "crons": [
+    {
+      "name": "Daily Database Backup",
+      "spec": "0 0 * * *",
+      "functionHandle": "databaseBackup:createDatabaseBackup"
+    }
+  ]
 }
