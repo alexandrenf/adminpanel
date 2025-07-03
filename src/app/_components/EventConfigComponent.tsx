@@ -10,6 +10,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { Switch } from "../../components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
+import dynamic from "next/dynamic";
 import { 
   Calendar, 
   MapPin, 
@@ -26,6 +27,9 @@ import {
   Image as ImageIcon,
   Lock
 } from "lucide-react";
+
+// Dynamic import for MDEditor
+const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
 interface Sponsor {
   name: string;
@@ -47,7 +51,6 @@ interface EventConfig {
   eventCity?: string;
   eventState?: string;
   eventVenue?: string;
-  eventAddress?: string;
   survivalKitUrl?: string;
   registrationUrl?: string;
   survivalKitStatus: "available" | "coming_soon" | "disabled";
@@ -84,14 +87,24 @@ export default function EventConfigComponent() {
   const [isSaving, setIsSaving] = useState(false);
   const [configId, setConfigId] = useState<number>(1);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  
+  // Track if data has been initially loaded to prevent overwriting user changes
+  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+  
   const { toast } = useToast();
 
-  const { data: initialConfig, isLoading } = api.config.getEventWithDetails.useQuery();
+  const { data: initialConfig, isLoading } = api.config.getEventWithDetails.useQuery(undefined, {
+    // Reduce automatic refetching while user is editing
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+  });
   const updateEventMutation = api.config.updateEvent.useMutation();
   const uploadLogoMutation = api.config.uploadEventLogo.useMutation();
 
   useEffect(() => {
-    if (initialConfig) {
+    if (initialConfig && !hasLoadedInitialData) {
+      // Only load data on initial fetch, not on subsequent refetches
       setConfigId(initialConfig.id || 1);
       setConfig({
         eventType: "ag", // Always AG for this component
@@ -104,7 +117,6 @@ export default function EventConfigComponent() {
         eventCity: initialConfig.eventCity || "",
         eventState: initialConfig.eventState || "",
         eventVenue: initialConfig.eventVenue || "",
-        eventAddress: initialConfig.eventAddress || "",
         survivalKitUrl: initialConfig.survivalKitUrl || "",
         registrationUrl: initialConfig.registrationUrl || "",
         survivalKitStatus: (initialConfig.survivalKitStatus as "available" | "coming_soon" | "disabled") || "coming_soon",
@@ -118,8 +130,10 @@ export default function EventConfigComponent() {
         eventStatus: (initialConfig.eventStatus as "upcoming" | "ongoing" | "past") || "upcoming",
         previewPassword: initialConfig.previewPassword || "",
       });
+      
+      setHasLoadedInitialData(true);
     }
-  }, [initialConfig]);
+  }, [initialConfig, hasLoadedInitialData]);
 
   const handleInputChange = (field: keyof EventConfig, value: any) => {
     setConfig((prevConfig) => ({
@@ -488,25 +502,14 @@ export default function EventConfigComponent() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="eventVenue">Local do Evento</Label>
-                      <Input
-                        id="eventVenue"
-                        placeholder="Hotel Grand Mercure"
-                        value={config.eventVenue || ""}
-                        onChange={(e) => handleInputChange('eventVenue', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="eventAddress">Endereço Completo</Label>
-                      <Input
-                        id="eventAddress"
-                        placeholder="Endereço completo do venue"
-                        value={config.eventAddress || ""}
-                        onChange={(e) => handleInputChange('eventAddress', e.target.value)}
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="eventVenue">Local do Evento</Label>
+                    <Input
+                      id="eventVenue"
+                      placeholder="Hotel Grand Mercure"
+                      value={config.eventVenue || ""}
+                      onChange={(e) => handleInputChange('eventVenue', e.target.value)}
+                    />
                   </div>
                 </div>
               )}
@@ -600,16 +603,14 @@ export default function EventConfigComponent() {
 
               <div className="space-y-2">
                 <Label htmlFor="eventContent">Conteúdo Detalhado (Markdown)</Label>
-                <Textarea
-                  id="eventContent"
-                  placeholder="## Sobre o Evento&#10;&#10;Markdown content aqui..."
-                  value={config.eventContent || ""}
-                  onChange={(e) => handleInputChange('eventContent', e.target.value)}
-                  rows={15}
-                  className="font-mono text-sm"
-                />
+                <div className="border rounded-md overflow-hidden">
+                  <MDEditor 
+                    value={config.eventContent || ""} 
+                    onChange={(value) => handleInputChange('eventContent', value || "")} 
+                  />
+                </div>
                 <p className="text-xs text-gray-500">
-                  Use Markdown para formatação. Se ativar &quot;Salvar no GitHub&quot;, o conteúdo será armazenado externamente.
+                  Use Markdown para formatação. O editor oferece preview em tempo real.
                 </p>
               </div>
 

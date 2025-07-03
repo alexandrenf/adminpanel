@@ -64,7 +64,6 @@ const eventConfigSchema = z.object({
   eventCity: z.string().optional(),
   eventState: z.string().optional(),
   eventVenue: z.string().optional(),
-  eventAddress: z.string().optional(),
   survivalKitUrl: z.string().optional(),
   registrationUrl: z.string().optional(),
   survivalKitStatus: z.enum(["available", "coming_soon", "disabled"]).optional(),
@@ -247,7 +246,6 @@ export const configRouter = createTRPCRouter({
             eventCity: eventConfig.eventCity,
             eventState: eventConfig.eventState,
             eventVenue: eventConfig.eventVenue,
-            eventAddress: eventConfig.eventAddress,
             
             // Event downloads and links
             survivalKitUrl: eventConfig.survivalKitUrl,
