@@ -143,6 +143,7 @@ const eventConfigSchema = z.object({
   showDownloads: z.boolean().optional(),
   eventStatus: z.enum(["upcoming", "ongoing", "past"]).optional(),
   registrationOpen: z.boolean().optional(),
+  previewPassword: z.string().optional(),
 });
 
 export const configRouter = createTRPCRouter({
@@ -239,7 +240,6 @@ export const configRouter = createTRPCRouter({
           buttonText: input.buttonText,
           buttonUrl: input.buttonUrl,
           title: input.title,
-          lastUpdated: new Date(),
           updatedBy: ctx.session.user.id,
         },
       })
@@ -263,6 +263,7 @@ export const configRouter = createTRPCRouter({
             registrationStatus: "coming_soon",
             primaryColor: "#00508c",
             secondaryColor: "#fac800",
+            previewPassword: "",
             updatedBy: ctx.session.user.id,
           },
         });
@@ -350,9 +351,9 @@ export const configRouter = createTRPCRouter({
             showDownloads: eventConfig.showDownloads,
             eventStatus: eventConfig.eventStatus,
             registrationOpen: eventConfig.registrationOpen,
+            previewPassword: eventConfig.previewPassword,
             
             // Tracking
-            lastUpdated: new Date(),
             updatedBy: ctx.session.user.id,
           },
         });
@@ -430,7 +431,6 @@ export const configRouter = createTRPCRouter({
           data: {
             eventType: input.eventType,
             eventActive: input.eventType !== "alert", // Auto-activate for AG events
-            lastUpdated: new Date(),
             updatedBy: ctx.session.user.id,
           },
         });

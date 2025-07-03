@@ -64,6 +64,7 @@ interface EventConfig {
   showDownloads: boolean;
   eventStatus: "upcoming" | "ongoing" | "past";
   registrationOpen: boolean;
+  previewPassword?: string;
 }
 
 export default function EventConfigComponent() {
@@ -82,6 +83,7 @@ export default function EventConfigComponent() {
     showDownloads: true,
     eventStatus: "upcoming",
     registrationOpen: false,
+    previewPassword: "",
   });
   
   const [activeTab, setActiveTab] = useState<"basic" | "content" | "sponsors" | "branding">("basic");
@@ -126,6 +128,7 @@ export default function EventConfigComponent() {
         showDownloads: initialConfig.showDownloads || true,
         eventStatus: (initialConfig.eventStatus as "upcoming" | "ongoing" | "past") || "upcoming",
         registrationOpen: initialConfig.registrationOpen || false,
+        previewPassword: initialConfig.previewPassword || "",
       });
     }
   }, [initialConfig]);
@@ -394,6 +397,34 @@ export default function EventConfigComponent() {
                   onCheckedChange={(checked) => handleInputChange('eventActive', checked)}
                 />
               </div>
+
+              {/* Preview Password (only when event is inactive) */}
+              {!config.eventActive && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="p-1 bg-amber-100 rounded">
+                        <Globe className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <Label className="text-base font-semibold text-amber-800">Senha de Pré-visualização</Label>
+                    </div>
+                    <p className="text-sm text-amber-700">
+                      Como o evento está inativo, defina uma senha para visualizar o site em modo de pré-visualização.
+                    </p>
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="Digite uma senha simples para pré-visualização"
+                        value={config.previewPassword || ""}
+                        onChange={(e) => handleInputChange('previewPassword', e.target.value)}
+                        className="bg-white border-amber-300 focus:border-amber-500"
+                      />
+                      <p className="text-xs text-amber-600">
+                        Esta senha permitirá acesso ao site mesmo com o evento inativo. Não é criptografada - use apenas para testes.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Event Details */}
               {config.eventType === "ag" && (

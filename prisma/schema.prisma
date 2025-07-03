@@ -272,6 +272,7 @@ model Config {
     showDownloads   Boolean?        // Show/hide download buttons
     eventStatus     String?         // "upcoming", "ongoing", "past"
     registrationOpen Boolean?       // Whether registration is open
+    previewPassword String?         // Password for preview access when event is inactive
     
     // Tracking
     lastUpdated     DateTime?  @updatedAt
