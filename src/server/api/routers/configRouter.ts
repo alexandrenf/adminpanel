@@ -145,6 +145,154 @@ export const configRouter = createTRPCRouter({
       }
     }),
 
+  // Upload sponsor logo to GitHub
+  uploadSponsorLogo: ifmsaEmailProcedure
+    .input(z.object({
+      image: z.string().nullable(), // base64 string
+      sponsorName: z.string().min(1),
+      eventType: z.enum(["alert", "ag"]).default("ag"),
+    }))
+    .mutation(async ({ input }) => {
+      const { image, sponsorName, eventType } = input;
+      
+      if (!image) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: "Image is required",
+        });
+      }
+
+      // Clean sponsor name for filename
+      const cleanSponsorName = sponsorName.toLowerCase()
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/--+/g, '-')
+        .replace(/^-|-$/g, '');
+
+      const imageFilename = `sponsor-${cleanSponsorName}-${new Date().getTime()}.webp`;
+      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/events/sponsors/${imageFilename}`;
+      const imageContent = image; // Image is already base64 encoded
+
+      try {
+        const requestBody = {
+          message: `Upload sponsor logo: ${sponsorName}`,
+          content: imageContent,
+          committer: {
+            name: "Admin Panel",
+            email: "admin@ifmsabrazil.org",
+          },
+        };
+
+        const response = await fetch(apiUrl, {
+          method: "PUT",
+          headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const responseData = await response.text();
+          console.error("GitHub API error:", responseData);
+          throw new Error(`GitHub API responded with status ${response.status}`);
+        }
+
+        const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/events/sponsors/${imageFilename}`;
+        
+        return {
+          imageUrl,
+          success: true,
+        };
+      } catch (error) {
+        console.error("Error uploading sponsor logo:", error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: "Error uploading sponsor logo",
+        });
+      }
+    }),
+
+  // Delete file from GitHub
+  deleteFileFromGitHub: ifmsaEmailProcedure
+    .input(z.object({
+      fileUrl: z.string().url(),
+      fileType: z.enum(["event-logo", "sponsor-logo"]),
+    }))
+    .mutation(async ({ input }) => {
+      const { fileUrl, fileType } = input;
+      
+      // Extract file path from CDN URL
+      const cdnBaseUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/`;
+      if (!fileUrl.startsWith(cdnBaseUrl)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: "Invalid file URL - not from our CDN",
+        });
+      }
+
+      const filePath = fileUrl.replace(cdnBaseUrl, '');
+      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`;
+
+      try {
+        // First, get the file to obtain its SHA
+        const getResponse = await fetch(apiUrl, {
+          headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!getResponse.ok) {
+          if (getResponse.status === 404) {
+            // File doesn't exist, consider it already deleted
+            return { success: true, message: "File already deleted or not found" };
+          }
+          throw new Error(`GitHub API responded with status ${getResponse.status}`);
+        }
+
+        const fileData = await getResponse.json();
+        const validated = validateGitHubFileResponse(fileData);
+        
+        if (!validated?.sha) {
+          throw new Error("Could not get file SHA for deletion");
+        }
+
+        // Delete the file
+        const deleteResponse = await fetch(apiUrl, {
+          method: "DELETE",
+          headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: `Delete ${fileType}: ${filePath}`,
+            sha: validated.sha,
+            committer: {
+              name: "Admin Panel",
+              email: "admin@ifmsabrazil.org",
+            },
+          }),
+        });
+
+        if (!deleteResponse.ok) {
+          const responseData = await deleteResponse.text();
+          console.error("GitHub API delete error:", responseData);
+          throw new Error(`GitHub API responded with status ${deleteResponse.status}`);
+        }
+
+        return {
+          success: true,
+          message: "File deleted successfully",
+        };
+      } catch (error) {
+        console.error("Error deleting file from GitHub:", error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: "Error deleting file from GitHub",
+        });
+      }
+    }),
+
   // Legacy alert configuration update
   update: ifmsaEmailProcedure
     .input(z.object({
