@@ -171,7 +171,7 @@ export const configRouter = createTRPCRouter({
 
       const imageFilename = `logo-${eventType}-${new Date().getTime()}.webp`;
       const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/events/logos/${imageFilename}`;
-      const imageContent = Buffer.from(image, "base64").toString("base64");
+      const imageContent = image; // Image is already base64 encoded
 
       try {
         const requestBody = {
@@ -251,23 +251,31 @@ export const configRouter = createTRPCRouter({
       const configs = await ctx.db.config.findMany();
       if (!configs || configs.length === 0) {
         // Create default config if none exists
-        const defaultConfig = await ctx.db.config.create({
-          data: {
-            eventType: "alert",
-            eventActive: false,
-            showSponsors: true,
-            showDownloads: true,
-            eventStatus: "upcoming",
-            registrationOpen: false,
-            survivalKitStatus: "coming_soon",
-            registrationStatus: "coming_soon",
-            primaryColor: "#00508c",
-            secondaryColor: "#fac800",
-            previewPassword: "",
-            updatedBy: ctx.session.user.id,
-          },
-        });
-        return defaultConfig;
+        try {
+          const defaultConfig = await ctx.db.config.create({
+            data: {
+              eventType: "alert",
+              eventActive: false,
+              showSponsors: true,
+              showDownloads: true,
+              eventStatus: "upcoming",
+              registrationOpen: false,
+              survivalKitStatus: "coming_soon",
+              registrationStatus: "coming_soon",
+              primaryColor: "#00508c",
+              secondaryColor: "#fac800",
+              previewPassword: "",
+              updatedBy: ctx.session.user.id,
+            },
+          });
+          return defaultConfig;
+        } catch (error) {
+          console.error("Error creating default configuration:", error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: "Failed to create default configuration",
+          });
+        }
       }
       
       const config = configs[0];
