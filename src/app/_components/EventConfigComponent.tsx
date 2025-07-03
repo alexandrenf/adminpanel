@@ -134,7 +134,15 @@ export default function EventConfigComponent() {
 
   const handleSponsorChange = (index: number, field: keyof Sponsor, value: string) => {
     const newSponsors = [...config.eventSponsors];
-    newSponsors[index] = { ...newSponsors[index]!, [field]: value };
+    
+    // Check if the sponsor at this index exists
+    if (newSponsors[index]) {
+      newSponsors[index] = { ...newSponsors[index], [field]: value };
+    } else {
+      // Initialize a new sponsor object if it doesn't exist
+      newSponsors[index] = { name: "", tier: "Patrocinador", [field]: value };
+    }
+    
     setConfig((prevConfig) => ({
       ...prevConfig,
       eventSponsors: newSponsors

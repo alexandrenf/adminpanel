@@ -12,6 +12,19 @@ const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
 const REPO_OWNER = "ifmsabrazil";
 const REPO_NAME = "dataifmsabrazil";
 
+// Helper function to safely validate GitHub API response
+const validateGitHubFileResponse = (data: unknown): { sha: string } | null => {
+  if (
+    typeof data === 'object' && 
+    data !== null && 
+    'sha' in data && 
+    typeof (data as any).sha === 'string'
+  ) {
+    return { sha: (data as any).sha };
+  }
+  return null;
+};
+
 // Helper function to upload event content to GitHub (following fileRouter patterns)
 const uploadEventContent = async (eventType: string, content: string) => {
   const filename = `${eventType}-config.md`;
@@ -30,8 +43,15 @@ const uploadEventContent = async (eventType: string, content: string) => {
       });
       
       if (existingFile.ok) {
-        const existingData = await existingFile.json() as { sha: string };
-        sha = existingData.sha;
+        const rawData = await existingFile.json();
+        const validatedData = validateGitHubFileResponse(rawData);
+        
+        if (validatedData) {
+          sha = validatedData.sha;
+        } else {
+          console.warn("GitHub API response does not contain valid sha field:", rawData);
+          // Continue without SHA - GitHub will treat this as a new file
+        }
       }
     } catch (error) {
       // File doesn't exist, proceed without SHA
@@ -66,6 +86,21 @@ const uploadEventContent = async (eventType: string, content: string) => {
   } catch (error) {
     console.error("Error uploading event content:", error);
     throw error;
+  }
+};
+
+// Helper function to safely parse event sponsors JSON
+const parseEventSponsors = (sponsorsJson: string | null | undefined): Array<any> => {
+  if (!sponsorsJson) {
+    return [];
+  }
+  
+  try {
+    const parsed = JSON.parse(sponsorsJson);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Error parsing eventSponsors JSON:", error);
+    return [];
   }
 };
 
@@ -154,7 +189,7 @@ export const configRouter = createTRPCRouter({
   getEvent: ifmsaEmailProcedure
     .query(async ({ ctx }) => {
       const configs = await ctx.db.config.findMany();
-      if (configs.length === 0) {
+      if (!configs || configs.length === 0) {
         // Create default config if none exists
         const defaultConfig = await ctx.db.config.create({
           data: {
@@ -173,7 +208,16 @@ export const configRouter = createTRPCRouter({
         });
         return defaultConfig;
       }
-      return configs[0];
+      
+      const config = configs[0];
+      if (!config) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: "Configuration exists but is invalid",
+        });
+      }
+      
+      return config;
     }),
 
   // Update event configuration
@@ -253,9 +297,12 @@ export const configRouter = createTRPCRouter({
           },
         });
 
+        // Parse eventSponsors safely
+        const parsedSponsors = parseEventSponsors(updatedConfig.eventSponsors);
+
         return {
           ...updatedConfig,
-          eventSponsors: updatedConfig.eventSponsors ? JSON.parse(updatedConfig.eventSponsors) : [],
+          eventSponsors: parsedSponsors,
           contentUploadedToGitHub: !!eventContentUrl,
           githubContentUrl: eventContentUrl,
         };
@@ -272,14 +319,21 @@ export const configRouter = createTRPCRouter({
   getEventWithDetails: ifmsaEmailProcedure
     .query(async ({ ctx }) => {
       const configs = await ctx.db.config.findMany();
-      if (configs.length === 0) {
+      if (!configs || configs.length === 0) {
         return null;
       }
       
       const config = configs[0];
+      if (!config) {
+        return null;
+      }
+      
+      // Parse eventSponsors safely
+      const parsedSponsors = parseEventSponsors(config.eventSponsors);
+      
       return {
         ...config,
-        eventSponsors: config?.eventSponsors ? JSON.parse(config.eventSponsors) : [],
+        eventSponsors: parsedSponsors,
       };
     }),
 
@@ -292,7 +346,7 @@ export const configRouter = createTRPCRouter({
       const configs = await ctx.db.config.findMany();
       let config;
       
-      if (configs.length === 0) {
+      if (!configs || configs.length === 0) {
         // Create new config
         config = await ctx.db.config.create({
           data: {
@@ -302,9 +356,17 @@ export const configRouter = createTRPCRouter({
           },
         });
       } else {
+        const existingConfig = configs[0];
+        if (!existingConfig) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: "Configuration exists but is invalid",
+          });
+        }
+        
         // Update existing config
         config = await ctx.db.config.update({
-          where: { id: configs[0]!.id },
+          where: { id: existingConfig.id },
           data: {
             eventType: input.eventType,
             eventActive: input.eventType !== "alert", // Auto-activate for AG events
@@ -314,9 +376,12 @@ export const configRouter = createTRPCRouter({
         });
       }
 
+      // Parse eventSponsors safely
+      const parsedSponsors = parseEventSponsors(config.eventSponsors);
+
       return {
         ...config,
-        eventSponsors: config.eventSponsors ? JSON.parse(config.eventSponsors) : [],
+        eventSponsors: parsedSponsors,
       };
     }),
 });
