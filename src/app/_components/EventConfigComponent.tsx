@@ -16,7 +16,6 @@ import {
   Download, 
   Users, 
   Palette,
-  Globe,
   Save,
   Loader2,
   Plus,
@@ -24,7 +23,8 @@ import {
   FileText,
   ExternalLink,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Lock
 } from "lucide-react";
 
 interface Sponsor {
@@ -39,7 +39,6 @@ interface Sponsor {
 interface EventConfig {
   eventType: "alert" | "ag";
   eventActive: boolean;
-  eventNumber?: number;
   eventTitle: string;
   eventDescription: string;
   eventLogo?: string;
@@ -57,13 +56,9 @@ interface EventConfig {
   eventSponsors: Sponsor[];
   primaryColor: string;
   secondaryColor: string;
-  metaTitle?: string;
-  metaDescription?: string;
-  metaKeywords?: string;
   showSponsors: boolean;
   showDownloads: boolean;
   eventStatus: "upcoming" | "ongoing" | "past";
-  registrationOpen: boolean;
   previewPassword?: string;
 }
 
@@ -82,13 +77,11 @@ export default function EventConfigComponent() {
     showSponsors: true,
     showDownloads: true,
     eventStatus: "upcoming",
-    registrationOpen: false,
     previewPassword: "",
   });
   
   const [activeTab, setActiveTab] = useState<"basic" | "content" | "sponsors" | "branding">("basic");
   const [isSaving, setIsSaving] = useState(false);
-  const [uploadToGitHub, setUploadToGitHub] = useState(false);
   const [configId, setConfigId] = useState<number>(1);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const { toast } = useToast();
@@ -103,7 +96,6 @@ export default function EventConfigComponent() {
       setConfig({
         eventType: "ag", // Always AG for this component
         eventActive: initialConfig.eventActive || false,
-        eventNumber: initialConfig.eventNumber || undefined,
         eventTitle: initialConfig.eventTitle || "",
         eventDescription: initialConfig.eventDescription || "",
         eventLogo: initialConfig.eventLogo || "https://placehold.co/1080x1080/e5e7eb/6b7280?text=Event+Logo",
@@ -121,13 +113,9 @@ export default function EventConfigComponent() {
         eventSponsors: Array.isArray(initialConfig.eventSponsors) ? initialConfig.eventSponsors : [],
         primaryColor: initialConfig.primaryColor || "#00508c",
         secondaryColor: initialConfig.secondaryColor || "#fac800",
-        metaTitle: initialConfig.metaTitle || "",
-        metaDescription: initialConfig.metaDescription || "",
-        metaKeywords: initialConfig.metaKeywords || "",
         showSponsors: initialConfig.showSponsors || true,
         showDownloads: initialConfig.showDownloads || true,
         eventStatus: (initialConfig.eventStatus as "upcoming" | "ongoing" | "past") || "upcoming",
-        registrationOpen: initialConfig.registrationOpen || false,
         previewPassword: initialConfig.previewPassword || "",
       });
     }
@@ -305,7 +293,6 @@ export default function EventConfigComponent() {
       await updateEventMutation.mutateAsync({
         id: configId,
         eventConfig: config,
-        uploadContent: uploadToGitHub,
       });
       
       toast({
@@ -404,7 +391,7 @@ export default function EventConfigComponent() {
                   <div className="space-y-3">
                     <div className="flex items-center space-x-2">
                       <div className="p-1 bg-amber-100 rounded">
-                        <Globe className="w-4 h-4 text-amber-600" />
+                        <Lock className="w-4 h-4 text-amber-600" />
                       </div>
                       <Label className="text-base font-semibold text-amber-800">Senha de Pré-visualização</Label>
                     </div>
@@ -428,26 +415,14 @@ export default function EventConfigComponent() {
 
               {/* Event Details */}
               {config.eventType === "ag" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="eventNumber">Número da AG</Label>
-                    <Input
-                      id="eventNumber"
-                      type="number"
-                      placeholder="Ex: 63"
-                      value={config.eventNumber || ""}
-                      onChange={(e) => handleInputChange('eventNumber', parseInt(e.target.value) || undefined)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="eventTitle">Título do Evento</Label>
-                    <Input
-                      id="eventTitle"
-                      placeholder="Ex: 63ª Assembleia Geral"
-                      value={config.eventTitle}
-                      onChange={(e) => handleInputChange('eventTitle', e.target.value)}
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eventTitle">Título do Evento</Label>
+                  <Input
+                    id="eventTitle"
+                    placeholder="Ex: 63ª Assembleia Geral"
+                    value={config.eventTitle}
+                    onChange={(e) => handleInputChange('eventTitle', e.target.value)}
+                  />
                 </div>
               )}
 
@@ -621,14 +596,6 @@ export default function EventConfigComponent() {
                   <FileText className="w-5 h-5 text-blue-600" />
                   <span>Conteúdo do Evento</span>
                 </h3>
-                
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    checked={uploadToGitHub}
-                    onCheckedChange={setUploadToGitHub}
-                  />
-                  <Label className="text-sm">Salvar no GitHub</Label>
-                </div>
               </div>
 
               <div className="space-y-2">
@@ -646,44 +613,7 @@ export default function EventConfigComponent() {
                 </p>
               </div>
 
-              {/* SEO Section */}
-              <div className="space-y-4">
-                <h4 className="flex items-center space-x-2 text-base font-semibold">
-                  <Globe className="w-4 h-4 text-blue-600" />
-                  <span>SEO e Metadados</span>
-                </h4>
 
-                <div className="space-y-2">
-                  <Label htmlFor="metaTitle">Título da Página</Label>
-                  <Input
-                    id="metaTitle"
-                    placeholder="63ª Assembleia Geral - IFMSA Brazil"
-                    value={config.metaTitle || ""}
-                    onChange={(e) => handleInputChange('metaTitle', e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="metaDescription">Meta Descrição</Label>
-                  <Textarea
-                    id="metaDescription"
-                    placeholder="Junte-se a nós na 63ª Assembleia Geral da IFMSA Brazil..."
-                    value={config.metaDescription || ""}
-                    onChange={(e) => handleInputChange('metaDescription', e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="metaKeywords">Palavras-chave (separadas por vírgula)</Label>
-                  <Input
-                    id="metaKeywords"
-                    placeholder="assembleia, ifmsa, medicina, estudantes"
-                    value={config.metaKeywords || ""}
-                    onChange={(e) => handleInputChange('metaKeywords', e.target.value)}
-                  />
-                </div>
-              </div>
             </div>
           )}
 
@@ -929,17 +859,6 @@ export default function EventConfigComponent() {
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <Label className="text-base font-semibold">Registro Aberto</Label>
-                      <p className="text-sm text-gray-600">Permitir novos registros</p>
-                    </div>
-                    <Switch
-                      checked={config.registrationOpen}
-                      onCheckedChange={(checked) => handleInputChange('registrationOpen', checked)}
-                    />
-                  </div>
                 </div>
               </div>
 
@@ -967,12 +886,6 @@ export default function EventConfigComponent() {
           {/* Save Button */}
           <div className="flex items-center justify-between pt-6 mt-6 border-t">
             <div className="text-sm text-gray-500">
-              {uploadToGitHub && activeTab === "content" && (
-                <div className="flex items-center space-x-2">
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Conteúdo será salvo no GitHub ao salvar</span>
-                </div>
-              )}
             </div>
             
             <Button 

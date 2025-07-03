@@ -25,69 +25,7 @@ const validateGitHubFileResponse = (data: unknown): { sha: string } | null => {
   return null;
 };
 
-// Helper function to upload event content to GitHub (following fileRouter patterns)
-const uploadEventContent = async (eventType: string, content: string) => {
-  const filename = `${eventType}-config.md`;
-  const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/events/${filename}`;
-  const fileContent = Buffer.from(content).toString("base64");
 
-  try {
-    // Check if file exists
-    let sha: string | undefined;
-    try {
-      const existingFile = await fetch(apiUrl, {
-        headers: {
-          Authorization: `token ${GITHUB_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      });
-      
-      if (existingFile.ok) {
-        const rawData = await existingFile.json();
-        const validatedData = validateGitHubFileResponse(rawData);
-        
-        if (validatedData) {
-          sha = validatedData.sha;
-        } else {
-          console.warn("GitHub API response does not contain valid sha field:", rawData);
-          // Continue without SHA - GitHub will treat this as a new file
-        }
-      }
-    } catch (error) {
-      // File doesn't exist, proceed without SHA
-    }
-
-    const requestBody = {
-      message: `Update ${eventType} event configuration`,
-      content: fileContent,
-      committer: {
-        name: "Admin Panel",
-        email: "admin@ifmsabrazil.org",
-      },
-      ...(sha && { sha })
-    };
-
-    const response = await fetch(apiUrl, {
-      method: "PUT",
-      headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const responseData = await response.text();
-      console.error("GitHub API error:", responseData);
-      throw new Error(`GitHub API responded with status ${response.status}`);
-    }
-
-    return `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/events/${filename}`;
-  } catch (error) {
-    console.error("Error uploading event content:", error);
-    throw error;
-  }
-};
 
 // Helper function to safely parse event sponsors JSON
 const parseEventSponsors = (sponsorsJson: string | null | undefined): Array<any> => {
@@ -118,7 +56,6 @@ const sponsorSchema = z.object({
 const eventConfigSchema = z.object({
   eventType: z.enum(["alert", "ag"]).optional(),
   eventActive: z.boolean().optional(),
-  eventNumber: z.number().optional(),
   eventTitle: z.string().optional(),
   eventDescription: z.string().optional(),
   eventLogo: z.string().optional(),
@@ -136,13 +73,9 @@ const eventConfigSchema = z.object({
   eventSponsors: z.array(sponsorSchema).optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
-  metaTitle: z.string().optional(),
-  metaDescription: z.string().optional(),
-  metaKeywords: z.string().optional(),
   showSponsors: z.boolean().optional(),
   showDownloads: z.boolean().optional(),
   eventStatus: z.enum(["upcoming", "ongoing", "past"]).optional(),
-  registrationOpen: z.boolean().optional(),
   previewPassword: z.string().optional(),
 });
 
@@ -259,7 +192,6 @@ export const configRouter = createTRPCRouter({
               showSponsors: true,
               showDownloads: true,
               eventStatus: "upcoming",
-              registrationOpen: false,
               survivalKitStatus: "coming_soon",
               registrationStatus: "coming_soon",
               primaryColor: "#00508c",
@@ -294,32 +226,17 @@ export const configRouter = createTRPCRouter({
     .input(z.object({
       id: z.number(),
       eventConfig: eventConfigSchema,
-      uploadContent: z.boolean().default(false), // Whether to upload content to GitHub
     }))
     .mutation(async ({ input, ctx }) => {
-      const { id, eventConfig, uploadContent } = input;
+      const { id, eventConfig } = input;
 
       try {
-        let eventContentUrl: string | undefined = undefined;
-
-        // Upload content to GitHub if requested and content exists
-        if (uploadContent && eventConfig.eventContent && eventConfig.eventType) {
-          try {
-            eventContentUrl = await uploadEventContent(eventConfig.eventType, eventConfig.eventContent);
-            console.log(`Content uploaded to GitHub: ${eventContentUrl}`);
-          } catch (error) {
-            console.error("Failed to upload content to GitHub:", error);
-            // Continue with update even if GitHub upload fails
-          }
-        }
-
         const updatedConfig = await ctx.db.config.update({
           where: { id },
           data: {
             // Event configuration
             eventType: eventConfig.eventType,
             eventActive: eventConfig.eventActive,
-            eventNumber: eventConfig.eventNumber,
             eventTitle: eventConfig.eventTitle,
             eventDescription: eventConfig.eventDescription,
             eventLogo: eventConfig.eventLogo,
@@ -340,7 +257,6 @@ export const configRouter = createTRPCRouter({
             
             // Event content
             eventContent: eventConfig.eventContent,
-            eventContentUrl: eventContentUrl || undefined,
             
             // Event sponsors (JSON stringified)
             eventSponsors: eventConfig.eventSponsors ? JSON.stringify(eventConfig.eventSponsors) : undefined,
@@ -349,16 +265,10 @@ export const configRouter = createTRPCRouter({
             primaryColor: eventConfig.primaryColor,
             secondaryColor: eventConfig.secondaryColor,
             
-            // SEO and metadata
-            metaTitle: eventConfig.metaTitle,
-            metaDescription: eventConfig.metaDescription,
-            metaKeywords: eventConfig.metaKeywords,
-            
             // Configuration flags
             showSponsors: eventConfig.showSponsors,
             showDownloads: eventConfig.showDownloads,
             eventStatus: eventConfig.eventStatus,
-            registrationOpen: eventConfig.registrationOpen,
             previewPassword: eventConfig.previewPassword,
             
             // Tracking
@@ -372,8 +282,6 @@ export const configRouter = createTRPCRouter({
         return {
           ...updatedConfig,
           eventSponsors: parsedSponsors,
-          contentUploadedToGitHub: !!eventContentUrl,
-          githubContentUrl: eventContentUrl,
         };
       } catch (error) {
         console.error("Error updating event configuration:", error);
