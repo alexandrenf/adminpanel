@@ -22,7 +22,9 @@ import {
   Plus,
   X,
   FileText,
-  ExternalLink
+  ExternalLink,
+  Upload,
+  Image as ImageIcon
 } from "lucide-react";
 
 interface Sponsor {
@@ -70,6 +72,7 @@ export default function EventConfigComponent() {
     eventActive: false,
     eventTitle: "",
     eventDescription: "",
+    eventLogo: "https://placehold.co/1080x1080/e5e7eb/6b7280?text=Event+Logo",
     survivalKitStatus: "coming_soon",
     registrationStatus: "coming_soon",
     eventSponsors: [],
@@ -85,10 +88,12 @@ export default function EventConfigComponent() {
   const [isSaving, setIsSaving] = useState(false);
   const [uploadToGitHub, setUploadToGitHub] = useState(false);
   const [configId, setConfigId] = useState<number>(1);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const { toast } = useToast();
 
   const { data: initialConfig, isLoading } = api.config.getEventWithDetails.useQuery();
   const updateEventMutation = api.config.updateEvent.useMutation();
+  const uploadLogoMutation = api.config.uploadEventLogo.useMutation();
 
   useEffect(() => {
     if (initialConfig) {
@@ -99,7 +104,7 @@ export default function EventConfigComponent() {
         eventNumber: initialConfig.eventNumber || undefined,
         eventTitle: initialConfig.eventTitle || "",
         eventDescription: initialConfig.eventDescription || "",
-        eventLogo: initialConfig.eventLogo || "",
+        eventLogo: initialConfig.eventLogo || "https://placehold.co/1080x1080/e5e7eb/6b7280?text=Event+Logo",
         eventDateStart: initialConfig.eventDateStart || undefined,
         eventDateEnd: initialConfig.eventDateEnd || undefined,
         eventCity: initialConfig.eventCity || "",
@@ -162,6 +167,131 @@ export default function EventConfigComponent() {
       ...prevConfig,
       eventSponsors: newSponsors
     }));
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Erro no arquivo",
+        description: "Por favor, selecione apenas arquivos de imagem.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 10MB for processing)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "Arquivo muito grande",
+        description: "O logo deve ter no máximo 10MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploadingLogo(true);
+
+    try {
+      // Process image: resize to 1080x1080 and convert to WebP
+      const processedImage = await processImageToWebP(file, 1080, 1080);
+
+      // Upload to GitHub
+      const result = await uploadLogoMutation.mutateAsync({
+        image: processedImage,
+        eventType: config.eventType,
+      });
+
+      // Update config with new logo URL
+      handleInputChange('eventLogo', result.imageUrl);
+
+      toast({
+        title: "Logo enviado!",
+        description: "O logo do evento foi carregado com sucesso.",
+      });
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      toast({
+        title: "Erro no upload",
+        description: "Ocorreu um erro ao enviar o logo. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const processImageToWebP = (file: File, width: number, height: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        // Set canvas dimensions
+        canvas.width = width;
+        canvas.height = height;
+
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+
+        // Calculate scaling to maintain aspect ratio
+        const scale = Math.min(width / img.width, height / img.height);
+        const scaledWidth = img.width * scale;
+        const scaledHeight = img.height * scale;
+
+        // Center the image
+        const x = (width - scaledWidth) / 2;
+        const y = (height - scaledHeight) / 2;
+
+        // Fill background with white
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        // Draw the scaled image
+        ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+
+        // Convert to WebP and get base64
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Could not create blob'));
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64String = reader.result as string;
+            const base64Parts = base64String.split(',');
+            if (base64Parts.length < 2 || !base64Parts[1]) {
+              reject(new Error('Could not extract base64 data'));
+              return;
+            }
+            resolve(base64Parts[1]);
+          };
+          reader.onerror = () => reject(new Error('Could not read blob'));
+          reader.readAsDataURL(blob);
+        }, 'image/webp', 0.85); // 85% quality
+      };
+
+      img.onerror = () => reject(new Error('Could not load image'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleDeleteLogo = () => {
+    // Set to placeholder image instead of removing completely
+    const placeholderImage = "https://placehold.co/1080x1080/e5e7eb/6b7280?text=Event+Logo";
+    handleInputChange('eventLogo', placeholderImage);
+    
+    toast({
+      title: "Logo removido",
+      description: "Logo substituído por imagem placeholder.",
+    });
   };
 
 
@@ -678,14 +808,76 @@ export default function EventConfigComponent() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="eventLogo">Logo do Evento (URL)</Label>
-                <Input
-                  id="eventLogo"
-                  placeholder="/images/assembleia-geral.png"
-                  value={config.eventLogo || ""}
-                  onChange={(e) => handleInputChange('eventLogo', e.target.value)}
-                />
+              {/* Event Logo Upload Section */}
+              <div className="space-y-4">
+                <Label className="text-base font-semibold">Logo do Evento</Label>
+                
+                {/* Current Logo Preview */}
+                {config.eventLogo && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600">Logo atual:</p>
+                    <div className="relative inline-block">
+                      <img
+                        src={config.eventLogo}
+                        alt="Logo do evento"
+                        className="max-w-xs max-h-32 object-contain border border-gray-200 rounded-lg shadow-sm"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://placehold.co/200x100?text=Logo+não+encontrado";
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload New Logo */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isUploadingLogo}
+                      className="relative"
+                      onClick={() => document.getElementById('logo-upload')?.click()}
+                    >
+                      {isUploadingLogo ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          {config.eventLogo ? 'Alterar Logo' : 'Enviar Logo'}
+                        </>
+                      )}
+                    </Button>
+                    
+                    {config.eventLogo && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleDeleteLogo}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+
+                  <input
+                    id="logo-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                  
+                  <p className="text-xs text-gray-500">
+                    Aceita imagens PNG, JPG, GIF. Máximo 10MB. Será redimensionado para 1080x1080px e convertido para WebP.
+                  </p>
+                </div>
               </div>
 
               {/* Event Status Configuration */}

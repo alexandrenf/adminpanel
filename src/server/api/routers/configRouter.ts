@@ -152,6 +152,66 @@ export const configRouter = createTRPCRouter({
       return ctx.db.config.findMany();
     }),
 
+  // Upload event logo to GitHub
+  uploadEventLogo: ifmsaEmailProcedure
+    .input(z.object({
+      image: z.string().nullable(), // base64 string
+      eventType: z.enum(["alert", "ag"]).default("ag"),
+    }))
+    .mutation(async ({ input }) => {
+      const { image, eventType } = input;
+      
+      if (!image) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: "Image is required",
+        });
+      }
+
+      const imageFilename = `logo-${eventType}-${new Date().getTime()}.webp`;
+      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/events/logos/${imageFilename}`;
+      const imageContent = Buffer.from(image, "base64").toString("base64");
+
+      try {
+        const requestBody = {
+          message: `Upload ${eventType} event logo`,
+          content: imageContent,
+          committer: {
+            name: "Admin Panel",
+            email: "admin@ifmsabrazil.org",
+          },
+        };
+
+        const response = await fetch(apiUrl, {
+          method: "PUT",
+          headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const responseData = await response.text();
+          console.error("GitHub API error:", responseData);
+          throw new Error(`GitHub API responded with status ${response.status}`);
+        }
+
+        const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/events/logos/${imageFilename}`;
+        
+        return {
+          imageUrl,
+          success: true,
+        };
+      } catch (error) {
+        console.error("Error uploading event logo:", error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: "Error uploading event logo",
+        });
+      }
+    }),
+
   // Legacy alert configuration update
   update: ifmsaEmailProcedure
     .input(z.object({
