@@ -9,13 +9,16 @@ import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
 import { Switch } from "../../components/ui/switch";
 import { useToast } from "../../hooks/use-toast";
+import EventConfigComponent from "./EventConfigComponent";
 import { 
   Settings, 
   Calendar, 
   MessageSquare, 
   Link as LinkIcon, 
   Save,
-  Loader2
+  Loader2,
+  Bell,
+  Users
 } from "lucide-react";
 
 export default function ConfigComponent() {
@@ -111,7 +114,7 @@ export default function ConfigComponent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center space-x-4">
         <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
@@ -121,15 +124,16 @@ export default function ConfigComponent() {
           <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
             Configurações do Sistema
           </h2>
-          <p className="text-gray-600">Configure avisos e notificações do sistema</p>
+          <p className="text-gray-600">Configure avisos e eventos da Assembleia Geral</p>
         </div>
       </div>
 
+      {/* Alert Configuration Section */}
       <Card className="w-full max-w-4xl shadow-lg border-0">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <MessageSquare className="w-5 h-5 text-blue-600" />
-            <span>Configuração de Avisos</span>
+            <Bell className="w-5 h-5 text-blue-600" />
+            <span>Configuração de Alerta</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-8">
@@ -272,13 +276,22 @@ export default function ConfigComponent() {
               ) : (
                 <>
                   <Save className="w-4 h-4 mr-2" />
-                  Salvar Alterações
+                  Salvar Alerta
                 </>
               )}
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* AG Event Configuration Section */}
+      <div>
+        <div className="flex items-center space-x-2 mb-4">
+          <Users className="w-6 h-6 text-blue-600" />
+          <h3 className="text-2xl font-bold text-gray-900">Configuração da Assembleia Geral</h3>
+        </div>
+        <EventConfigComponent />
+      </div>
     </div>
   );
 }
