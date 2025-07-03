@@ -10,6 +10,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { Switch } from "../../components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import dynamic from "next/dynamic";
 import { 
   Calendar, 
@@ -87,6 +88,7 @@ export default function EventConfigComponent() {
   const [isSaving, setIsSaving] = useState(false);
   const [configId, setConfigId] = useState<number>(1);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [sponsorToDelete, setSponsorToDelete] = useState<{ index: number; sponsor: Sponsor } | null>(null);
   
   // Track if data has been initially loaded to prevent overwriting user changes
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
@@ -101,6 +103,8 @@ export default function EventConfigComponent() {
   });
   const updateEventMutation = api.config.updateEvent.useMutation();
   const uploadLogoMutation = api.config.uploadEventLogo.useMutation();
+  const uploadSponsorLogoMutation = api.config.uploadSponsorLogo.useMutation();
+  const deleteFileFromGitHubMutation = api.config.deleteFileFromGitHub.useMutation();
 
   useEffect(() => {
     if (initialConfig && !hasLoadedInitialData) {
@@ -167,11 +171,51 @@ export default function EventConfigComponent() {
   };
 
   const removeSponsor = (index: number) => {
+    const sponsor = config.eventSponsors[index];
+    if (sponsor) {
+      setSponsorToDelete({ index, sponsor });
+    }
+  };
+
+  const confirmRemoveSponsor = async () => {
+    if (!sponsorToDelete) return;
+    
+    const { index, sponsor } = sponsorToDelete;
+    
+    // If sponsor has a GitHub-hosted logo, delete it first
+    if (sponsor.logo && sponsor.logo.includes('cdn.jsdelivr.net/gh/')) {
+      try {
+        await deleteFileFromGitHubMutation.mutateAsync({
+          fileUrl: sponsor.logo,
+          fileType: "sponsor-logo",
+        });
+        
+        toast({
+          title: "Patrocinador removido",
+          description: `Logo do patrocinador "${sponsor.name}" também foi removido do GitHub.`,
+        });
+      } catch (error) {
+        console.error('Error deleting sponsor logo from GitHub:', error);
+        toast({
+          title: "Aviso",
+          description: "Patrocinador removido, mas o logo pode ainda estar no GitHub.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      toast({
+        title: "Patrocinador removido",
+        description: sponsor.name ? `"${sponsor.name}" foi removido.` : "Patrocinador removido.",
+      });
+    }
+    
     const newSponsors = config.eventSponsors.filter((_, i) => i !== index);
     setConfig((prevConfig) => ({
       ...prevConfig,
       eventSponsors: newSponsors
     }));
+    
+    setSponsorToDelete(null);
   };
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -288,18 +332,142 @@ export default function EventConfigComponent() {
     });
   };
 
-  const handleDeleteLogo = () => {
-    // Set to placeholder image instead of removing completely
+  const handleDeleteLogo = async () => {
+    const currentLogo = config.eventLogo;
+    
+    // Check if it's a GitHub-hosted image (not placeholder)
+    const isGitHubImage = currentLogo && currentLogo.includes('cdn.jsdelivr.net/gh/');
+    
+    if (isGitHubImage) {
+      try {
+        // Delete from GitHub first
+        await deleteFileFromGitHubMutation.mutateAsync({
+          fileUrl: currentLogo,
+          fileType: "event-logo",
+        });
+        
+        toast({
+          title: "Logo removido",
+          description: "Logo removido do GitHub e substituído por placeholder.",
+        });
+      } catch (error) {
+        console.error('Error deleting logo from GitHub:', error);
+        toast({
+          title: "Aviso",
+          description: "Logo removido localmente, mas pode ainda estar no GitHub.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      toast({
+        title: "Logo removido",
+        description: "Logo substituído por imagem placeholder.",
+      });
+    }
+    
+    // Set to placeholder image
     const placeholderImage = "https://placehold.co/1080x1080/e5e7eb/6b7280?text=Event+Logo";
     handleInputChange('eventLogo', placeholderImage);
-    
-    toast({
-      title: "Logo removido",
-      description: "Logo substituído por imagem placeholder.",
-    });
   };
 
+  const handleSponsorLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>, sponsorIndex: number) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
+    const sponsor = config.eventSponsors[sponsorIndex];
+    if (!sponsor?.name) {
+      toast({
+        title: "Erro",
+        description: "Por favor, adicione o nome do patrocinador antes de enviar o logo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Erro no arquivo",
+        description: "Por favor, selecione apenas arquivos de imagem.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "Arquivo muito grande",
+        description: "O logo deve ter no máximo 10MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Process image: resize to 300x300 and convert to WebP
+      const processedImage = await processImageToWebP(file, 300, 300);
+
+      // Upload to GitHub
+      const result = await uploadSponsorLogoMutation.mutateAsync({
+        image: processedImage,
+        sponsorName: sponsor.name,
+        eventType: config.eventType,
+      });
+
+      // Update sponsor logo URL
+      handleSponsorChange(sponsorIndex, 'logo', result.imageUrl);
+
+      toast({
+        title: "Logo enviado!",
+        description: `Logo do patrocinador "${sponsor.name}" foi carregado com sucesso.`,
+      });
+    } catch (error) {
+      console.error('Error uploading sponsor logo:', error);
+      toast({
+        title: "Erro no upload",
+        description: "Ocorreu um erro ao enviar o logo. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteSponsorLogo = async (sponsorIndex: number) => {
+    const sponsor = config.eventSponsors[sponsorIndex];
+    if (!sponsor?.logo) return;
+
+    const isGitHubImage = sponsor.logo.includes('cdn.jsdelivr.net/gh/');
+    
+    if (isGitHubImage) {
+      try {
+        // Delete from GitHub first
+        await deleteFileFromGitHubMutation.mutateAsync({
+          fileUrl: sponsor.logo,
+          fileType: "sponsor-logo",
+        });
+        
+        toast({
+          title: "Logo removido",
+          description: `Logo do patrocinador "${sponsor.name}" removido do GitHub.`,
+        });
+      } catch (error) {
+        console.error('Error deleting sponsor logo from GitHub:', error);
+        toast({
+          title: "Aviso",
+          description: "Logo removido localmente, mas pode ainda estar no GitHub.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      toast({
+        title: "Logo removido",
+        description: `Logo do patrocinador "${sponsor.name}" removido.`,
+      });
+    }
+    
+    // Remove logo URL from sponsor
+    handleSponsorChange(sponsorIndex, 'logo', '');
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -683,14 +851,6 @@ export default function EventConfigComponent() {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Logo (URL)</Label>
-                            <Input
-                              placeholder="https://example.com/logo.png"
-                              value={sponsor.logo || ""}
-                              onChange={(e) => handleSponsorChange(index, 'logo', e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
                             <Label>Website</Label>
                             <Input
                               placeholder="https://www.saude.gov.br"
@@ -698,16 +858,141 @@ export default function EventConfigComponent() {
                               onChange={(e) => handleSponsorChange(index, 'website', e.target.value)}
                             />
                           </div>
+                          <div className="space-y-2">
+                            <Label>Logo (URL ou Upload)</Label>
+                            <div className="space-y-2">
+                              <Input
+                                placeholder="https://example.com/logo.png"
+                                value={sponsor.logo || ""}
+                                onChange={(e) => handleSponsorChange(index, 'logo', e.target.value)}
+                              />
+                              
+                              {/* Logo Preview */}
+                              {sponsor.logo && (
+                                <div className="space-y-2">
+                                  <p className="text-sm text-gray-600">Logo atual:</p>
+                                  <div className="relative inline-block">
+                                    <img
+                                      src={sponsor.logo}
+                                      alt={`Logo ${sponsor.name}`}
+                                      className="max-w-24 max-h-24 object-contain border border-gray-200 rounded-lg shadow-sm"
+                                      onError={(e) => {
+                                        e.currentTarget.src = "https://placehold.co/100x100?text=Logo+Error";
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Upload/Delete Actions */}
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={uploadSponsorLogoMutation.isPending}
+                                  onClick={() => document.getElementById(`sponsor-logo-upload-${index}`)?.click()}
+                                >
+                                  {uploadSponsorLogoMutation.isPending ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Enviando...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload className="w-4 h-4 mr-2" />
+                                      {sponsor.logo ? 'Alterar' : 'Upload'}
+                                    </>
+                                  )}
+                                </Button>
+                                
+                                {sponsor.logo && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteSponsorLogo(index)}
+                                    disabled={deleteFileFromGitHubMutation.isPending}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <X className="w-4 h-4 mr-1" />
+                                    Remover
+                                  </Button>
+                                )}
+                              </div>
+                              
+                              <input
+                                id={`sponsor-logo-upload-${index}`}
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleSponsorLogoUpload(e, index)}
+                                className="hidden"
+                              />
+                              
+                              <p className="text-xs text-gray-500">
+                                Aceita imagens PNG, JPG, GIF. Máximo 10MB. Redimensionado para 300x300px.
+                              </p>
+                            </div>
+                          </div>
                         </div>
                         
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeSponsor(index)}
-                          className="ml-4 text-red-600 hover:text-red-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
+                                                <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSponsorToDelete({ index, sponsor })}
+                              disabled={deleteFileFromGitHubMutation.isPending}
+                              className="ml-4 text-red-600 hover:text-red-700"
+                            >
+                              {deleteFileFromGitHubMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <X className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Confirmar remoção do patrocinador</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Tem certeza que deseja remover o patrocinador <strong>&quot;{sponsor.name || 'sem nome'}&quot;</strong>?
+                                <br /><br />
+                                {sponsor.logo && sponsor.logo.includes('cdn.jsdelivr.net/gh/') && (
+                                  <span className="text-amber-600">
+                                    ⚠️ O logo deste patrocinador também será removido permanentemente do GitHub.
+                                  </span>
+                                )}
+                                {sponsor.logo && !sponsor.logo.includes('cdn.jsdelivr.net/gh/') && (
+                                  <span className="text-gray-600">
+                                    ℹ️ O logo externo não será afetado, apenas a referência será removida.
+                                  </span>
+                                )}
+                                <br /><br />
+                                Esta ação não pode ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel onClick={() => setSponsorToDelete(null)}>
+                                Cancelar
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={confirmRemoveSponsor}
+                                className="bg-red-600 hover:bg-red-700"
+                                disabled={deleteFileFromGitHubMutation.isPending}
+                              >
+                                {deleteFileFromGitHubMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Removendo...
+                                  </>
+                                ) : (
+                                  "Remover patrocinador"
+                                )}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </Card>
                   ))}
@@ -820,10 +1105,20 @@ export default function EventConfigComponent() {
                         variant="ghost"
                         size="sm"
                         onClick={handleDeleteLogo}
+                        disabled={deleteFileFromGitHubMutation.isPending}
                         className="text-red-600 hover:text-red-700"
                       >
-                        <X className="w-4 h-4 mr-1" />
-                        Delete
+                        {deleteFileFromGitHubMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            Removendo...
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-4 h-4 mr-1" />
+                            Delete
+                          </>
+                        )}
                       </Button>
                     )}
                   </div>
