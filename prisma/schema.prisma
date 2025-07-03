@@ -218,6 +218,7 @@ model Arquivado {
 
 model Config {
     id              Int      @id @default(autoincrement())
+    // Legacy alert configuration
     toggleDate      Boolean?
     dateStart       DateTime?
     dateEnd         DateTime?
@@ -227,6 +228,54 @@ model Config {
     buttonText      String?
     buttonUrl       String?
     title           String?
+    
+    // Event configuration
+    eventType       String?         // "alert" or "ag" 
+    eventActive     Boolean?        // Whether event is currently active
+    eventNumber     Int?            // Event number (e.g., 63 for 63ª AG)
+    eventTitle      String?         // Full event title
+    eventDescription String?   @db.Text     // Event description/promotional text
+    eventLogo       String?         // Path to event logo
+    
+    // Event dates and location
+    eventDateStart  DateTime?       // Event start date
+    eventDateEnd    DateTime?       // Event end date
+    eventCity       String?         // Event city
+    eventState      String?         // Event state
+    eventVenue      String?         // Event venue name
+    eventAddress    String?         // Full venue address
+    
+    // Event downloads and links
+    survivalKitUrl  String?         // URL to survival kit PDF
+    registrationUrl String?         // URL to registration PDF
+    survivalKitStatus String?       // "available", "coming_soon", "disabled"
+    registrationStatus String?      // "available", "coming_soon", "disabled"
+    
+    // Event content
+    eventContent    String?    @db.LongText // Markdown content for detailed info
+    eventContentUrl String?         // GitHub URL for content if using external storage
+    
+    // Event sponsors (JSON array)
+    eventSponsors   String?    @db.Text     // JSON array of sponsor objects
+    
+    // Event branding
+    primaryColor    String?         // Primary brand color
+    secondaryColor  String?         // Secondary brand color
+    
+    // SEO and metadata
+    metaTitle       String?         // Page title for SEO
+    metaDescription String?         // Meta description
+    metaKeywords    String?         // SEO keywords
+    
+    // Configuration flags
+    showSponsors    Boolean?        // Show/hide sponsors section
+    showDownloads   Boolean?        // Show/hide download buttons
+    eventStatus     String?         // "upcoming", "ongoing", "past"
+    registrationOpen Boolean?       // Whether registration is open
+    
+    // Tracking
+    lastUpdated     DateTime?  @updatedAt
+    updatedBy       String?         // User ID who last updated
 }
 
 model Registros {
