@@ -1,12 +1,9 @@
 import { z } from "zod";
 import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import fetch from 'node-fetch';
+import { githubFetch, buildGithubApiUrl, buildCdnUrl, GITHUB_TOKEN, GITHUB_CONFIG } from "~/server/githubClient";
 import { env } from "~/env";
 
-const GITHUB_TOKEN = env.GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabrazil";
-const REPO_NAME = "dataifmsabrazil";
 const PLACEHOLDER_IMAGE_URL = "https://placehold.co/400";
 
 // Define a type for the GitHub API response
@@ -17,12 +14,7 @@ interface GitHubFileResponse {
 }
 
 const fetchFileContent = async (url: string) => {
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `token ${GITHUB_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const response = await githubFetch(url);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch file content: ${response.statusText}`);
@@ -71,13 +63,7 @@ const deleteOldFile = async (url: string): Promise<boolean> => {
     console.log(`Converted to GitHub API URL: ${githubUrl}`);
 
     // First, check if the file exists and get its SHA
-    const response = await fetch(githubUrl, {
-      method: "GET",
-      headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await githubFetch(githubUrl);
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -93,12 +79,8 @@ const deleteOldFile = async (url: string): Promise<boolean> => {
     console.log(`Found file with SHA: ${data.sha}`);
 
     // Now delete the file
-    const deleteResponse = await fetch(githubUrl, {
+    const deleteResponse = await githubFetch(githubUrl, {
       method: "DELETE",
-      headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({
         message: `Delete old file: ${url}`,
         sha: data.sha,
@@ -278,8 +260,8 @@ export const fileRouter = createTRPCRouter({
       const markdownFilename = `content.md`;
       const imageFilename = `cover.png`;
 
-      const GITHUB_API_URL_MARKDOWN = (filename: string) => `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${filename}`;
-      const GITHUB_API_URL_IMAGE = (filename: string) => `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${filename}`;
+      const GITHUB_API_URL_MARKDOWN = (filename: string) => `https://api.github.com/repos/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/contents/noticias/${id}/${filename}`;
+      const GITHUB_API_URL_IMAGE = (filename: string) => `https://api.github.com/repos/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/contents/noticias/${id}/${filename}`;
 
       const fileContent = Buffer.from(markdown).toString("base64");
       const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
@@ -295,12 +277,8 @@ export const fileRouter = createTRPCRouter({
           markdownSha
         );
 
-        const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
+        const markdownResponse = await githubFetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
           method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify(markdownRequestBody),
         });
 
@@ -326,12 +304,8 @@ export const fileRouter = createTRPCRouter({
             imageSha
           );
 
-          const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
+          const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
             method: "PUT",
-            headers: {
-              Authorization: `token ${GITHUB_TOKEN}`,
-              "Content-Type": "application/json",
-            },
             body: JSON.stringify(imageRequestBody),
           });
 
@@ -344,11 +318,11 @@ export const fileRouter = createTRPCRouter({
             });
           }
 
-          imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${imageFilename}`;
+          imageUrl = `https://cdn.jsdelivr.net/gh/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/noticias/${id}/${imageFilename}`;
         }
 
         return {
-          markdownUrl: `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${markdownFilename}`,
+          markdownUrl: `https://cdn.jsdelivr.net/gh/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/noticias/${id}/${markdownFilename}`,
           imageUrl,
         };
       } catch (error) {
@@ -372,9 +346,9 @@ export const fileRouter = createTRPCRouter({
       const { id, markdown, image, contentLink, imageLink } = input;
 
       const COMMIT_MESSAGE = `Update notícia: ${id}`;
-      const GITHUB_API_URL_MARKDOWN = (filename: string) => `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${filename}`;
-      const GITHUB_API_URL_IMAGE = (filename: string) => `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${filename}`;
-      const GITHUB_API_URL_EDIT = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/edit.txt`;
+      const GITHUB_API_URL_MARKDOWN = (filename: string) => `https://api.github.com/repos/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/contents/noticias/${id}/${filename}`;
+      const GITHUB_API_URL_IMAGE = (filename: string) => `https://api.github.com/repos/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/contents/noticias/${id}/${filename}`;
+      const GITHUB_API_URL_EDIT = `https://api.github.com/repos/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/contents/noticias/${id}/edit.txt`;
 
       const fileContent = Buffer.from(markdown).toString("base64");
       const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
@@ -409,12 +383,8 @@ export const fileRouter = createTRPCRouter({
            fileContent
          );
 
-         const markdownResponse = await fetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
+         const markdownResponse = await githubFetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
            method: "PUT",
-           headers: {
-             Authorization: `token ${GITHUB_TOKEN}`,
-             "Content-Type": "application/json",
-           },
            body: JSON.stringify(newMarkdownRequestBody),
          });
 
@@ -439,12 +409,8 @@ export const fileRouter = createTRPCRouter({
              imageContent
            );
 
-           const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
+           const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
              method: "PUT",
-             headers: {
-               Authorization: `token ${GITHUB_TOKEN}`,
-               "Content-Type": "application/json",
-             },
              body: JSON.stringify(newImageRequestBody),
            });
 
@@ -453,7 +419,7 @@ export const fileRouter = createTRPCRouter({
             console.error("Image response error:", imageResponseData);
                          // Try to clean up the markdown file we just created
              try {
-               const newMarkdownUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/noticias/${id}/${markdownFilename}`;
+               const newMarkdownUrl = `https://api.github.com/repos/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/contents/noticias/${id}/${markdownFilename}`;
                const markdownShaToDelete = await getFileShaIfExists(newMarkdownUrl);
                
                if (markdownShaToDelete) {
@@ -463,12 +429,8 @@ export const fileRouter = createTRPCRouter({
                    markdownShaToDelete
                  );
                  
-                 await fetch(newMarkdownUrl, {
+                 await githubFetch(newMarkdownUrl, {
                    method: "DELETE",
-                   headers: {
-                     Authorization: `token ${GITHUB_TOKEN}`,
-                     "Content-Type": "application/json",
-                   },
                    body: JSON.stringify({
                      message: cleanupRequestBody.message,
                      sha: cleanupRequestBody.sha,
@@ -486,7 +448,7 @@ export const fileRouter = createTRPCRouter({
             });
           }
 
-          imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${imageFilename}`;
+          imageUrl = `https://cdn.jsdelivr.net/gh/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/noticias/${id}/${imageFilename}`;
           newImageUploaded = true;
           console.log(`Successfully uploaded new image file: ${imageFilename}`);
         }
@@ -498,12 +460,8 @@ export const fileRouter = createTRPCRouter({
            editSha
          );
 
-         const editFileResponse = await fetch(GITHUB_API_URL_EDIT, {
+         const editFileResponse = await githubFetch(GITHUB_API_URL_EDIT, {
            method: "PUT",
-           headers: {
-             Authorization: `token ${GITHUB_TOKEN}`,
-             "Content-Type": "application/json",
-           },
            body: JSON.stringify(editRequestBody),
          });
 
@@ -517,7 +475,7 @@ export const fileRouter = createTRPCRouter({
         }
 
         // Verify new files exist before deleting old ones
-        const newMarkdownUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/noticias/${id}/${markdownFilename}`;
+        const newMarkdownUrl = `https://cdn.jsdelivr.net/gh/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/noticias/${id}/${markdownFilename}`;
         console.log("Verifying new markdown file exists...");
         
         // Wait a bit for CDN to update
