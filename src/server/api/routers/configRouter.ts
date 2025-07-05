@@ -1,16 +1,12 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import fetch from 'node-fetch';
+import { githubFetch, buildGithubApiUrl, buildCdnUrl } from "~/server/githubClient";
 import { env } from "~/env";
 
 import {
   createTRPCRouter,
   ifmsaEmailProcedure,
 } from "~/server/api/trpc";
-
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabrazil";
-const REPO_NAME = "dataifmsabrazil";
 
 // Helper function to safely validate GitHub API response
 const validateGitHubFileResponse = (data: unknown): { sha: string } | null => {
@@ -102,7 +98,7 @@ export const configRouter = createTRPCRouter({
       }
 
       const imageFilename = `logo-${eventType}-${new Date().getTime()}.webp`;
-      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/events/logos/${imageFilename}`;
+      const apiUrl = buildGithubApiUrl(`events/logos/${imageFilename}`);
       const imageContent = image; // Image is already base64 encoded
 
       try {
@@ -115,12 +111,8 @@ export const configRouter = createTRPCRouter({
           },
         };
 
-        const response = await fetch(apiUrl, {
+        const response = await githubFetch(apiUrl, {
           method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify(requestBody),
         });
 
@@ -130,7 +122,7 @@ export const configRouter = createTRPCRouter({
           throw new Error(`GitHub API responded with status ${response.status}`);
         }
 
-        const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/events/logos/${imageFilename}`;
+        const imageUrl = buildCdnUrl(`events/logos/${imageFilename}`);
         
         return {
           imageUrl,
@@ -169,7 +161,7 @@ export const configRouter = createTRPCRouter({
         .replace(/^-|-$/g, '');
 
       const imageFilename = `sponsor-${cleanSponsorName}-${new Date().getTime()}.webp`;
-      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/events/sponsors/${imageFilename}`;
+      const apiUrl = buildGithubApiUrl(`events/sponsors/${imageFilename}`);
       const imageContent = image; // Image is already base64 encoded
 
       try {
@@ -182,12 +174,8 @@ export const configRouter = createTRPCRouter({
           },
         };
 
-        const response = await fetch(apiUrl, {
+        const response = await githubFetch(apiUrl, {
           method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify(requestBody),
         });
 
@@ -197,7 +185,7 @@ export const configRouter = createTRPCRouter({
           throw new Error(`GitHub API responded with status ${response.status}`);
         }
 
-        const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/events/sponsors/${imageFilename}`;
+        const imageUrl = buildCdnUrl(`events/sponsors/${imageFilename}`);
         
         return {
           imageUrl,
@@ -222,7 +210,7 @@ export const configRouter = createTRPCRouter({
       const { fileUrl, fileType } = input;
       
       // Extract file path from CDN URL
-      const cdnBaseUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/`;
+      const cdnBaseUrl = buildCdnUrl('');
       if (!fileUrl.startsWith(cdnBaseUrl)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -231,15 +219,12 @@ export const configRouter = createTRPCRouter({
       }
 
       const filePath = fileUrl.replace(cdnBaseUrl, '');
-      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`;
+      const apiUrl = buildGithubApiUrl(filePath);
 
       try {
         // First, get the file to obtain its SHA
-        const getResponse = await fetch(apiUrl, {
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
+        const getResponse = await githubFetch(apiUrl, {
+          method: "GET",
         });
 
         if (!getResponse.ok) {
@@ -258,12 +243,8 @@ export const configRouter = createTRPCRouter({
         }
 
         // Delete the file
-        const deleteResponse = await fetch(apiUrl, {
+        const deleteResponse = await githubFetch(apiUrl, {
           method: "DELETE",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({
             message: `Delete ${fileType}: ${filePath}`,
             sha: validated.sha,

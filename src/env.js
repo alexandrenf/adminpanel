@@ -32,7 +32,6 @@ export const env = createEnv({
    */
   client: {
     // NEXT_PUBLIC_CLIENTVAR: z.string(),
-    NEXT_PUBLIC_GITHUB_TOKEN: z.string(),
   },
 
   /**
@@ -47,7 +46,6 @@ export const env = createEnv({
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-    NEXT_PUBLIC_GITHUB_TOKEN: process.env.NEXT_PUBLIC_GITHUB_TOKEN,
     WEBMASTER_EMAIL: process.env.WEBMASTER_EMAIL,
     MAILTRAP_API_TOKEN: process.env.MAILTRAP_API_TOKEN,
     ALGOLIA_APPLICATION_ID: process.env.ALGOLIA_APPLICATION_ID,

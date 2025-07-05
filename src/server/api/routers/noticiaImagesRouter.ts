@@ -1,13 +1,9 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import fetch from 'node-fetch';
+import { githubFetch, buildGithubApiUrl, buildCdnUrl, GITHUB_TOKEN, GITHUB_CONFIG } from "~/server/githubClient";
 import { env } from "~/env";
 import crypto from 'crypto';
-
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabrazil";
-const REPO_NAME = "dataifmsabrazil";
 
 // Generate a random string for filename
 const generateRandomString = (length: number = 16): string => {
@@ -80,14 +76,14 @@ const assignBlogIdAndMoveImages = async (
         for (let attempt = 1; attempt <= maxRetries && !success; attempt++) {
             try {
                 // Get the file content from GitHub (always fetch fresh to get latest SHA)
-                const oldGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${image.filePath}`;
+                const oldGithubUrl = buildGithubApiUrl(image.filePath);
                 const fileData = await fetchFileContent(oldGithubUrl);
                 
                 // Create new file path
                 const filename = image.filePath.split('/').pop();
                 const newFilePath = `noticias/${blogId}/images/${filename}`;
-                const newGithubUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${newFilePath}`;
-                const newUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${newFilePath}`;
+                const newGithubUrl = buildGithubApiUrl(newFilePath);
+                const newUrl = buildCdnUrl(newFilePath);
                 
                 // Check if file already exists at new location and get SHA if it does
                 let existingSha: string | undefined;
@@ -113,12 +109,8 @@ const assignBlogIdAndMoveImages = async (
                     requestBody.sha = existingSha;
                 }
 
-                const uploadResponse = await fetch(newGithubUrl, {
+                const uploadResponse = await githubFetch(newGithubUrl, {
                     method: "PUT",
-                    headers: {
-                        Authorization: `token ${GITHUB_TOKEN}`,
-                        "Content-Type": "application/json",
-                    },
                     body: JSON.stringify(requestBody),
                 });
                 
@@ -170,11 +162,8 @@ interface GitHubFileResponse {
 }
 
 const fetchFileContent = async (url: string) => {
-    const response = await fetch(url, {
-        headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-        },
+    const response = await githubFetch(url, {
+        method: "GET",
     });
 
     if (!response.ok) {
@@ -188,15 +177,11 @@ const fetchFileContent = async (url: string) => {
 const deleteFileFromGitHub = async (filePath: string, maxRetries: number = 3) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const githubApiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`;
+            const githubApiUrl = buildGithubApiUrl(filePath);
             
             // First get the file's SHA
-            const response = await fetch(githubApiUrl, {
+            const response = await githubFetch(githubApiUrl, {
                 method: "GET",
-                headers: {
-                    Authorization: `token ${GITHUB_TOKEN}`,
-                    "Content-Type": "application/json",
-                },
             });
 
             if (!response.ok) {
@@ -212,12 +197,8 @@ const deleteFileFromGitHub = async (filePath: string, maxRetries: number = 3) =>
             const data: GitHubFileResponse = await response.json() as GitHubFileResponse;
             
             // Delete the file
-            const deleteResponse = await fetch(githubApiUrl, {
+            const deleteResponse = await githubFetch(githubApiUrl, {
                 method: "DELETE",
-                headers: {
-                    Authorization: `token ${GITHUB_TOKEN}`,
-                    "Content-Type": "application/json",
-                },
                 body: JSON.stringify({
                     message: `Delete noticia image: ${filePath}`,
                     sha: data.sha,
@@ -252,14 +233,105 @@ const deleteFileFromGitHub = async (filePath: string, maxRetries: number = 3) =>
     }
 };
 
+// Constants for file validation
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB max file size
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+
+// Helper function to validate uploaded image
+const validateImageUpload = (base64String: string, originalFilename: string, fileSize?: number, mimeType?: string): void => {
+    // Validate filename
+    const extension = originalFilename.split('.').pop()?.toLowerCase();
+    if (!extension || !ALLOWED_EXTENSIONS.includes(`.${extension}`)) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Invalid file extension. Allowed extensions: ${ALLOWED_EXTENSIONS.join(', ')}`,
+        });
+    }
+    
+    // Validate mime type if provided
+    if (mimeType && !ALLOWED_IMAGE_TYPES.includes(mimeType)) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Invalid file type. Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+        });
+    }
+    
+    // Validate base64
+    let buffer: Buffer;
+    try {
+        // Check if it's a data URL or raw base64
+        let base64Data: string;
+        if (base64String.startsWith('data:')) {
+            const matches = base64String.match(/^data:([^;]+);base64,(.+)$/);
+            if (!matches || matches.length < 3) {
+                throw new Error('Invalid data URL format');
+            }
+            // Additional mime type check from data URL
+            const dataUrlMimeType = matches[1];
+            if (!dataUrlMimeType || !ALLOWED_IMAGE_TYPES.includes(dataUrlMimeType)) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: `Invalid file type in data URL. Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+                });
+            }
+            base64Data = matches[2] || '';
+            if (!base64Data) {
+                throw new Error('No base64 data found in data URL');
+            }
+        } else {
+            base64Data = base64String;
+        }
+        
+        buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: "Invalid base64 image data",
+        });
+    }
+    
+    // Validate file size
+    const calculatedSize = buffer.length;
+    if (calculatedSize > MAX_FILE_SIZE) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `File size (${(calculatedSize / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        });
+    }
+    
+    // If fileSize was provided, validate it matches
+    if (fileSize && Math.abs(fileSize - calculatedSize) > 1000) { // Allow 1KB difference
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: "Provided file size does not match actual file size",
+        });
+    }
+    
+    // Validate image magic numbers
+    const isValidImage = 
+        (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) || // JPEG
+        (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) || // PNG
+        (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) || // GIF
+        (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && 
+         buffer.toString('ascii', 8, 12) === 'WEBP'); // WebP
+    
+    if (!isValidImage) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: "File content does not match a valid image format",
+        });
+    }
+};
+
 export const noticiaImagesRouter = createTRPCRouter({
     // Upload a new image for a noticia
     uploadImage: protectedProcedure
         .input(
             z.object({
-                noticiaId: z.string().min(1, "Noticia ID is required"), 
+                noticiaId: z.string().min(1, "Noticia ID is required").max(100).regex(/^[a-zA-Z0-9-_]+$|^new$/, 'Invalid noticia ID format'), 
                 image: z.string().min(1, "Image data is required"), // base64 image
-                originalFilename: z.string().min(1, "Original filename is required"),
+                originalFilename: z.string().min(1, "Original filename is required").max(255),
                 fileSize: z.number().optional(),
                 mimeType: z.string().optional(),
             })
@@ -267,15 +339,8 @@ export const noticiaImagesRouter = createTRPCRouter({
         .mutation(async ({ ctx, input }) => {
             const { noticiaId, image, originalFilename, fileSize, mimeType } = input;
             
-            // Validate base64 image data
-            try {
-                Buffer.from(image, "base64");
-            } catch (error) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: "Invalid base64 image data",
-                });
-            }
+            // Validate the uploaded image
+            validateImageUpload(image, originalFilename, fileSize, mimeType);
             
             // Generate unique random string for filename
             const randomString = await generateUniqueRandomString(ctx.db);
@@ -288,7 +353,7 @@ export const noticiaImagesRouter = createTRPCRouter({
             const blogId = noticiaId === "new" ? null : parseInt(noticiaId, 10);
             
             const filePath = `noticias/${noticiaId}/images/${finalFilename}`;
-            const githubApiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`;
+            const githubApiUrl = buildGithubApiUrl(filePath);
             
             const imageContent = Buffer.from(image, "base64").toString("base64");
             
@@ -322,12 +387,8 @@ export const noticiaImagesRouter = createTRPCRouter({
                         requestBody.sha = existingSha;
                     }
 
-                    const imageResponse = await fetch(githubApiUrl, {
+                    const imageResponse = await githubFetch(githubApiUrl, {
                         method: "PUT",
-                        headers: {
-                            Authorization: `token ${GITHUB_TOKEN}`,
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify(requestBody),
                     });
 
@@ -354,7 +415,7 @@ export const noticiaImagesRouter = createTRPCRouter({
                     }
                 }
 
-                const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${filePath}`;
+                const imageUrl = buildCdnUrl(filePath);
                 
                 // Save image metadata to database
                 const savedImage = await ctx.db.noticiaImage.create({
@@ -467,15 +528,8 @@ export const noticiaImagesRouter = createTRPCRouter({
         .mutation(async ({ ctx, input }) => {
             const { imageId, newImage, newOriginalFilename, fileSize, mimeType } = input;
             
-            // Validate base64 image data
-            try {
-                Buffer.from(newImage, "base64");
-            } catch (error) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: "Invalid base64 image data",
-                });
-            }
+            // Validate the uploaded image using the same comprehensive validation as uploadImage
+            validateImageUpload(newImage, newOriginalFilename, fileSize, mimeType);
             
             try {
                 // Get existing image from database
@@ -503,7 +557,7 @@ export const noticiaImagesRouter = createTRPCRouter({
                 // Determine the directory based on existing blogId
                 const directoryId = existingImage.blogId?.toString() || "new";
                 const newFilePath = `noticias/${directoryId}/images/${finalFilename}`;
-                const githubApiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${newFilePath}`;
+                const githubApiUrl = buildGithubApiUrl(newFilePath);
                 
                 const imageContent = Buffer.from(newImage, "base64").toString("base64");
                 
@@ -512,12 +566,8 @@ export const noticiaImagesRouter = createTRPCRouter({
                 let updateSuccess = false;
                 
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                    const imageResponse = await fetch(githubApiUrl, {
+                    const imageResponse = await githubFetch(githubApiUrl, {
                         method: "PUT",
-                        headers: {
-                            Authorization: `token ${GITHUB_TOKEN}`,
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify({
                             message: `Update noticia image: ${newOriginalFilename}`,
                             content: imageContent,
@@ -550,7 +600,7 @@ export const noticiaImagesRouter = createTRPCRouter({
                     }
                 }
 
-                const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${newFilePath}`;
+                const imageUrl = buildCdnUrl(newFilePath);
                 
                 // Update image metadata in database
                 const updatedImage = await ctx.db.noticiaImage.update({
