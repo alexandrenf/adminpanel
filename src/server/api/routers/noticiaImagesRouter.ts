@@ -528,15 +528,8 @@ export const noticiaImagesRouter = createTRPCRouter({
         .mutation(async ({ ctx, input }) => {
             const { imageId, newImage, newOriginalFilename, fileSize, mimeType } = input;
             
-            // Validate base64 image data
-            try {
-                Buffer.from(newImage, "base64");
-            } catch (error) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: "Invalid base64 image data",
-                });
-            }
+            // Validate the uploaded image using the same comprehensive validation as uploadImage
+            validateImageUpload(newImage, newOriginalFilename, fileSize, mimeType);
             
             try {
                 // Get existing image from database
