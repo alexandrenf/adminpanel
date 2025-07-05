@@ -62,35 +62,21 @@ export default function TimesTable({ type, label }: TimesTableProps) {
 
     const { data: timeData, error: timeError, refetch: refetchTime } = api.times.getByType.useQuery({ type });
 
-    const [membroQueryId, setMembroQueryId] = useState<number | null>(null);
-
-    const { data: membrosData, error: membrosError, refetch: refetchMembros } = api.times.getMembros.useQuery(
-        { id: membroQueryId ?? 0 },
-        { enabled: membroQueryId !== null }
-    );
-
     useEffect(() => {
         if (timeData) {
             setTime(timeData);
             if (timeData.length > 0) {
                 const firstTime = timeData[0];
-                if (firstTime) {
-                    setMembroQueryId(firstTime.id);
+                if (firstTime && firstTime.membros) {
+                    setMembros(firstTime.membros);
                 }
             }
         }
     }, [timeData]);
 
-    useEffect(() => {
-        if (membrosData) {
-            setMembros(membrosData);
-        }
-    }, [membrosData]);
-
     const deleteMutation = api.times.delete.useMutation({
         onSuccess: () => {
             refetchTime();
-            refetchMembros();
         },
         onError: (error) => {
             setDeleteError(error.message);
@@ -118,7 +104,7 @@ export default function TimesTable({ type, label }: TimesTableProps) {
             .slice(0, 2);
     };
 
-    if (timeError || membrosError) {
+    if (timeError) {
         return (
             <Card className="w-full">
                 <CardContent className="flex items-center justify-center py-12">

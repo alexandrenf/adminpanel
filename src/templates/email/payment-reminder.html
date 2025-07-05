@@ -1,0 +1,48 @@
+<p>Olá <strong>{{participantName}}</strong>,</p>
+<p>Este é um lembrete sobre o pagamento pendente para sua inscrição em <strong>{{assemblyName}}</strong>.</p>
+
+<div class="warning">
+  <h4>⏰ Pagamento Pendente</h4>
+  <p>Prazo para pagamento: <strong>{{paymentDeadline}}</strong></p>
+</div>
+
+<div class="details-card">
+  <h3>📋 Detalhes da Inscrição</h3>
+  <div class="detail-row">
+    <span class="detail-label">ID da Inscrição:</span>
+    <span class="detail-value">{{registrationId}}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Evento:</span>
+    <span class="detail-value">{{assemblyName}}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Valor:</span>
+    <span class="detail-value">{{paymentAmount}}</span>
+  </div>
+</div>
+
+<div class="payment-section">
+  <h3>💳 Informações de Pagamento</h3>
+  {{#if paymentUrl}}
+  <a href="{{paymentUrl}}" class="action-button">Realizar Pagamento</a>
+  {{/if}}
+  
+  {{#if pixKey}}
+  <div class="detail-row">
+    <span class="detail-label">Chave PIX:</span>
+    <span class="detail-value">{{pixKey}}</span>
+  </div>
+  {{/if}}
+  
+  {{#if bankDetails}}
+  <div class="detail-row">
+    <span class="detail-label">Dados Bancários:</span>
+    <span class="detail-value">{{bankDetails}}</span>
+  </div>
+  {{/if}}
+</div>
+
+<h3>📞 Precisa de Ajuda?</h3>
+<p>Se você tiver dúvidas sobre o pagamento ou precisar de assistência, entre em contato conosco.</p>
+<p><strong>Importante:</strong> O pagamento deve ser realizado até o prazo indicado para garantir sua participação no evento.</p> 

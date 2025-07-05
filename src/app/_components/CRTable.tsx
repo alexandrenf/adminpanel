@@ -75,7 +75,7 @@ type Cr = {
     imageLink: string | null;
     order: number;
     regionalID: number;
-    Regional?: Regional;
+    regional?: Regional;
 };
 
 export default function CrTable() {
@@ -84,7 +84,7 @@ export default function CrTable() {
     const [orderModalOpen, setOrderModalOpen] = useState(false);
     const [crOrder, setCrOrder] = useState<Cr[]>([] as Cr[]);
     const { data: cr, refetch } = api.cr.getAll.useQuery();
-    const { data: regional, refetch: regionalRefetch } = api.regional.getAll.useQuery();
+    // Regional data is now included in the CR query, no need for separate fetch
 
     const deleteMutation = api.cr.delete.useMutation({
         onSuccess: () => {
@@ -281,7 +281,7 @@ export default function CrTable() {
                                                 <div className="flex items-center space-x-2">
                                                     <MapPin className="w-4 h-4 text-gray-400" />
                                                     <span className="text-sm">
-                                                        {regional?.find(reg => reg.id === row.regionalID)?.name || 'N/A'}
+                                                        {row.regional?.name || 'N/A'}
                                                     </span>
                                                 </div>
                                             </TableCell>

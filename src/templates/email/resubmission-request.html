@@ -1,0 +1,32 @@
+<p>Olá <strong>{{participantName}}</strong>,</p>
+<p>Solicitamos que você reenvie sua inscrição para <strong>{{assemblyName}}</strong> com as correções necessárias.</p>
+
+<div class="warning">
+  <h4>🔄 Reenvio Solicitado</h4>
+  <p><strong>Motivo:</strong> {{reasonForResubmission}}</p>
+  {{#if resubmissionDeadline}}
+  <p><strong>Prazo para reenvio:</strong> {{resubmissionDeadline}}</p>
+  {{/if}}
+</div>
+
+<div class="details-card">
+  <h3>📋 Detalhes da Inscrição</h3>
+  <div class="detail-row">
+    <span class="detail-label">ID da Inscrição:</span>
+    <span class="detail-value">{{registrationId}}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Evento:</span>
+    <span class="detail-value">{{assemblyName}}</span>
+  </div>
+</div>
+
+<div class="details-card">
+  <h3>📝 Como Reenviar</h3>
+  <p>Acesse o link abaixo para fazer as correções necessárias e reenviar sua inscrição:</p>
+  <a href="{{resubmissionUrl}}" class="action-button">Reenviar Inscrição</a>
+</div>
+
+<h3>📞 Precisa de Ajuda?</h3>
+<p>Se você tiver dúvidas sobre as correções necessárias ou sobre o processo de reenvio, entre em contato conosco.</p>
+<p><strong>Importante:</strong> {{#if resubmissionDeadline}}Certifique-se de reenviar sua inscrição até o prazo indicado.{{else}}Reenvie sua inscrição o mais breve possível para garantir sua participação.{{/if}}</p> 

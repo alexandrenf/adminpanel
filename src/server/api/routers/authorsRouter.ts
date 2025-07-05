@@ -146,12 +146,22 @@ export const authorsRouter = createTRPCRouter({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      // First check if author is used in any blog posts
-      const blogAuthors = await ctx.db.blogAuthor.findMany({
-        where: { authorId: input.id },
+      // Get author with blogAuthors relationship to check if it's used
+      const authorWithBlogAuthors = await ctx.db.author.findUnique({
+        where: { id: input.id },
+        include: {
+          blogAuthors: true,
+        },
       });
 
-      if (blogAuthors.length > 0) {
+      if (!authorWithBlogAuthors) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Author not found",
+        });
+      }
+
+      if (authorWithBlogAuthors.blogAuthors.length > 0) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "Cannot delete author that is used in blog posts",

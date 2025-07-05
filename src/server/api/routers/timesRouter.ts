@@ -92,6 +92,10 @@ export const timesRouter = createTRPCRouter({
                 where: {
                     type: input.type,
                 },
+                include: {
+                    membros: true,
+                    ebs: true,
+                },
             });
         }),
 
@@ -103,6 +107,9 @@ export const timesRouter = createTRPCRouter({
             return ctx.db.membroTime.findMany({
                 where: {
                     timeID: input.id,
+                },
+                include: {
+                    time: true,
                 },
             });
         }),
@@ -119,6 +126,9 @@ export const timesRouter = createTRPCRouter({
             return ctx.db.membroTime.findUnique({
                 where: {
                     id: input.id,
+                },
+                include: {
+                    time: true,
                 },
             });
         }),
