@@ -1,12 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import fetch from 'node-fetch';
-import { env } from "~/env";
+import { githubFetch, buildGithubApiUrl, buildCdnUrl } from "~/server/githubClient";
 
-const GITHUB_TOKEN = env.GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabrazil";
-const REPO_NAME = "dataifmsabrazil";
 const PLACEHOLDER_IMAGE_URL = "https://placehold.co/400";
 
 // Define a type for the GitHub API response
@@ -17,11 +13,8 @@ interface GitHubFileResponse {
 }
 
 const fetchFileContent = async (url: string) => {
-    const response = await fetch(url, {
-        headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-        },
+    const response = await githubFetch(url, {
+        method: "GET",
     });
 
     if (!response.ok) {
@@ -49,12 +42,8 @@ const deleteOldFile = async (url: string) => {
             return;
         }
 
-        const response = await fetch(githubUrl, {
+        const response = await githubFetch(githubUrl, {
             method: "GET",
-            headers: {
-                Authorization: `token ${GITHUB_TOKEN}`,
-                "Content-Type": "application/json",
-            },
         });
 
         if (!response.ok) {
@@ -67,12 +56,8 @@ const deleteOldFile = async (url: string) => {
         }
 
         const data: GitHubFileResponse = await response.json() as GitHubFileResponse;
-        const deleteResponse = await fetch(githubUrl, {
+        const deleteResponse = await githubFetch(githubUrl, {
             method: "DELETE",
-            headers: {
-                Authorization: `token ${GITHUB_TOKEN}`,
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 message: `Delete old file for ${url}`,
                 sha: data.sha,
@@ -124,7 +109,7 @@ export const arquivoRouter = createTRPCRouter({
             const COMMIT_MESSAGE = `Add new photo for ${tipo}: ${id}`;
             const imageFilename = `photo${new Date().getTime()}.png`;
 
-            const GITHUB_API_URL_IMAGE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${tipo}/${id}/${imageFilename}`;
+            const GITHUB_API_URL_IMAGE = buildGithubApiUrl(`${tipo}/${id}/${imageFilename}`);
 
             const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
 
@@ -156,12 +141,8 @@ export const arquivoRouter = createTRPCRouter({
                         requestBody.sha = existingSha;
                     }
 
-                    const imageResponse = await fetch(GITHUB_API_URL_IMAGE, {
+                    const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE, {
                         method: "PUT",
-                        headers: {
-                            Authorization: `token ${GITHUB_TOKEN}`,
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify(requestBody),
                     });
 
@@ -174,7 +155,7 @@ export const arquivoRouter = createTRPCRouter({
                         });
                     }
 
-                    imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${tipo}/${id}/${imageFilename}`;
+                    imageUrl = buildCdnUrl(`${tipo}/${id}/${imageFilename}`);
                 }
 
                 return {
@@ -200,8 +181,8 @@ export const arquivoRouter = createTRPCRouter({
             const { id, image, imageLink, tipo } = input;
 
             const COMMIT_MESSAGE = `Update photo for ${tipo}: ${id}`;
-            const GITHUB_API_URL_IMAGE = (filename: string) => `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${tipo}/${id}/${filename}`;
-            const GITHUB_API_URL_EDIT = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${tipo}/${id}/edit.txt`;
+            const GITHUB_API_URL_IMAGE = (filename: string) => buildGithubApiUrl(`${tipo}/${id}/${filename}`);
+            const GITHUB_API_URL_EDIT = buildGithubApiUrl(`${tipo}/${id}/edit.txt`);
 
             const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
 
@@ -247,12 +228,8 @@ export const arquivoRouter = createTRPCRouter({
                         requestBody.sha = existingSha;
                     }
 
-                    const imageResponse = await fetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
+                    const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
                         method: "PUT",
-                        headers: {
-                            Authorization: `token ${GITHUB_TOKEN}`,
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify(requestBody),
                     });
 
@@ -265,19 +242,15 @@ export const arquivoRouter = createTRPCRouter({
                         });
                     }
 
-                    imageUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/${tipo}/${id}/${imageFilename}`;
+                    imageUrl = buildCdnUrl(`${tipo}/${id}/${imageFilename}`);
 
                     // Delete the old image file
                     await deleteOldFile(imageLink);
                 }
 
                 // Upload the edit.txt file with the updated edit count
-                const editFileResponse = await fetch(GITHUB_API_URL_EDIT, {
+                const editFileResponse = await githubFetch(GITHUB_API_URL_EDIT, {
                     method: "PUT",
-                    headers: {
-                        Authorization: `token ${GITHUB_TOKEN}`,
-                        "Content-Type": "application/json",
-                    },
                     body: JSON.stringify({
                         message: `Update edit count for ${id}`,
                         content: Buffer.from(editCount.toString()).toString("base64"),

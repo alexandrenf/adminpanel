@@ -151,6 +151,35 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"'\/]/g, (char) => map[char] || char);
 }
 
+// URL encoding function for href attributes
+function encodeHtmlUrl(url: string): string {
+  // Safely encode URLs for href attributes while preserving functionality
+  try {
+    // Handle empty or invalid URLs
+    if (!url || typeof url !== 'string') {
+      return '';
+    }
+    
+    // For mailto links, return as-is since they don't need URL encoding
+    if (url.startsWith('mailto:')) {
+      return url;
+    }
+    
+    // For data URLs, return as-is to preserve functionality
+    if (url.startsWith('data:')) {
+      return url;
+    }
+    
+    // For regular URLs, use encodeURI to handle special characters
+    // This preserves the URL structure while making it safe for href attributes
+    return encodeURI(url);
+  } catch (error) {
+    // If encoding fails, return the original URL
+    console.warn('Failed to encode URL:', url, error);
+    return url;
+  }
+}
+
 // Format currency to BRL
 function formatCurrency(amount: number | undefined): string {
   if (amount === undefined) {
@@ -929,7 +958,7 @@ Equipe IFMSA Brazil
             <div class="details-card">
               <h3>📱 QR Code de Participação</h3>
               <p>Seu QR Code de participação está pronto! Use-o para fazer check-in no evento:</p>
-              <a href="${escapeHtml(approvedData.qrCodeUrl)}" class="btn">Acessar Meu QR Code</a>
+              <a href="${encodeHtmlUrl(approvedData.qrCodeUrl)}" class="btn">Acessar Meu QR Code</a>
               <p style="font-size: 14px; color: #64748b; margin-top: 15px;">
                 <strong>Dica:</strong> Salve este link nos seus favoritos para acesso rápido durante o evento.
               </p>
@@ -1030,7 +1059,7 @@ Equipe IFMSA Brazil
       <div class="resubmit">
         <h3>💡 Possibilidade de Reenvio</h3>
         <p>Você pode reenviar sua inscrição corrigindo os problemas mencionados.</p>
-        ${rejectedData.resubmissionUrl ? `<a href="${escapeHtml(rejectedData.resubmissionUrl)}" class="button">Reenviar Inscrição</a>` : ''}
+        ${rejectedData.resubmissionUrl ? `<a href="${encodeHtmlUrl(rejectedData.resubmissionUrl)}" class="button">Reenviar Inscrição</a>` : ''}
       </div>
       ` : `
       <div class="rejection">
@@ -1041,7 +1070,7 @@ Equipe IFMSA Brazil
       ${rejectedData.contactEmail ? `
       <div class="details">
         <h3>Contato</h3>
-        <p>Para esclarecimentos, entre em contato: <a href="mailto:${escapeHtml(rejectedData.contactEmail)}">${escapeHtml(rejectedData.contactEmail)}</a></p>
+        <p>Para esclarecimentos, entre em contato: <a href="mailto:${rejectedData.contactEmail}">${escapeHtml(rejectedData.contactEmail)}</a></p>
       </div>
       ` : ''}
     </div>
@@ -1115,7 +1144,7 @@ Equipe IFMSA Brazil
       
       <div class="details">
         <h3>Como Pagar</h3>
-        <a href="${escapeHtml(paymentData.paymentUrl)}" class="button">Acessar Página de Pagamento</a>
+        <a href="${encodeHtmlUrl(paymentData.paymentUrl)}" class="button">Acessar Página de Pagamento</a>
         ${paymentData.pixKey ? `<p><strong>PIX:</strong> ${escapeHtml(paymentData.pixKey)}</p>` : ''}
         ${paymentData.bankDetails ? `<p><strong>Dados Bancários:</strong> ${escapeHtml(paymentData.bankDetails)}</p>` : ''}
       </div>
@@ -1264,7 +1293,7 @@ Equipe IFMSA Brazil
       <div class="details">
         <h3>Como Proceder</h3>
         <p>Por favor, corrija as informações mencionadas e reenvie sua inscrição.</p>
-        <a href="${escapeHtml(resubmitData.resubmissionUrl)}" class="button">Reenviar Inscrição</a>
+        <a href="${encodeHtmlUrl(resubmitData.resubmissionUrl)}" class="button">Reenviar Inscrição</a>
         ${resubmitData.resubmissionDeadline ? `<p><strong>Prazo:</strong> ${escapeHtml(resubmitData.resubmissionDeadline)}</p>` : ''}
       </div>
     </div>

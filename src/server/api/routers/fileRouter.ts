@@ -192,7 +192,7 @@ const validateBase64Image = (base64String: string): { isValid: boolean; error?: 
     
     if (base64String.startsWith('data:')) {
       const matches = base64String.match(/^data:([^;]+);base64,(.+)$/);
-      if (!matches) {
+      if (!matches || !matches[1] || !matches[2]) {
         return { isValid: false, error: 'Invalid base64 format' };
       }
       mimeType = matches[1];
@@ -201,8 +201,11 @@ const validateBase64Image = (base64String: string): { isValid: boolean; error?: 
       base64Data = base64String;
     }
     
+    // Normalize base64 string by removing whitespace and line breaks
+    const normalizedBase64 = base64Data.replace(/\s/g, '');
+    
     // Decode base64 to check size
-    const buffer = Buffer.from(base64Data, 'base64');
+    const buffer = Buffer.from(normalizedBase64, 'base64');
     const size = buffer.length;
     
     // Check file size
@@ -232,9 +235,16 @@ const validateBase64Image = (base64String: string): { isValid: boolean; error?: 
     }
     
     // Additional security check: ensure it's valid base64
-    const reEncoded = buffer.toString('base64');
-    if (reEncoded !== base64Data) {
-      return { isValid: false, error: 'Invalid base64 encoding' };
+    // We validate by attempting to decode and checking if we get a reasonable buffer size
+    // This is more reliable than string comparison since base64 can have different padding/formatting
+    if (buffer.length === 0) {
+      return { isValid: false, error: 'Invalid base64 encoding - empty result' };
+    }
+    
+    // Additional check: verify the base64 string contains valid characters
+    const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+    if (!base64Regex.test(normalizedBase64)) {
+      return { isValid: false, error: 'Invalid base64 encoding - contains invalid characters' };
     }
     
     return { isValid: true, mimeType, size };

@@ -7,7 +7,7 @@
 **Location:** `src/env.js`, lines 35-36, 50
 **Description:** The GitHub token was exposed as a client-side environment variable (`NEXT_PUBLIC_GITHUB_TOKEN`). This allowed any user to inspect the token via browser developer tools, potentially compromising the GitHub repository security.
 **Impact:** Attackers could have used this token to modify or delete files in the GitHub repository, upload malicious content, or exceed API rate limits.
-**Resolution:** Fixed by removing `NEXT_PUBLIC_GITHUB_TOKEN` from client-side environment variables and updating all routers to use the server-side `GITHUB_TOKEN` instead.
+**Resolution:** Fixed by removing `NEXT_PUBLIC_GITHUB_TOKEN` from client-side environment variables and updating all routers to use the server-side `GITHUB_TOKEN` instead. All GitHub API interactions now use the secure server-side token.
 **Severity/Priority:** CRITICAL / P1 - RESOLVED
 
 ### 2. Missing CSRF Protection on Sensitive Operations
