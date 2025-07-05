@@ -907,7 +907,7 @@ Equipe IFMSA Brazil
               ${approvedData.isPaymentExempt ? `
                 <div class="payment-exempt">
                   <p><strong>Status:</strong> Isento de Pagamento</p>
-                  ${approvedData.paymentExemptReason ? `<p><strong>Motivo:</strong> ${approvedData.paymentExemptReason}</p>` : ''}
+                  ${approvedData.paymentExemptReason ? `<p><strong>Motivo:</strong> ${escapeHtml(approvedData.paymentExemptReason)}</p>` : ''}
                 </div>
               ` : `
                 <div class="payment-required">
@@ -1041,7 +1041,7 @@ Equipe IFMSA Brazil
       ${rejectedData.contactEmail ? `
       <div class="details">
         <h3>Contato</h3>
-        <p>Para esclarecimentos, entre em contato: <a href="mailto:${rejectedData.contactEmail}">${rejectedData.contactEmail}</a></p>
+        <p>Para esclarecimentos, entre em contato: <a href="mailto:${escapeHtml(rejectedData.contactEmail)}">${escapeHtml(rejectedData.contactEmail)}</a></p>
       </div>
       ` : ''}
     </div>
@@ -1115,9 +1115,9 @@ Equipe IFMSA Brazil
       
       <div class="details">
         <h3>Como Pagar</h3>
-        <a href="${paymentData.paymentUrl}" class="button">Acessar Página de Pagamento</a>
-        ${paymentData.pixKey ? `<p><strong>PIX:</strong> ${paymentData.pixKey}</p>` : ''}
-        ${paymentData.bankDetails ? `<p><strong>Dados Bancários:</strong> ${paymentData.bankDetails}</p>` : ''}
+        <a href="${escapeHtml(paymentData.paymentUrl)}" class="button">Acessar Página de Pagamento</a>
+        ${paymentData.pixKey ? `<p><strong>PIX:</strong> ${escapeHtml(paymentData.pixKey)}</p>` : ''}
+        ${paymentData.bankDetails ? `<p><strong>Dados Bancários:</strong> ${escapeHtml(paymentData.bankDetails)}</p>` : ''}
       </div>
       
       <div class="warning">
@@ -1264,8 +1264,8 @@ Equipe IFMSA Brazil
       <div class="details">
         <h3>Como Proceder</h3>
         <p>Por favor, corrija as informações mencionadas e reenvie sua inscrição.</p>
-        <a href="${resubmitData.resubmissionUrl}" class="button">Reenviar Inscrição</a>
-        ${resubmitData.resubmissionDeadline ? `<p><strong>Prazo:</strong> ${resubmitData.resubmissionDeadline}</p>` : ''}
+        <a href="${escapeHtml(resubmitData.resubmissionUrl)}" class="button">Reenviar Inscrição</a>
+        ${resubmitData.resubmissionDeadline ? `<p><strong>Prazo:</strong> ${escapeHtml(resubmitData.resubmissionDeadline)}</p>` : ''}
       </div>
     </div>
     <div class="footer">
