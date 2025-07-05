@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import fetch from 'node-fetch';
 import { env } from "~/env";
 
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
+const GITHUB_TOKEN = env.GITHUB_TOKEN;
 const REPO_OWNER = "ifmsabrazil";
 const REPO_NAME = "dataifmsabrazil";
 const PLACEHOLDER_IMAGE_URL = "https://placehold.co/400";
@@ -178,15 +178,91 @@ const verifyFileExists = async (url: string): Promise<boolean> => {
   }
 };
 
+// Constants for file validation
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB max file size
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+
+// Helper function to validate base64 image
+const validateBase64Image = (base64String: string): { isValid: boolean; error?: string; mimeType?: string; size?: number } => {
+  try {
+    // Check if it's a data URL or raw base64
+    let base64Data: string;
+    let mimeType: string | undefined;
+    
+    if (base64String.startsWith('data:')) {
+      const matches = base64String.match(/^data:([^;]+);base64,(.+)$/);
+      if (!matches) {
+        return { isValid: false, error: 'Invalid base64 format' };
+      }
+      mimeType = matches[1];
+      base64Data = matches[2];
+    } else {
+      base64Data = base64String;
+    }
+    
+    // Decode base64 to check size
+    const buffer = Buffer.from(base64Data, 'base64');
+    const size = buffer.length;
+    
+    // Check file size
+    if (size > MAX_FILE_SIZE) {
+      return { isValid: false, error: `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB` };
+    }
+    
+    // If we couldn't determine mime type from data URL, try to detect from buffer
+    if (!mimeType) {
+      // Check magic numbers for common image formats
+      if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+        mimeType = 'image/jpeg';
+      } else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+        mimeType = 'image/png';
+      } else if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
+        // Could be WebP
+        const webpCheck = buffer.toString('ascii', 8, 12);
+        if (webpCheck === 'WEBP') {
+          mimeType = 'image/webp';
+        }
+      }
+    }
+    
+    // Validate mime type
+    if (!mimeType || !ALLOWED_IMAGE_TYPES.includes(mimeType)) {
+      return { isValid: false, error: `Invalid file type. Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}` };
+    }
+    
+    // Additional security check: ensure it's valid base64
+    const reEncoded = buffer.toString('base64');
+    if (reEncoded !== base64Data) {
+      return { isValid: false, error: 'Invalid base64 encoding' };
+    }
+    
+    return { isValid: true, mimeType, size };
+  } catch (error) {
+    return { isValid: false, error: 'Failed to validate image' };
+  }
+};
+
 export const fileRouter = createTRPCRouter({
   uploadFile: ifmsaEmailProcedure
     .input(z.object({
-      id: z.string().min(1),
-      markdown: z.string().min(1),
+      id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9-_]+$/, 'ID must be alphanumeric with hyphens or underscores only'),
+      markdown: z.string().min(1).max(100000), // Max 100KB for markdown content
       image: z.string().nullable(), // Expecting base64 string or null
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, markdown, image } = input;
+      
+      // Validate image if provided
+      if (image) {
+        const validation = validateBase64Image(image);
+        if (!validation.isValid) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: validation.error || 'Invalid image file',
+          });
+        }
+      }
 
       const COMMIT_MESSAGE = `Add new notícia: ${id}`;
       const markdownFilename = `content.md`;

@@ -1,6 +1,7 @@
 'use server';
 
 import nodemailer from 'nodemailer';
+import sanitizeHtml from 'sanitize-html';
 import { env } from '~/env.js';
 
 // Email types for different scenarios
@@ -115,10 +116,39 @@ function validateEmail(email: string): boolean {
 
 // Sanitize email content to prevent injection
 function sanitizeContent(content: string): string {
-  return content
-    .replace(/[<>]/g, '') // Remove potential HTML injection
-    .replace(/javascript:/gi, '') // Remove javascript protocols
-    .trim();
+  return sanitizeHtml(content, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']),
+    allowedAttributes: {
+      '*': ['style', 'class', 'id'],
+      'a': ['href', 'name', 'target'],
+      'img': ['src', 'srcset', 'alt', 'title', 'width', 'height', 'loading'],
+    },
+    allowedStyles: {
+      '*': {
+        // Match HEX and RGB
+        'color': [/^#(0x)?[0-9a-f]+$/i, /^rgb\([\s\d]+\)$/i],
+        'text-align': [/^left$/, /^right$/, /^center$/, /^justify$/],
+        // Add more style filters as needed
+      },
+      'img': {
+        'width': [/^\d+(?:px|%)?$/],
+        'height': [/^\d+(?:px|%)?$/]
+      }
+    }
+  });
+}
+
+// HTML escape function for user-generated content
+function escapeHtml(text: string): string {
+  const map: { [key: string]: string } = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '/': '&#x2F;',
+  };
+  return text.replace(/[&<>"'\/]/g, (char) => map[char] || char);
 }
 
 // Format currency to BRL
@@ -442,12 +472,12 @@ Equipe IFMSA Brazil
     <div class="header">
             <div class="icon">✅</div>
             <h1>Inscrição Confirmada</h1>
-      <h2>${confirmData.assemblyName}</h2>
+      <h2>${escapeHtml(confirmData.assemblyName)}</h2>
     </div>
           
           <!-- Content -->
     <div class="content">
-      <p>Olá <strong>${confirmData.participantName}</strong>,</p>
+      <p>Olá <strong>${escapeHtml(confirmData.participantName)}</strong>,</p>
             <p>Ficamos felizes em confirmar que sua inscrição foi recebida com sucesso!</p>
             
             <div class="status-badge">Inscrição Registrada</div>
@@ -456,23 +486,23 @@ Equipe IFMSA Brazil
               <h3>📋 Detalhes da Inscrição</h3>
               <div class="detail-row">
                 <span class="detail-label">ID da Inscrição:</span>
-                <span class="detail-value">${confirmData.registrationId}</span>
+                <span class="detail-value">${escapeHtml(confirmData.registrationId)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Evento:</span>
-                <span class="detail-value">${confirmData.assemblyName}</span>
+                <span class="detail-value">${escapeHtml(confirmData.assemblyName)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Local:</span>
-                <span class="detail-value">${confirmData.assemblyLocation}</span>
+                <span class="detail-value">${escapeHtml(confirmData.assemblyLocation)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Datas:</span>
-                <span class="detail-value">${confirmData.assemblyDates}</span>
+                <span class="detail-value">${escapeHtml(confirmData.assemblyDates)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Modalidade:</span>
-                <span class="detail-value">${confirmData.modalityName}</span>
+                <span class="detail-value">${escapeHtml(confirmData.modalityName)}</span>
               </div>
       </div>
       
@@ -482,7 +512,7 @@ Equipe IFMSA Brazil
               ${confirmData.isPaymentExempt ? `
                 <div class="payment-exempt">
                   <p><strong>Status:</strong> Isento de Pagamento</p>
-                  ${confirmData.paymentExemptReason ? `<p><strong>Motivo:</strong> ${confirmData.paymentExemptReason}</p>` : ''}
+                  ${confirmData.paymentExemptReason ? `<p><strong>Motivo:</strong> ${escapeHtml(confirmData.paymentExemptReason)}</p>` : ''}
       </div>
               ` : `
                 <div class="payment-required">
@@ -842,7 +872,7 @@ Equipe IFMSA Brazil
     <div class="content">
             <div class="success-hero">
               <h3>Inscrição Aprovada!</h3>
-              <p>Olá <strong>${approvedData.participantName}</strong>, sua participação está confirmada!</p>
+              <p>Olá <strong>${escapeHtml(approvedData.participantName)}</strong>, sua participação está confirmada!</p>
       </div>
       
             <div class="status-badge">✅ Aprovado</div>
@@ -851,23 +881,23 @@ Equipe IFMSA Brazil
               <h3>📋 Detalhes da Sua Participação</h3>
               <div class="detail-row">
                 <span class="detail-label">ID da Inscrição:</span>
-                <span class="detail-value">${approvedData.registrationId}</span>
+                <span class="detail-value">${escapeHtml(approvedData.registrationId)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Evento:</span>
-                <span class="detail-value">${approvedData.assemblyName}</span>
+                <span class="detail-value">${escapeHtml(approvedData.assemblyName)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Local:</span>
-                <span class="detail-value">${approvedData.assemblyLocation}</span>
+                <span class="detail-value">${escapeHtml(approvedData.assemblyLocation)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Datas:</span>
-                <span class="detail-value">${approvedData.assemblyDates}</span>
+                <span class="detail-value">${escapeHtml(approvedData.assemblyDates)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Modalidade:</span>
-                <span class="detail-value">${approvedData.modalityName}</span>
+                <span class="detail-value">${escapeHtml(approvedData.modalityName)}</span>
               </div>
       </div>
       
@@ -891,7 +921,7 @@ Equipe IFMSA Brazil
       ${approvedData.additionalInstructions ? `
             <div class="instructions-section">
               <h3>📝 Instruções Importantes</h3>
-        <p>${approvedData.additionalInstructions}</p>
+        <p>${escapeHtml(approvedData.additionalInstructions)}</p>
       </div>
       ` : ''}
       
@@ -899,7 +929,7 @@ Equipe IFMSA Brazil
             <div class="details-card">
               <h3>📱 QR Code de Participação</h3>
               <p>Seu QR Code de participação está pronto! Use-o para fazer check-in no evento:</p>
-              <a href="${approvedData.qrCodeUrl}" class="btn">Acessar Meu QR Code</a>
+              <a href="${escapeHtml(approvedData.qrCodeUrl)}" class="btn">Acessar Meu QR Code</a>
               <p style="font-size: 14px; color: #64748b; margin-top: 15px;">
                 <strong>Dica:</strong> Salve este link nos seus favoritos para acesso rápido durante o evento.
               </p>
@@ -984,23 +1014,23 @@ Equipe IFMSA Brazil
       <h2>${rejectedData.assemblyName}</h2>
     </div>
     <div class="content">
-      <p>Olá <strong>${rejectedData.participantName}</strong>,</p>
+      <p>Olá <strong>${escapeHtml(rejectedData.participantName)}</strong>,</p>
       
       <div class="rejection">
         <p>Infelizmente, sua inscrição foi rejeitada.</p>
-        <p><strong>ID da Inscrição:</strong> ${rejectedData.registrationId}</p>
+        <p><strong>ID da Inscrição:</strong> ${escapeHtml(rejectedData.registrationId)}</p>
       </div>
       
       <div class="details">
         <h3>Motivo da Rejeição</h3>
-        <p>${rejectedData.rejectionReason}</p>
+        <p>${escapeHtml(rejectedData.rejectionReason)}</p>
       </div>
       
       ${rejectedData.canResubmit ? `
       <div class="resubmit">
         <h3>💡 Possibilidade de Reenvio</h3>
         <p>Você pode reenviar sua inscrição corrigindo os problemas mencionados.</p>
-        ${rejectedData.resubmissionUrl ? `<a href="${rejectedData.resubmissionUrl}" class="button">Reenviar Inscrição</a>` : ''}
+        ${rejectedData.resubmissionUrl ? `<a href="${escapeHtml(rejectedData.resubmissionUrl)}" class="button">Reenviar Inscrição</a>` : ''}
       </div>
       ` : `
       <div class="rejection">
@@ -1216,19 +1246,19 @@ Equipe IFMSA Brazil
   <div class="container">
     <div class="header">
       <h1>🔄 Solicitação de Reenvio</h1>
-      <h2>${resubmitData.assemblyName}</h2>
+      <h2>${escapeHtml(resubmitData.assemblyName)}</h2>
     </div>
     <div class="content">
-      <p>Olá <strong>${resubmitData.participantName}</strong>,</p>
+      <p>Olá <strong>${escapeHtml(resubmitData.participantName)}</strong>,</p>
       <p>Solicitamos que você reenvie sua inscrição.</p>
       
       <div class="details">
-        <p><strong>ID da Inscrição:</strong> ${resubmitData.registrationId}</p>
+        <p><strong>ID da Inscrição:</strong> ${escapeHtml(resubmitData.registrationId)}</p>
       </div>
       
       <div class="info">
         <h3>Motivo para Reenvio</h3>
-        <p>${resubmitData.reasonForResubmission}</p>
+        <p>${escapeHtml(resubmitData.reasonForResubmission)}</p>
       </div>
       
       <div class="details">
@@ -1271,7 +1301,7 @@ Equipe IFMSA Brazil
       <h1>IFMSA Brazil</h1>
     </div>
     <div class="content">
-      <p>Olá <strong>${genericData.participantName}</strong>,</p>
+      <p>Olá <strong>${escapeHtml(genericData.participantName)}</strong>,</p>
       <div style="white-space: pre-line;">${sanitizeContent(genericData.message)}</div>
     </div>
     <div class="footer">

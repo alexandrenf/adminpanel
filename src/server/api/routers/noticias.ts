@@ -5,7 +5,7 @@ import fetch from 'node-fetch';
 import { env } from "~/env";
 import { algoliasearch } from 'algoliasearch';
 
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
+const GITHUB_TOKEN = env.GITHUB_TOKEN;
 const REPO_OWNER = "ifmsabrazil";
 const REPO_NAME = "dataifmsabrazil";
 

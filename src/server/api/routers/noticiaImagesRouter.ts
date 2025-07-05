@@ -5,7 +5,7 @@ import fetch from 'node-fetch';
 import { env } from "~/env";
 import crypto from 'crypto';
 
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
+const GITHUB_TOKEN = env.GITHUB_TOKEN;
 const REPO_OWNER = "ifmsabrazil";
 const REPO_NAME = "dataifmsabrazil";
 
@@ -252,14 +252,102 @@ const deleteFileFromGitHub = async (filePath: string, maxRetries: number = 3) =>
     }
 };
 
+// Constants for file validation
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB max file size
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+
+// Helper function to validate uploaded image
+const validateImageUpload = (base64String: string, originalFilename: string, fileSize?: number, mimeType?: string): void => {
+    // Validate filename
+    const extension = originalFilename.split('.').pop()?.toLowerCase();
+    if (!extension || !ALLOWED_EXTENSIONS.includes(`.${extension}`)) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Invalid file extension. Allowed extensions: ${ALLOWED_EXTENSIONS.join(', ')}`,
+        });
+    }
+    
+    // Validate mime type if provided
+    if (mimeType && !ALLOWED_IMAGE_TYPES.includes(mimeType)) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Invalid file type. Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+        });
+    }
+    
+    // Validate base64
+    let buffer: Buffer;
+    try {
+        // Check if it's a data URL or raw base64
+        let base64Data: string;
+        if (base64String.startsWith('data:')) {
+            const matches = base64String.match(/^data:([^;]+);base64,(.+)$/);
+            if (!matches) {
+                throw new Error('Invalid data URL format');
+            }
+            // Additional mime type check from data URL
+            const dataUrlMimeType = matches[1];
+            if (!ALLOWED_IMAGE_TYPES.includes(dataUrlMimeType)) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: `Invalid file type in data URL. Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+                });
+            }
+            base64Data = matches[2];
+        } else {
+            base64Data = base64String;
+        }
+        
+        buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: "Invalid base64 image data",
+        });
+    }
+    
+    // Validate file size
+    const calculatedSize = buffer.length;
+    if (calculatedSize > MAX_FILE_SIZE) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `File size (${(calculatedSize / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        });
+    }
+    
+    // If fileSize was provided, validate it matches
+    if (fileSize && Math.abs(fileSize - calculatedSize) > 1000) { // Allow 1KB difference
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: "Provided file size does not match actual file size",
+        });
+    }
+    
+    // Validate image magic numbers
+    const isValidImage = 
+        (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) || // JPEG
+        (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) || // PNG
+        (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) || // GIF
+        (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && 
+         buffer.toString('ascii', 8, 12) === 'WEBP'); // WebP
+    
+    if (!isValidImage) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: "File content does not match a valid image format",
+        });
+    }
+};
+
 export const noticiaImagesRouter = createTRPCRouter({
     // Upload a new image for a noticia
     uploadImage: protectedProcedure
         .input(
             z.object({
-                noticiaId: z.string().min(1, "Noticia ID is required"), 
+                noticiaId: z.string().min(1, "Noticia ID is required").max(100).regex(/^[a-zA-Z0-9-_]+$|^new$/, 'Invalid noticia ID format'), 
                 image: z.string().min(1, "Image data is required"), // base64 image
-                originalFilename: z.string().min(1, "Original filename is required"),
+                originalFilename: z.string().min(1, "Original filename is required").max(255),
                 fileSize: z.number().optional(),
                 mimeType: z.string().optional(),
             })
@@ -267,15 +355,8 @@ export const noticiaImagesRouter = createTRPCRouter({
         .mutation(async ({ ctx, input }) => {
             const { noticiaId, image, originalFilename, fileSize, mimeType } = input;
             
-            // Validate base64 image data
-            try {
-                Buffer.from(image, "base64");
-            } catch (error) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: "Invalid base64 image data",
-                });
-            }
+            // Validate the uploaded image
+            validateImageUpload(image, originalFilename, fileSize, mimeType);
             
             // Generate unique random string for filename
             const randomString = await generateUniqueRandomString(ctx.db);
