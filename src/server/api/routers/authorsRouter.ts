@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import fetch from 'node-fetch';
-import { env } from "~/env";
-
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabrazil";
-const REPO_NAME = "dataifmsabrazil";
+import { githubFetch, buildGithubApiUrl, buildCdnUrl } from "~/server/githubClient";
 
 export const authorsRouter = createTRPCRouter({
   // Get all authors
@@ -207,18 +202,14 @@ export const authorsRouter = createTRPCRouter({
       const { authorId, image } = input;
       
       const imageFilename = `photo_${new Date().getTime()}.png`;
-      const GITHUB_API_URL_IMAGE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/authors/${authorId}/${imageFilename}`;
+      const GITHUB_API_URL_IMAGE = buildGithubApiUrl(`authors/${authorId}/${imageFilename}`);
       
       const imageContent = Buffer.from(image, "base64").toString("base64");
       
       try {
         // Upload the image file to GitHub
-        const imageResponse = await fetch(GITHUB_API_URL_IMAGE, {
+        const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE, {
           method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({
             message: `Add author photo for ${authorId}`,
             content: imageContent,
@@ -238,7 +229,7 @@ export const authorsRouter = createTRPCRouter({
           });
         }
 
-        const photoUrl = `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}/authors/${authorId}/${imageFilename}`;
+        const photoUrl = buildCdnUrl(`authors/${authorId}/${imageFilename}`);
         
         // Update the author's photoLink in the database
         await ctx.db.author.update({

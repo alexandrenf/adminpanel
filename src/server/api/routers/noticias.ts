@@ -5,10 +5,6 @@ import fetch from 'node-fetch';
 import { env } from "~/env";
 import { algoliasearch } from 'algoliasearch';
 
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabrazil";
-const REPO_NAME = "dataifmsabrazil";
-
 // Algolia client setup
 const client = algoliasearch(env.ALGOLIA_APPLICATION_ID, env.ALGOLIA_API_KEY);
 const NOTICIAS_INDEX = 'noticias_index';

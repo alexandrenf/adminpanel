@@ -1,13 +1,9 @@
 import { z } from "zod";
 import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import fetch from 'node-fetch';
-import { env } from "~/env";
+import { githubFetch } from "~/server/githubClient";
 import { image } from "@uiw/react-md-editor";
 
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabrazil";
-const REPO_NAME = "dataifmsabrazil";
 const PLACEHOLDER_IMAGE_URL = "https://placehold.co/400";
 
 // Define a type for the GitHub API response
@@ -18,11 +14,8 @@ interface GitHubFileResponse {
 }
 
 const fetchFileContent = async (url: string) => {
-    const response = await fetch(url, {
-        headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-        },
+    const response = await githubFetch(url, {
+        method: "GET",
     });
 
     if (!response.ok) {
@@ -50,12 +43,8 @@ const deleteOldFile = async (url: string) => {
             return;
         }
 
-        const response = await fetch(githubUrl, {
+        const response = await githubFetch(githubUrl, {
             method: "GET",
-            headers: {
-                Authorization: `token ${GITHUB_TOKEN}`,
-                "Content-Type": "application/json",
-            },
         });
 
         if (!response.ok) {
@@ -68,12 +57,8 @@ const deleteOldFile = async (url: string) => {
         }
 
         const data: GitHubFileResponse = await response.json() as GitHubFileResponse;
-        const deleteResponse = await fetch(githubUrl, {
+        const deleteResponse = await githubFetch(githubUrl, {
             method: "DELETE",
-            headers: {
-                Authorization: `token ${GITHUB_TOKEN}`,
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 message: `Delete old file for ${url}`,
                 sha: data.sha,

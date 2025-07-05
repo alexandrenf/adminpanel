@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, ifmsaEmailProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import fetch from "node-fetch";
-import { env } from "~/env";
-
-const GITHUB_TOKEN = env.NEXT_PUBLIC_GITHUB_TOKEN;
-const REPO_OWNER = "ifmsabrazil";
-const REPO_NAME = "dataifmsabrazil";
+import { githubFetch } from "~/server/githubClient";
 
 const deleteFileFromGitHub = async (url: string | null) => {
     if (!url) return;
@@ -27,24 +22,16 @@ const deleteFileFromGitHub = async (url: string | null) => {
     }
 
     // Get the SHA of the file
-    const response = await fetch(githubUrl, {
+    const response = await githubFetch(githubUrl, {
         method: "GET",
-        headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json",
-        },
     });
     const data = response.ok ? await response.json() : null;
     const sha = data ? (data as { sha: string }).sha : null;
 
     if (sha) {
         // Delete the file
-        await fetch(githubUrl, {
+        await githubFetch(githubUrl, {
             method: "DELETE",
-            headers: {
-                Authorization: `token ${GITHUB_TOKEN}`,
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 message: `Delete file for Pessoa Arquivada`,
                 sha,

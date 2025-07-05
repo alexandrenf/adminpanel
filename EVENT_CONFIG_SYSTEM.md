@@ -289,7 +289,7 @@ interface EventConfig {
 - **Authentication**: Requires IFMSA email authentication
 - **Authorization**: Uses `ifmsaEmailProcedure` for all mutations
 - **Input validation**: Comprehensive Zod schema validation
-- **GitHub token**: Securely stored in environment variables
+- **GitHub token**: Securely stored server-side in environment variables (`GITHUB_TOKEN`)
 
 ## Future Enhancements
 
@@ -320,7 +320,7 @@ interface EventConfig {
 - Check browser console for errors
 
 **2. GitHub content upload failing**
-- Verify `NEXT_PUBLIC_GITHUB_TOKEN` environment variable
+- Verify `GITHUB_TOKEN` environment variable (server-side)
 - Check GitHub repository permissions
 - Ensure repository exists and is accessible
 
