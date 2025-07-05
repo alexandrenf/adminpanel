@@ -338,7 +338,7 @@ export const fileRouter = createTRPCRouter({
     .input(z.object({
       id: z.string().min(1),
       markdown: z.string().min(1),
-      image: z.string().nullable(), // Expecting base64 string or null
+      image: z.string().nullable(),
       contentLink: z.string().url().min(1),
       imageLink: z.string().url().min(1),
     }))
@@ -353,181 +353,173 @@ export const fileRouter = createTRPCRouter({
       const fileContent = Buffer.from(markdown).toString("base64");
       const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
 
+      const tempMarkdownFilename = `temp_content_${Date.now()}.md`;
+      const tempImageFilename = imageContent ? `temp_cover_${Date.now()}.png` : null;
+
+      let tempMarkdownUrl: string | null = null;
+      let tempImageUrl: string | null = null;
+
       try {
-        console.log(`Starting update for noticia ${id}`);
-        
-        // Handle edit.txt to keep track of edit count
-        let editCount = 1;
-        const editSha = await getFileShaIfExists(GITHUB_API_URL_EDIT);
+        // Phase 1: Upload new files with temporary names
+        console.log(`Starting phase 1: Uploading temporary files for noticia ${id}`);
 
-        if (editSha) {
-          try {
-            const existingEditFile = await fetchFileContent(GITHUB_API_URL_EDIT);
-            editCount = parseInt(Buffer.from(existingEditFile.content ?? '', 'base64').toString('utf-8'), 10) + 1;
-            console.log(`Current edit count: ${editCount - 1}, new count will be: ${editCount}`);
-          } catch (error) {
-            console.log("Edit file exists but couldn't parse content, using count 1.");
-          }
-        } else {
-          console.log("Edit file not found, creating a new one with count 1.");
-        }
-
-        const markdownFilename = `content_${editCount}.md`;
-        const imageFilename = imageContent ? `cover_${editCount}.png` : null;
-
-        console.log(`Creating new files: ${markdownFilename}${imageFilename ? `, ${imageFilename}` : ''}`);
-
-                 // Upload the new markdown file first
-         const newMarkdownRequestBody = createUploadRequestBody(
-           COMMIT_MESSAGE,
-           fileContent
-         );
-
-         const markdownResponse = await githubFetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
-           method: "PUT",
-           body: JSON.stringify(newMarkdownRequestBody),
-         });
+        const markdownResponse = await githubFetch(GITHUB_API_URL_MARKDOWN(tempMarkdownFilename), {
+          method: "PUT",
+          body: JSON.stringify(createUploadRequestBody(COMMIT_MESSAGE, fileContent))
+        });
 
         if (!markdownResponse.ok) {
-          const markdownResponseData = await markdownResponse.text();
-          console.error("Markdown response error:", markdownResponseData);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: `Failed to upload new markdown file: ${markdownResponse.status}`,
-          });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to upload temporary markdown file.' });
         }
+        tempMarkdownUrl = GITHUB_API_URL_MARKDOWN(tempMarkdownFilename);
+        console.log(`Successfully uploaded temporary markdown file: ${tempMarkdownFilename}`);
 
-        console.log(`Successfully uploaded new markdown file: ${markdownFilename}`);
-
-        let imageUrl = imageLink;
-        let newImageUploaded = false;
-
-        if (imageContent) {
-                     // Upload the new image file
-           const newImageRequestBody = createUploadRequestBody(
-             `Update image for ${id}`,
-             imageContent
-           );
-
-           const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
-             method: "PUT",
-             body: JSON.stringify(newImageRequestBody),
-           });
+        if (imageContent && tempImageFilename) {
+          const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE(tempImageFilename), {
+            method: "PUT",
+            body: JSON.stringify(createUploadRequestBody(`Update image for ${id}`, imageContent))
+          });
 
           if (!imageResponse.ok) {
-            const imageResponseData = await imageResponse.text();
-            console.error("Image response error:", imageResponseData);
-                         // Try to clean up the markdown file we just created
-             try {
-               const newMarkdownUrl = `https://api.github.com/repos/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/contents/noticias/${id}/${markdownFilename}`;
-               const markdownShaToDelete = await getFileShaIfExists(newMarkdownUrl);
-               
-               if (markdownShaToDelete) {
-                 const cleanupRequestBody = createUploadRequestBody(
-                   `Cleanup: Delete failed markdown upload for ${id}`,
-                   "", // Empty content for delete operation (though content isn't used for DELETE)
-                   markdownShaToDelete
-                 );
-                 
-                 await githubFetch(newMarkdownUrl, {
-                   method: "DELETE",
-                   body: JSON.stringify({
-                     message: cleanupRequestBody.message,
-                     sha: cleanupRequestBody.sha,
-                     committer: cleanupRequestBody.committer,
-                   }),
-                 });
-               }
-             } catch (cleanupError) {
-               console.error("Failed to cleanup markdown file after image upload failure:", cleanupError);
-             }
-            
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: `Failed to upload new image file: ${imageResponse.status}`,
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to upload temporary image file.' });
+          }
+          tempImageUrl = GITHUB_API_URL_IMAGE(tempImageFilename);
+          console.log(`Successfully uploaded temporary image file: ${tempImageFilename}`);
+        }
+
+        // Phase 2: Verify temporary files are accessible
+        console.log("Starting phase 2: Verifying temporary files");
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for CDN propagation
+
+        const markdownCdnUrl = buildCdnUrl(`noticias/${id}/${tempMarkdownFilename}`);
+        const isMarkdownVerified = await verifyFileExists(markdownCdnUrl);
+        if (!isMarkdownVerified) {
+          console.error(`Failed to verify temporary markdown file at ${markdownCdnUrl}`);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Could not verify temporary markdown file.' });
+        }
+
+        let imageCdnUrl: string | null = null;
+        if (tempImageUrl && tempImageFilename) {
+          imageCdnUrl = buildCdnUrl(`noticias/${id}/${tempImageFilename}`);
+          const isImageVerified = await verifyFileExists(imageCdnUrl);
+          if (!isImageVerified) {
+            console.error(`Failed to verify temporary image file at ${imageCdnUrl}`);
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Could not verify temporary image file.' });
+          }
+        }
+
+        // Phase 3: Delete old files and rename temporary files
+        console.log("Starting phase 3: Deleting old files and renaming temporary ones");
+
+        // Delete old markdown
+        const oldMarkdownDeleted = await deleteOldFile(contentLink);
+        if (!oldMarkdownDeleted) {
+          console.warn("Could not delete old markdown file, but proceeding.");
+        }
+
+        // Delete old image if a new one was uploaded
+        if (imageContent && imageLink !== PLACEHOLDER_IMAGE_URL) {
+          const oldImageDeleted = await deleteOldFile(imageLink);
+          if (!oldImageDeleted) {
+            console.warn("Could not delete old image file, but proceeding.");
+          }
+        }
+
+        // Rename by creating new files with final names and deleting temporary ones
+        const finalMarkdownFilename = 'content.md';
+        const finalImageFilename = imageContent ? 'cover.png' : null;
+
+        const finalMarkdownSha = await getFileShaIfExists(GITHUB_API_URL_MARKDOWN(finalMarkdownFilename));
+        const renameMarkdownResponse = await githubFetch(GITHUB_API_URL_MARKDOWN(finalMarkdownFilename), {
+            method: "PUT",
+            body: JSON.stringify(createUploadRequestBody(COMMIT_MESSAGE, fileContent, finalMarkdownSha))
+        });
+        if (!renameMarkdownResponse.ok) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create final markdown file.' });
+        }
+
+        let finalImageUrl = imageLink;
+        if (imageContent && finalImageFilename) {
+            const finalImageSha = await getFileShaIfExists(GITHUB_API_URL_IMAGE(finalImageFilename));
+            const renameImageResponse = await githubFetch(GITHUB_API_URL_IMAGE(finalImageFilename), {
+                method: "PUT",
+                body: JSON.stringify(createUploadRequestBody(`Update image for ${id}`, imageContent, finalImageSha))
             });
-          }
-
-          imageUrl = `https://cdn.jsdelivr.net/gh/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/noticias/${id}/${imageFilename}`;
-          newImageUploaded = true;
-          console.log(`Successfully uploaded new image file: ${imageFilename}`);
+            if (!renameImageResponse.ok) {
+                throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create final image file.' });
+            }
+            finalImageUrl = buildCdnUrl(`noticias/${id}/${finalImageFilename}`);
         }
 
-                 // Update the edit.txt file with the new edit count
-         const editRequestBody = createUploadRequestBody(
-           `Update edit count for ${id}`,
-           Buffer.from(editCount.toString()).toString("base64"),
-           editSha
-         );
-
-         const editFileResponse = await githubFetch(GITHUB_API_URL_EDIT, {
-           method: "PUT",
-           body: JSON.stringify(editRequestBody),
-         });
-
-        if (!editFileResponse.ok) {
-          const editFileResponseData = await editFileResponse.text();
-          console.error("Edit file response error:", editFileResponseData);
-          // This is not critical enough to fail the whole operation
-          console.warn("Failed to update edit count, but continuing with file operations");
-        } else {
-          console.log(`Successfully updated edit count to: ${editCount}`);
+        // Final step: update edit count
+        const editSha = await getFileShaIfExists(GITHUB_API_URL_EDIT);
+        let editCount = 1;
+        if (editSha) {
+            try {
+                const existingEditFile = await fetchFileContent(GITHUB_API_URL_EDIT);
+                editCount = parseInt(Buffer.from(existingEditFile.content ?? '', 'base64').toString('utf-8'), 10) + 1;
+            } catch (e) { /* Ignore */ }
         }
-
-        // Verify new files exist before deleting old ones
-        const newMarkdownUrl = `https://cdn.jsdelivr.net/gh/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/noticias/${id}/${markdownFilename}`;
-        console.log("Verifying new markdown file exists...");
-        
-        // Wait a bit for CDN to update
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        const markdownExists = await verifyFileExists(newMarkdownUrl);
-        if (!markdownExists) {
-          console.error("New markdown file not accessible via CDN, but continuing...");
-        } else {
-          console.log("New markdown file verified via CDN");
-        }
-
-        if (newImageUploaded) {
-          console.log("Verifying new image file exists...");
-          const imageExists = await verifyFileExists(imageUrl);
-          if (!imageExists) {
-            console.error("New image file not accessible via CDN, but continuing...");
-          } else {
-            console.log("New image file verified via CDN");
-          }
-        }
-
-        // Now try to delete old files
-        console.log("Attempting to delete old files...");
-        
-        // Delete the old image file first (if we uploaded a new one)
-        if (newImageUploaded && imageLink !== PLACEHOLDER_IMAGE_URL) {
-          const imageDeleted = await deleteOldFile(imageLink);
-          if (!imageDeleted) {
-            console.error("Failed to delete old image file, but continuing...");
-          }
-        }
-
-        // Delete the old markdown file
-        const markdownDeleted = await deleteOldFile(contentLink);
-        if (!markdownDeleted) {
-          console.error("Failed to delete old markdown file, but continuing...");
-        }
-
-        console.log(`Update completed for noticia ${id}`);
+        await githubFetch(GITHUB_API_URL_EDIT, {
+            method: "PUT",
+            body: JSON.stringify(createUploadRequestBody(`Update edit count for ${id}`, Buffer.from(editCount.toString()).toString("base64"), editSha))
+        });
 
         return {
-          markdownUrl: newMarkdownUrl,
-          imageUrl,
+          markdownUrl: buildCdnUrl(`noticias/${id}/${finalMarkdownFilename}`),
+          imageUrl: finalImageUrl,
           editCount
         };
+
       } catch (error) {
-        console.error("Error updating file:", error);
+        // Rollback phase
+        console.error("An error occurred during the update process, rolling back...", error);
+
+        if (tempMarkdownUrl) {
+          console.log(`Attempting to delete temporary markdown file: ${tempMarkdownUrl}`);
+          const tempMarkdownSha = await getFileShaIfExists(tempMarkdownUrl);
+          if (tempMarkdownSha) {
+            await githubFetch(tempMarkdownUrl, { 
+                method: 'DELETE', 
+                body: JSON.stringify({ message: 'Rollback: delete temp markdown', sha: tempMarkdownSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
+            });
+          }
+        }
+        if (tempImageUrl) {
+          console.log(`Attempting to delete temporary image file: ${tempImageUrl}`);
+          const tempImageSha = await getFileShaIfExists(tempImageUrl);
+          if (tempImageSha) {
+            await githubFetch(tempImageUrl, { 
+                method: 'DELETE', 
+                body: JSON.stringify({ message: 'Rollback: delete temp image', sha: tempImageSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
+            });
+          }
+        }
+
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Error updating file: ${error instanceof Error ? error.message : 'Unknown error'}`,
         });
+      } finally {
+        // Cleanup temporary files that might be left if rename succeeded but something else failed
+        if (tempMarkdownUrl) {
+            const tempMarkdownSha = await getFileShaIfExists(tempMarkdownUrl);
+            if (tempMarkdownSha) {
+                await githubFetch(tempMarkdownUrl, { 
+                    method: 'DELETE', 
+                    body: JSON.stringify({ message: 'Cleanup: delete temp markdown', sha: tempMarkdownSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
+                });
+            }
+        }
+        if (tempImageUrl) {
+            const tempImageSha = await getFileShaIfExists(tempImageUrl);
+            if (tempImageSha) {
+                await githubFetch(tempImageUrl, { 
+                    method: 'DELETE', 
+                    body: JSON.stringify({ message: 'Cleanup: delete temp image', sha: tempImageSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
+                });
+            }
+        }
       }
-    }),
+    })
 });
