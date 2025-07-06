@@ -237,7 +237,7 @@ Detalhes:
 - Datas: ${approvedData.assemblyDates}
 - Modalidade: ${approvedData.modalityName}
 
-${approvedData.paymentAmount !== undefined && approvedData.paymentAmount !== null || approvedData.isPaymentExempt ? `
+${((approvedData.paymentAmount !== undefined && approvedData.paymentAmount !== null && approvedData.paymentAmount > 0) || approvedData.isPaymentExempt) ? `
 ${approvedData.isPaymentExempt ? `
 PAGAMENTO: Isento de Pagamento
 ${approvedData.paymentExemptReason ? `Motivo: ${approvedData.paymentExemptReason}` : ''}
@@ -261,7 +261,10 @@ Nos vemos na assembleia!
 Atenciosamente,
 Equipe IFMSA Brazil
         `,
-        html: generateEmailHtml('registration-approved', approvedData)
+        html: generateEmailHtml('registration-approved', {
+          ...approvedData,
+          hasPayment: (approvedData.paymentAmount !== undefined && approvedData.paymentAmount !== null && approvedData.paymentAmount > 0) || approvedData.isPaymentExempt
+        })
       };
     }
 

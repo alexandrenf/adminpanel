@@ -25,7 +25,12 @@
 <div class="payment-section">
   <h3>💳 Informações de Pagamento</h3>
   {{#if paymentUrl}}
-  <a href="{{paymentUrl}}" class="action-button">Realizar Pagamento</a>
+  <a href="{{paymentUrl}}" class="action-button" target="_blank" rel="noopener">
+    Realizar Pagamento
+  </a>
+  <p style="font-size:12px;color:#666;">
+    Caso o botão não funcione, copie e cole este link no seu navegador: {{paymentUrl}}
+  </p>
   {{/if}}
   
   {{#if pixKey}}

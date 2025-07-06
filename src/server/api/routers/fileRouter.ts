@@ -371,8 +371,27 @@ export const fileRouter = createTRPCRouter({
       const imageFilename = imageContent ? `cover_${editCount}.png` : null;
 
       let uploadedMarkdownPath: string | null = null;
+      let uploadedImagePath: string | null = null;
+      let editCountUpdated = false;
 
       try {
+        // Update edit count first to ensure version tracking consistency
+        console.log(`Updating edit count to ${editCount} for ${id}`);
+        try {
+          const editCountResponse = await githubFetch(GITHUB_API_URL_EDIT, {
+            method: "PUT",
+            body: JSON.stringify(createUploadRequestBody(`Update edit count for ${id}`, Buffer.from(editCount.toString()).toString("base64"), editSha))
+          });
+
+          if (!editCountResponse.ok) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to update edit count: ${editCountResponse.status}` });
+          }
+          editCountUpdated = true;
+        } catch (editCountError) {
+          console.error("Failed to update edit count:", editCountError);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to update edit count: ${editCountError instanceof Error ? editCountError.message : 'Unknown error'}` });
+        }
+
         console.log(`Uploading new versioned files: ${markdownFilename}${imageFilename ? `, ${imageFilename}` : ''}`);
 
         const markdownResponse = await githubFetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
@@ -396,14 +415,9 @@ export const fileRouter = createTRPCRouter({
             // If image upload fails, roll back the markdown upload.
             throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to upload new image file: ${imageFilename}` });
           }
+          uploadedImagePath = GITHUB_API_URL_IMAGE(imageFilename);
           imageUrl = buildCdnUrl(`noticias/${id}/${imageFilename}`);
         }
-
-        // After successful uploads, update the edit count.
-        await githubFetch(GITHUB_API_URL_EDIT, {
-          method: "PUT",
-          body: JSON.stringify(createUploadRequestBody(`Update edit count for ${id}`, Buffer.from(editCount.toString()).toString("base64"), editSha))
-        });
 
         // Asynchronously delete old files. Failure here is logged but doesn't fail the operation.
         deleteOldFile(contentLink).catch(e => console.error("Failed to delete old markdown file in background", e));
@@ -420,14 +434,51 @@ export const fileRouter = createTRPCRouter({
       } catch (error) {
         console.error("An error occurred during the update process, attempting rollback...", error);
 
+        // Rollback uploaded files in reverse order (image first, then markdown)
+        if (uploadedImagePath) {
+          console.log(`Rolling back image upload: ${uploadedImagePath}`);
+          const imageSha = await getFileShaIfExists(uploadedImagePath);
+          if (imageSha) {
+            try {
+              await githubFetch(uploadedImagePath, { 
+                  method: 'DELETE', 
+                  body: JSON.stringify({ message: 'Rollback: delete failed update', sha: imageSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
+              });
+            } catch (cleanupError) {
+              console.error(`Failed to cleanup rollback file: ${uploadedImagePath}`, cleanupError);
+            }
+          }
+        }
+
         if (uploadedMarkdownPath) {
           console.log(`Rolling back markdown upload: ${uploadedMarkdownPath}`);
           const markdownSha = await getFileShaIfExists(uploadedMarkdownPath);
           if (markdownSha) {
-            await githubFetch(uploadedMarkdownPath, { 
-                method: 'DELETE', 
-                body: JSON.stringify({ message: 'Rollback: delete failed update', sha: markdownSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
-            }).catch(e => console.error("Failed to rollback markdown upload", e));
+            try {
+              await githubFetch(uploadedMarkdownPath, { 
+                  method: 'DELETE', 
+                  body: JSON.stringify({ message: 'Rollback: delete failed update', sha: markdownSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
+              });
+            } catch (cleanupError) {
+              console.error(`Failed to cleanup rollback file: ${uploadedMarkdownPath}`, cleanupError);
+            }
+          }
+        }
+
+        // Rollback edit count if it was updated
+        if (editCountUpdated) {
+          console.log(`Rolling back edit count for ${id}`);
+          try {
+            const rollbackEditCount = editCount - 1;
+            const currentEditSha = await getFileShaIfExists(GITHUB_API_URL_EDIT);
+            if (currentEditSha) {
+              await githubFetch(GITHUB_API_URL_EDIT, {
+                method: "PUT",
+                body: JSON.stringify(createUploadRequestBody(`Rollback edit count for ${id}`, Buffer.from(rollbackEditCount.toString()).toString("base64"), currentEditSha))
+              });
+            }
+          } catch (editCountRollbackError) {
+            console.error(`Failed to rollback edit count for ${id}:`, editCountRollbackError);
           }
         }
 
