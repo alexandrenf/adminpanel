@@ -3,7 +3,7 @@
 import nodemailer from 'nodemailer';
 import sanitizeHtml from 'sanitize-html';
 import { env } from '~/env.js';
-import { generateEmailHtml } from '../../lib/emailTemplateLoader';
+import { generateEmailHtml, formatCurrency } from '../../lib/emailTemplateLoader';
 
 // Email types for different scenarios
 export type EmailType = 
@@ -186,7 +186,7 @@ function generateEmailContent(emailData: EmailData): { subject: string; text: st
   const baseUrl = env.NEXTAUTH_URL;
   
   switch (emailData.type) {
-    case 'registration_confirmation':
+    case 'registration_confirmation': {
       const confirmData = emailData.data;
       return {
         subject: `✅ Confirmação de Inscrição - ${confirmData.assemblyName}`,
@@ -207,7 +207,7 @@ ${confirmData.isPaymentExempt ? `
 PAGAMENTO: Isento de Pagamento
 ${confirmData.paymentExemptReason ? `Motivo: ${confirmData.paymentExemptReason}` : ''}
 ` : `
-PAGAMENTO: ${confirmData.paymentAmount ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(confirmData.paymentAmount) : 'N/A'}
+PAGAMENTO: ${confirmData.paymentAmount !== undefined && confirmData.paymentAmount !== null ? formatCurrency(confirmData.paymentAmount) : 'N/A'}
 Status: Pagamento Necessário
 `}
 ` : 'Sua inscrição será analisada em breve.'}
@@ -219,8 +219,9 @@ Equipe IFMSA Brazil
         `,
         html: generateEmailHtml('registration-confirmation', confirmData)
       };
+    }
 
-    case 'registration_approved':
+    case 'registration_approved': {
       const approvedData = emailData.data;
       return {
         subject: `🎉 Inscrição Aprovada - ${approvedData.assemblyName}`,
@@ -236,12 +237,12 @@ Detalhes:
 - Datas: ${approvedData.assemblyDates}
 - Modalidade: ${approvedData.modalityName}
 
-${approvedData.paymentAmount || approvedData.isPaymentExempt ? `
+${approvedData.paymentAmount !== undefined && approvedData.paymentAmount !== null || approvedData.isPaymentExempt ? `
 ${approvedData.isPaymentExempt ? `
 PAGAMENTO: Isento de Pagamento
 ${approvedData.paymentExemptReason ? `Motivo: ${approvedData.paymentExemptReason}` : ''}
 ` : `
-PAGAMENTO: ${approvedData.paymentAmount ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(approvedData.paymentAmount) : 'N/A'}
+PAGAMENTO: ${approvedData.paymentAmount !== undefined && approvedData.paymentAmount !== null ? formatCurrency(approvedData.paymentAmount) : 'N/A'}
 Status: Pagamento Confirmado
 `}
 ` : ''}
@@ -262,8 +263,9 @@ Equipe IFMSA Brazil
         `,
         html: generateEmailHtml('registration-approved', approvedData)
       };
+    }
 
-    case 'registration_rejected':
+    case 'registration_rejected': {
       const rejectedData = emailData.data;
       return {
         subject: `❌ Inscrição Rejeitada - ${rejectedData.assemblyName}`,
@@ -290,8 +292,9 @@ Equipe IFMSA Brazil
         `,
         html: generateEmailHtml('registration-rejected', rejectedData)
       };
+    }
 
-    case 'payment_reminder':
+    case 'payment_reminder': {
       const reminderData = emailData.data;
       return {
         subject: `💳 Lembrete de Pagamento - ${reminderData.assemblyName}`,
@@ -303,7 +306,7 @@ Este é um lembrete sobre o pagamento pendente para ${reminderData.assemblyName}
 Detalhes:
 - ID da Inscrição: ${reminderData.registrationId}
 - Assembleia: ${reminderData.assemblyName}
-- Valor: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(reminderData.paymentAmount)}
+- Valor: ${formatCurrency(reminderData.paymentAmount)}
 - Prazo: ${reminderData.paymentDeadline}
 
 Link para pagamento: ${reminderData.paymentUrl}
@@ -316,8 +319,9 @@ Equipe IFMSA Brazil
         `,
         html: generateEmailHtml('payment-reminder', reminderData)
       };
+    }
 
-    case 'payment_confirmation':
+    case 'payment_confirmation': {
       const confirmationData = emailData.data;
       return {
         subject: `✅ Pagamento Confirmado - ${confirmationData.assemblyName}`,
@@ -329,7 +333,7 @@ Seu pagamento para ${confirmationData.assemblyName} foi confirmado!
 Detalhes:
 - ID da Inscrição: ${confirmationData.registrationId}
 - Assembleia: ${confirmationData.assemblyName}
-- Valor Pago: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(confirmationData.paymentAmount)}
+- Valor Pago: ${formatCurrency(confirmationData.paymentAmount)}
 - Data do Pagamento: ${confirmationData.paymentDate}
 ${confirmationData.receiptNumber ? `- Número do Recibo: ${confirmationData.receiptNumber}` : ''}
 
@@ -340,8 +344,9 @@ Equipe IFMSA Brazil
         `,
         html: generateEmailHtml('payment-confirmation', confirmationData)
       };
+    }
 
-    case 'resubmission_request':
+    case 'resubmission_request': {
       const resubmissionData = emailData.data;
       return {
         subject: `🔄 Solicitação de Reenvio - ${resubmissionData.assemblyName}`,
@@ -364,9 +369,15 @@ Equipe IFMSA Brazil
         `,
         html: generateEmailHtml('resubmission-request', resubmissionData)
       };
+    }
 
-    case 'generic':
+    case 'generic': {
       const genericData = emailData.data;
+      // Sanitize htmlMessage to prevent XSS vulnerabilities
+      const sanitizedGenericData = {
+        ...genericData,
+        htmlMessage: genericData.htmlMessage ? sanitizeContent(genericData.htmlMessage) : genericData.htmlMessage
+      };
       return {
         subject: genericData.subject,
         text: `
@@ -377,8 +388,9 @@ ${genericData.message}
 Atenciosamente,
 Equipe IFMSA Brazil
         `,
-        html: generateEmailHtml('generic', genericData)
+        html: generateEmailHtml('generic', sanitizedGenericData)
       };
+    }
 
     default:
       // This should never happen with TypeScript, but just in case

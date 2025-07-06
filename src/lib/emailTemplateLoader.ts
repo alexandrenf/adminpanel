@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 interface TemplateData {
   [key: string]: any;
@@ -24,7 +25,13 @@ interface TemplateConfig {
   headerTextColor: string;
 }
 
-const TEMPLATES_DIR = join(process.cwd(), 'src', 'templates', 'email');
+// Get the current module directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Use environment variable if set, otherwise resolve relative to current module
+const TEMPLATES_DIR = process.env.EMAIL_TEMPLATES_DIR || 
+  join(__dirname, '..', 'templates', 'email');
 
 // Simple template engine for replacing placeholders
 function processTemplate(template: string, data: TemplateData): string {
@@ -48,18 +55,18 @@ function processTemplate(template: string, data: TemplateData): string {
     return String(value);
   });
   
-  // Process conditional blocks {{#if condition}}...{{/if}}
-  processed = processed.replace(/\{\{#if ([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, condition, content) => {
-    const value = data[condition];
-    const isTrue = value && value !== false && value !== 0 && value !== '';
-    return isTrue ? content : '';
-  });
-  
-  // Process conditional blocks with else {{#if condition}}...{{else}}...{{/if}}
+  // Process conditional blocks with else {{#if condition}}...{{else}}...{{/if}} FIRST
   processed = processed.replace(/\{\{#if ([^}]+)\}\}([\s\S]*?)\{\{else\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, condition, ifContent, elseContent) => {
     const value = data[condition];
     const isTrue = value && value !== false && value !== 0 && value !== '';
     return isTrue ? ifContent : elseContent;
+  });
+  
+  // Process conditional blocks {{#if condition}}...{{/if}} AFTER else blocks
+  processed = processed.replace(/\{\{#if ([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, condition, content) => {
+    const value = data[condition];
+    const isTrue = value && value !== false && value !== 0 && value !== '';
+    return isTrue ? content : '';
   });
   
   return processed;
@@ -179,7 +186,18 @@ function getTemplateConfig(templateName: string, data: TemplateData): TemplateCo
     }
   };
   
-  return configs[templateName] || configs['generic']!;
+  // Check if the specific template config exists
+  if (configs[templateName]) {
+    return configs[templateName];
+  }
+  
+  // Check if the generic fallback exists
+  if (configs['generic']) {
+    return configs['generic'];
+  }
+  
+  // If neither exists, throw a controlled error
+  throw new Error(`Email template configuration not found for '${templateName}' and no generic fallback available`);
 }
 
 export function formatCurrency(amount: number | undefined): string {

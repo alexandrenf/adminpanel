@@ -2,23 +2,6 @@
 
 ## Performance Issues
 
-### 5. Inefficient Database Queries (N+1 Problem)
-**Title:** N+1 Query Pattern in Multiple Routers
-**Location:** Various router files, notably in `src/server/api/routers/crRouter.ts`
-**Description:** Many API endpoints fetch related data using separate queries instead of using Prisma's include/select features for eager loading.
-**Impact:** Significant performance degradation as data grows, especially noticeable in list views that fetch related data for each item.
-**Recommendation:** Use Prisma's `include` and `select` options to fetch related data in a single query. Implement query result caching where appropriate.
-**Severity/Priority:** MEDIUM / P2
-
-### 6. Large Bundle Size Due to Email Templates ✅ FIXED
-**Title:** Massive Email Template HTML in JavaScript Bundle
-**Location:** `src/app/actions/sendEmail.ts`, lines 136-1538
-**Description:** The email templates contain over 1400 lines of inline HTML within the JavaScript code, significantly increasing bundle size.
-**Impact:** Slower initial page load, increased bandwidth usage, poor performance on slower connections.
-**Recommendation:** Move email templates to separate HTML files or use a templating engine. Load templates dynamically on the server side only when needed.
-**Severity/Priority:** MEDIUM / P2
-**Status:** IMPLEMENTED - Created template system with base template and individual email templates. Template loader utility created for dynamic server-side loading. See `ISSUE_6_IMPLEMENTATION.md` for details.
-
 ### 7. Missing Database Connection Pooling Configuration
 **Title:** Suboptimal Database Connection Management
 **Location:** `src/server/db.ts`
@@ -55,15 +38,6 @@
 
 ## Error Handling & Resilience Issues
 
-### 11. Insufficient Error Handling in API Calls ✅ FIXED
-**Title:** Missing Error Recovery Mechanisms
-**Location:** `src/server/api/routers/fileRouter.ts`, GitHub API interactions
-**Description:** Many external API calls lack proper error handling, retry logic, or graceful degradation.
-**Impact:** Application crashes or undefined behavior when external services are unavailable. Poor user experience during network issues.
-**Recommendation:** Implement comprehensive error handling with retry logic, circuit breakers, and user-friendly error messages. Add fallback behaviors for external service failures.
-**Severity/Priority:** MEDIUM / P2
-**Status:** IMPLEMENTED - Enhanced the `githubFetch` function in `src/server/githubClient.ts` to include automatic retries with exponential backoff for failed GitHub API requests. This improves the resilience of all features relying on GitHub interactions, such as file uploads and deletions in `fileRouter.ts`.
-
 ### 12. No Rate Limiting on Public Endpoints
 **Title:** Missing Rate Limiting Protection
 **Location:** API routes in `src/app/api/`
@@ -84,12 +58,12 @@
 
 ### 14. Orphaned Files in GitHub Storage ✅ FIXED
 **Title:** No Cleanup Mechanism for Deleted Content
-**Location:** Various delete operations in routers
+**Location:** `src/server/api/routers/fileRouter.ts`
 **Description:** When database records are deleted, associated files in GitHub storage may fail to delete but the database operation continues, creating orphaned files.
 **Impact:** Storage bloat, potential security issues with orphaned sensitive files, inconsistent state.
 **Recommendation:** Implement a two-phase delete with rollback capability, or create a cleanup job that periodically removes orphaned files. Log all failed deletions for manual cleanup.
 **Severity/Priority:** LOW / P3
-**Status:** IMPLEMENTED - Refactored the `updateFile` mutation in `src/server/api/routers/fileRouter.ts` to use a two-phase commit with rollback. New files are uploaded to temporary locations, verified, and then old files are deleted and temporary files are renamed. If any step fails, the operation is rolled back by deleting the temporary files, thus preventing orphaned files.
+**Status:** IMPLEMENTED - Refactored the `updateFile` mutation in `src/server/api/routers/fileRouter.ts` to be more robust. The new implementation preserves the existing file versioning system while adding rollback logic. If an image upload fails after a successful markdown upload, the markdown file is deleted to prevent an inconsistent state for the new version. Deletion of old files is now handled asynchronously and logged as a warning on failure, preventing the main operation from failing.
 
 ## Security Best Practices
 
