@@ -353,181 +353,139 @@ export const fileRouter = createTRPCRouter({
       const fileContent = Buffer.from(markdown).toString("base64");
       const imageContent = image ? Buffer.from(image, "base64").toString("base64") : null;
 
-      try {
-        console.log(`Starting update for noticia ${id}`);
-        
-        // Handle edit.txt to keep track of edit count
-        let editCount = 1;
-        const editSha = await getFileShaIfExists(GITHUB_API_URL_EDIT);
+      let editCount = 1;
+      const editSha = await getFileShaIfExists(GITHUB_API_URL_EDIT);
 
-        if (editSha) {
-          try {
-            const existingEditFile = await fetchFileContent(GITHUB_API_URL_EDIT);
-            editCount = parseInt(Buffer.from(existingEditFile.content ?? '', 'base64').toString('utf-8'), 10) + 1;
-            console.log(`Current edit count: ${editCount - 1}, new count will be: ${editCount}`);
-          } catch (error) {
-            console.log("Edit file exists but couldn't parse content, using count 1.");
+      if (editSha) {
+        try {
+          const existingEditFile = await fetchFileContent(GITHUB_API_URL_EDIT);
+          editCount = parseInt(Buffer.from(existingEditFile.content ?? '', 'base64').toString('utf-8'), 10) + 1;
+        } catch (error) {
+          console.log("Edit file exists but couldn't parse content, using count 1.");
+        }
+      } else {
+        console.log("Edit file not found, creating a new one with count 1.");
+      }
+
+      const markdownFilename = `content_${editCount}.md`;
+      const imageFilename = imageContent ? `cover_${editCount}.png` : null;
+
+      let uploadedMarkdownPath: string | null = null;
+      let uploadedImagePath: string | null = null;
+      let editCountUpdated = false;
+
+      try {
+        // Update edit count first to ensure version tracking consistency
+        console.log(`Updating edit count to ${editCount} for ${id}`);
+        try {
+          const editCountResponse = await githubFetch(GITHUB_API_URL_EDIT, {
+            method: "PUT",
+            body: JSON.stringify(createUploadRequestBody(`Update edit count for ${id}`, Buffer.from(editCount.toString()).toString("base64"), editSha))
+          });
+
+          if (!editCountResponse.ok) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to update edit count: ${editCountResponse.status}` });
           }
-        } else {
-          console.log("Edit file not found, creating a new one with count 1.");
+          editCountUpdated = true;
+        } catch (editCountError) {
+          console.error("Failed to update edit count:", editCountError);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to update edit count: ${editCountError instanceof Error ? editCountError.message : 'Unknown error'}` });
         }
 
-        const markdownFilename = `content_${editCount}.md`;
-        const imageFilename = imageContent ? `cover_${editCount}.png` : null;
+        console.log(`Uploading new versioned files: ${markdownFilename}${imageFilename ? `, ${imageFilename}` : ''}`);
 
-        console.log(`Creating new files: ${markdownFilename}${imageFilename ? `, ${imageFilename}` : ''}`);
-
-                 // Upload the new markdown file first
-         const newMarkdownRequestBody = createUploadRequestBody(
-           COMMIT_MESSAGE,
-           fileContent
-         );
-
-         const markdownResponse = await githubFetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
-           method: "PUT",
-           body: JSON.stringify(newMarkdownRequestBody),
-         });
+        const markdownResponse = await githubFetch(GITHUB_API_URL_MARKDOWN(markdownFilename), {
+          method: "PUT",
+          body: JSON.stringify(createUploadRequestBody(COMMIT_MESSAGE, fileContent))
+        });
 
         if (!markdownResponse.ok) {
-          const markdownResponseData = await markdownResponse.text();
-          console.error("Markdown response error:", markdownResponseData);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: `Failed to upload new markdown file: ${markdownResponse.status}`,
-          });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to upload new markdown file: ${markdownFilename}` });
         }
-
-        console.log(`Successfully uploaded new markdown file: ${markdownFilename}`);
+        uploadedMarkdownPath = GITHUB_API_URL_MARKDOWN(markdownFilename);
 
         let imageUrl = imageLink;
-        let newImageUploaded = false;
-
-        if (imageContent) {
-                     // Upload the new image file
-           const newImageRequestBody = createUploadRequestBody(
-             `Update image for ${id}`,
-             imageContent
-           );
-
-           const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE(imageFilename || ''), {
-             method: "PUT",
-             body: JSON.stringify(newImageRequestBody),
-           });
+        if (imageContent && imageFilename) {
+          const imageResponse = await githubFetch(GITHUB_API_URL_IMAGE(imageFilename), {
+            method: "PUT",
+            body: JSON.stringify(createUploadRequestBody(`Update image for ${id}`, imageContent))
+          });
 
           if (!imageResponse.ok) {
-            const imageResponseData = await imageResponse.text();
-            console.error("Image response error:", imageResponseData);
-                         // Try to clean up the markdown file we just created
-             try {
-               const newMarkdownUrl = `https://api.github.com/repos/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/contents/noticias/${id}/${markdownFilename}`;
-               const markdownShaToDelete = await getFileShaIfExists(newMarkdownUrl);
-               
-               if (markdownShaToDelete) {
-                 const cleanupRequestBody = createUploadRequestBody(
-                   `Cleanup: Delete failed markdown upload for ${id}`,
-                   "", // Empty content for delete operation (though content isn't used for DELETE)
-                   markdownShaToDelete
-                 );
-                 
-                 await githubFetch(newMarkdownUrl, {
-                   method: "DELETE",
-                   body: JSON.stringify({
-                     message: cleanupRequestBody.message,
-                     sha: cleanupRequestBody.sha,
-                     committer: cleanupRequestBody.committer,
-                   }),
-                 });
-               }
-             } catch (cleanupError) {
-               console.error("Failed to cleanup markdown file after image upload failure:", cleanupError);
-             }
-            
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: `Failed to upload new image file: ${imageResponse.status}`,
-            });
+            // If image upload fails, roll back the markdown upload.
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to upload new image file: ${imageFilename}` });
           }
-
-          imageUrl = `https://cdn.jsdelivr.net/gh/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/noticias/${id}/${imageFilename}`;
-          newImageUploaded = true;
-          console.log(`Successfully uploaded new image file: ${imageFilename}`);
+          uploadedImagePath = GITHUB_API_URL_IMAGE(imageFilename);
+          imageUrl = buildCdnUrl(`noticias/${id}/${imageFilename}`);
         }
 
-                 // Update the edit.txt file with the new edit count
-         const editRequestBody = createUploadRequestBody(
-           `Update edit count for ${id}`,
-           Buffer.from(editCount.toString()).toString("base64"),
-           editSha
-         );
-
-         const editFileResponse = await githubFetch(GITHUB_API_URL_EDIT, {
-           method: "PUT",
-           body: JSON.stringify(editRequestBody),
-         });
-
-        if (!editFileResponse.ok) {
-          const editFileResponseData = await editFileResponse.text();
-          console.error("Edit file response error:", editFileResponseData);
-          // This is not critical enough to fail the whole operation
-          console.warn("Failed to update edit count, but continuing with file operations");
-        } else {
-          console.log(`Successfully updated edit count to: ${editCount}`);
+        // Asynchronously delete old files. Failure here is logged but doesn't fail the operation.
+        deleteOldFile(contentLink).catch(e => console.error("Failed to delete old markdown file in background", e));
+        if (imageContent && imageLink !== PLACEHOLDER_IMAGE_URL) {
+          deleteOldFile(imageLink).catch(e => console.error("Failed to delete old image file in background", e));
         }
-
-        // Verify new files exist before deleting old ones
-        const newMarkdownUrl = `https://cdn.jsdelivr.net/gh/${GITHUB_CONFIG.REPO_OWNER}/${GITHUB_CONFIG.REPO_NAME}/noticias/${id}/${markdownFilename}`;
-        console.log("Verifying new markdown file exists...");
-        
-        // Wait a bit for CDN to update
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        const markdownExists = await verifyFileExists(newMarkdownUrl);
-        if (!markdownExists) {
-          console.error("New markdown file not accessible via CDN, but continuing...");
-        } else {
-          console.log("New markdown file verified via CDN");
-        }
-
-        if (newImageUploaded) {
-          console.log("Verifying new image file exists...");
-          const imageExists = await verifyFileExists(imageUrl);
-          if (!imageExists) {
-            console.error("New image file not accessible via CDN, but continuing...");
-          } else {
-            console.log("New image file verified via CDN");
-          }
-        }
-
-        // Now try to delete old files
-        console.log("Attempting to delete old files...");
-        
-        // Delete the old image file first (if we uploaded a new one)
-        if (newImageUploaded && imageLink !== PLACEHOLDER_IMAGE_URL) {
-          const imageDeleted = await deleteOldFile(imageLink);
-          if (!imageDeleted) {
-            console.error("Failed to delete old image file, but continuing...");
-          }
-        }
-
-        // Delete the old markdown file
-        const markdownDeleted = await deleteOldFile(contentLink);
-        if (!markdownDeleted) {
-          console.error("Failed to delete old markdown file, but continuing...");
-        }
-
-        console.log(`Update completed for noticia ${id}`);
 
         return {
-          markdownUrl: newMarkdownUrl,
+          markdownUrl: buildCdnUrl(`noticias/${id}/${markdownFilename}`),
           imageUrl,
           editCount
         };
+
       } catch (error) {
-        console.error("Error updating file:", error);
+        console.error("An error occurred during the update process, attempting rollback...", error);
+
+        // Rollback uploaded files in reverse order (image first, then markdown)
+        if (uploadedImagePath) {
+          console.log(`Rolling back image upload: ${uploadedImagePath}`);
+          const imageSha = await getFileShaIfExists(uploadedImagePath);
+          if (imageSha) {
+            try {
+              await githubFetch(uploadedImagePath, { 
+                  method: 'DELETE', 
+                  body: JSON.stringify({ message: 'Rollback: delete failed update', sha: imageSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
+              });
+            } catch (cleanupError) {
+              console.error(`Failed to cleanup rollback file: ${uploadedImagePath}`, cleanupError);
+            }
+          }
+        }
+
+        if (uploadedMarkdownPath) {
+          console.log(`Rolling back markdown upload: ${uploadedMarkdownPath}`);
+          const markdownSha = await getFileShaIfExists(uploadedMarkdownPath);
+          if (markdownSha) {
+            try {
+              await githubFetch(uploadedMarkdownPath, { 
+                  method: 'DELETE', 
+                  body: JSON.stringify({ message: 'Rollback: delete failed update', sha: markdownSha, committer: { name: 'Admin Panel', email: 'admin@ifmsabrazil.org' } })
+              });
+            } catch (cleanupError) {
+              console.error(`Failed to cleanup rollback file: ${uploadedMarkdownPath}`, cleanupError);
+            }
+          }
+        }
+
+        // Rollback edit count if it was updated
+        if (editCountUpdated) {
+          console.log(`Rolling back edit count for ${id}`);
+          try {
+            const rollbackEditCount = editCount - 1;
+            const currentEditSha = await getFileShaIfExists(GITHUB_API_URL_EDIT);
+            if (currentEditSha) {
+              await githubFetch(GITHUB_API_URL_EDIT, {
+                method: "PUT",
+                body: JSON.stringify(createUploadRequestBody(`Rollback edit count for ${id}`, Buffer.from(rollbackEditCount.toString()).toString("base64"), currentEditSha))
+              });
+            }
+          } catch (editCountRollbackError) {
+            console.error(`Failed to rollback edit count for ${id}:`, editCountRollbackError);
+          }
+        }
+
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Error updating file: ${error instanceof Error ? error.message : 'Unknown error'}`,
         });
       }
-    }),
+    })
 });

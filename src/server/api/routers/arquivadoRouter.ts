@@ -47,6 +47,9 @@ const deleteFileFromGitHub = async (url: string | null) => {
 export const arquivadoRouter = createTRPCRouter({
     getAll: ifmsaEmailProcedure.query(({ ctx }) => {
         return ctx.db.arquivado.findMany({
+            include: {
+                gestao: true,
+            },
             orderBy: {
                 order: "asc",
             },
@@ -56,7 +59,12 @@ export const arquivadoRouter = createTRPCRouter({
     getOne: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .query(({ input, ctx }) => {
-            return ctx.db.arquivado.findUnique({ where: { id: input.id } });
+            return ctx.db.arquivado.findUnique({
+                where: { id: input.id },
+                include: {
+                    gestao: true,
+                },
+            });
         }),
 
     delete: ifmsaEmailProcedure

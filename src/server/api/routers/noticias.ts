@@ -197,6 +197,21 @@ const reindexAllBlogsToAlgolia = async (blogs: any[]) => {
 export const noticiasRouter = createTRPCRouter({
     getAll: ifmsaEmailProcedure.query(({ ctx }) => {
         return ctx.db.blog.findMany({
+            include: {
+                authors: {
+                    include: {
+                        author: true,
+                    },
+                },
+                images: true,
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                    },
+                },
+            },
             orderBy: [{ id: "desc" }],
         });
     }),
@@ -204,25 +219,48 @@ export const noticiasRouter = createTRPCRouter({
     getOne: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .query(({ ctx, input }) => {
-            return ctx.db.blog.findUnique({ where: { id: input.id } });
+            return ctx.db.blog.findUnique({
+                where: { id: input.id },
+                include: {
+                    authors: {
+                        include: {
+                            author: true,
+                        },
+                    },
+                    images: true,
+                    user: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                },
+            });
         }),
 
     delete: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ ctx, input }) => {
-            // First get the blog to find photo name if it exists
-            const blog = await ctx.db.blog.findUnique({
-                where: { id: input.id }
-            });
-
-            if (!blog) {
-                throw new Error("Blog not found");
-            }
-
             // Use delete instead of deleteMany since we're querying by ID (primary key)
             try {
                 const deletedBlog = await ctx.db.blog.delete({
-                    where: { id: input.id }
+                    where: { id: input.id },
+                    include: {
+                        authors: {
+                            include: {
+                                author: true,
+                            },
+                        },
+                        images: true,
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                email: true,
+                            },
+                        },
+                    },
                 });
 
                 // Delete from Algolia
