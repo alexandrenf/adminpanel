@@ -37,15 +37,6 @@ const TEMPLATES_DIR = process.env.EMAIL_TEMPLATES_DIR ||
 function processTemplate(template: string, data: TemplateData): string {
   let processed = template;
   
-  // Replace simple variables {{variable}}
-  processed = processed.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
-    const value = data[key];
-    if (value === undefined || value === null) {
-      return '';
-    }
-    return escapeHtml(String(value));
-  });
-  
   // Replace unescaped variables {{{variable}}}
   processed = processed.replace(/\{\{\{([^}]+)\}\}\}/g, (match, key) => {
     const value = data[key];
@@ -53,6 +44,15 @@ function processTemplate(template: string, data: TemplateData): string {
       return '';
     }
     return String(value);
+  });
+  
+  // Replace simple variables {{variable}}
+  processed = processed.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+    const value = data[key];
+    if (value === undefined || value === null) {
+      return '';
+    }
+    return escapeHtml(String(value));
   });
   
   // Process conditional blocks with else {{#if condition}}...{{else}}...{{/if}} FIRST
