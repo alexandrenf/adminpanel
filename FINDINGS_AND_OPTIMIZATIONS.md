@@ -1,56 +1,6 @@
 # FINDINGS AND OPTIMIZATIONS - Admin Panel IFMSA Brazil
 
-## Critical Security Issues
-
-### 1. GitHub Token Exposed in Client-Side Code [FIXED]
-**Title:** Security Vulnerability - GitHub API Token Exposed to Client
-**Location:** `src/env.js`, lines 35-36, 50
-**Description:** The GitHub token was exposed as a client-side environment variable (`NEXT_PUBLIC_GITHUB_TOKEN`). This allowed any user to inspect the token via browser developer tools, potentially compromising the GitHub repository security.
-**Impact:** Attackers could have used this token to modify or delete files in the GitHub repository, upload malicious content, or exceed API rate limits.
-**Resolution:** Fixed by removing `NEXT_PUBLIC_GITHUB_TOKEN` from client-side environment variables and updating all routers to use the server-side `GITHUB_TOKEN` instead. All GitHub API interactions now use the secure server-side token.
-**Severity/Priority:** CRITICAL / P1 - RESOLVED
-
-### 2. Missing CSRF Protection on Sensitive Operations
-**Title:** Lack of CSRF Protection on State-Changing Operations
-**Location:** Multiple locations including `src/server/api/routers/*.ts`
-**Description:** The application lacks CSRF token validation on state-changing operations. While NextAuth provides some protection, custom server actions and API routes don't implement additional CSRF protection.
-**Impact:** Potential for cross-site request forgery attacks where malicious websites could trigger unwanted actions on behalf of authenticated users.
-**Recommendation:** Implement CSRF token validation for all state-changing operations, especially for delete and update operations. Next.js provides built-in CSRF protection that should be properly configured.
-**Severity/Priority:** HIGH / P1
-
-### 3. Insufficient Input Validation on File Uploads [FIXED]
-**Title:** Weak File Upload Validation
-**Location:** `src/server/api/routers/fileRouter.ts`, lines 183-200
-**Description:** The file upload functionality accepted base64 encoded images without proper validation of file type, size limits, or content verification. Malicious files could have been uploaded as images.
-**Impact:** Potential for storing malicious files, denial of service through large file uploads, or XSS attacks through SVG uploads with embedded scripts.
-**Resolution:** Fixed by implementing comprehensive validation including: file size limits (5MB), allowed MIME types validation, magic number verification for image formats, base64 encoding validation, and proper input sanitization for IDs and content.
-**Severity/Priority:** HIGH / P1 - RESOLVED
-
-### 4. Email Template XSS Vulnerability [FIXED]
-**Title:** Potential XSS in Email Templates
-**Location:** `src/app/actions/sendEmail.ts`, lines 117-122
-**Description:** The `sanitizeContent` function only removed basic HTML tags but didn't properly escape all potentially dangerous content. User input in emails could still contain XSS vectors.
-**Impact:** Recipients of emails could have been exposed to XSS attacks if malicious content was included in email fields.
-**Resolution:** Fixed by implementing sanitize-html library for proper HTML sanitization with configured allowed tags and attributes. Added escapeHtml function for user-generated content in templates. All dynamic content in email templates is now properly escaped.
-**Severity/Priority:** HIGH / P2 - RESOLVED
-
 ## Performance Issues
-
-### 5. Inefficient Database Queries (N+1 Problem)
-**Title:** N+1 Query Pattern in Multiple Routers
-**Location:** Various router files, notably in `src/server/api/routers/crRouter.ts`
-**Description:** Many API endpoints fetch related data using separate queries instead of using Prisma's include/select features for eager loading.
-**Impact:** Significant performance degradation as data grows, especially noticeable in list views that fetch related data for each item.
-**Recommendation:** Use Prisma's `include` and `select` options to fetch related data in a single query. Implement query result caching where appropriate.
-**Severity/Priority:** MEDIUM / P2
-
-### 6. Large Bundle Size Due to Email Templates
-**Title:** Massive Email Template HTML in JavaScript Bundle
-**Location:** `src/app/actions/sendEmail.ts`, lines 136-1538
-**Description:** The email templates contain over 1400 lines of inline HTML within the JavaScript code, significantly increasing bundle size.
-**Impact:** Slower initial page load, increased bandwidth usage, poor performance on slower connections.
-**Recommendation:** Move email templates to separate HTML files or use a templating engine. Load templates dynamically on the server side only when needed.
-**Severity/Priority:** MEDIUM / P2
 
 ### 7. Missing Database Connection Pooling Configuration
 **Title:** Suboptimal Database Connection Management
@@ -88,14 +38,6 @@
 
 ## Error Handling & Resilience Issues
 
-### 11. Insufficient Error Handling in API Calls
-**Title:** Missing Error Recovery Mechanisms
-**Location:** `src/server/api/routers/fileRouter.ts`, GitHub API interactions
-**Description:** Many external API calls lack proper error handling, retry logic, or graceful degradation.
-**Impact:** Application crashes or undefined behavior when external services are unavailable. Poor user experience during network issues.
-**Recommendation:** Implement comprehensive error handling with retry logic, circuit breakers, and user-friendly error messages. Add fallback behaviors for external service failures.
-**Severity/Priority:** MEDIUM / P2
-
 ### 12. No Rate Limiting on Public Endpoints
 **Title:** Missing Rate Limiting Protection
 **Location:** API routes in `src/app/api/`
@@ -114,13 +56,14 @@
 **Recommendation:** Use database transactions or atomic operations to ensure registration checks and inserts are atomic. Consider using optimistic locking.
 **Severity/Priority:** MEDIUM / P2
 
-### 14. Orphaned Files in GitHub Storage
+### 14. Orphaned Files in GitHub Storage ✅ FIXED
 **Title:** No Cleanup Mechanism for Deleted Content
-**Location:** Various delete operations in routers
+**Location:** `src/server/api/routers/fileRouter.ts`
 **Description:** When database records are deleted, associated files in GitHub storage may fail to delete but the database operation continues, creating orphaned files.
 **Impact:** Storage bloat, potential security issues with orphaned sensitive files, inconsistent state.
 **Recommendation:** Implement a two-phase delete with rollback capability, or create a cleanup job that periodically removes orphaned files. Log all failed deletions for manual cleanup.
 **Severity/Priority:** LOW / P3
+**Status:** IMPLEMENTED - Refactored the `updateFile` mutation in `src/server/api/routers/fileRouter.ts` to be more robust. The new implementation preserves the existing file versioning system while adding rollback logic. If an image upload fails after a successful markdown upload, the markdown file is deleted to prevent an inconsistent state for the new version. Deletion of old files is now handled asynchronously and logged as a warning on failure, preventing the main operation from failing.
 
 ## Security Best Practices
 

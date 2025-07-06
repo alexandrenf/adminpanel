@@ -60,6 +60,9 @@ const deleteFileFromGitHub = async (url: string | null) => {
 export const ebRouter = createTRPCRouter({
     getAll: ifmsaEmailProcedure.query(({ ctx }) => {
         return ctx.db.eB.findMany({
+            include: {
+                time: true,
+            },
             orderBy: [{ order: "asc" }],
         });
     }),
@@ -67,7 +70,12 @@ export const ebRouter = createTRPCRouter({
     getOne: ifmsaEmailProcedure
         .input(z.object({ id: z.number() }))
         .query(({ input, ctx }) => {
-            return ctx.db.eB.findUnique({ where: { id: input.id } });
+            return ctx.db.eB.findUnique({
+                where: { id: input.id },
+                include: {
+                    time: true,
+                },
+            });
         }),
 
     delete: ifmsaEmailProcedure
