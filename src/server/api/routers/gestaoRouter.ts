@@ -23,7 +23,11 @@ export const gestaoRouter = createTRPCRouter({
         }),
 
     getAll: ifmsaEmailProcedure.query(({ ctx }) => {
-        return ctx.db.gestao.findMany();
+        return ctx.db.gestao.findMany({
+            include: {
+                arquivados: true,
+            },
+        });
     }),
 
     delete: ifmsaEmailProcedure
@@ -39,6 +43,9 @@ export const gestaoRouter = createTRPCRouter({
                 where: {
                     gestaoId: input.id,
                     type: input.tipoCargo,
+                },
+                include: {
+                    gestao: true,
                 },
                 orderBy: {
                     order: "asc",
