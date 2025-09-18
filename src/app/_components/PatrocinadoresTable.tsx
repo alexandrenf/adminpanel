@@ -233,13 +233,7 @@ export default function PatrocinadoresTable() {
                         <p className="text-gray-600">Gerencie apoiadores à marca e colaboradores do ecossistema IFMSA Brazil</p>
                     </div>
                 </div>
-                <Button
-                    onClick={() => handleAdd()}
-                    className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Novo patrocinador
-                </Button>
+                
             </div>
 
             <Badge variant="secondary" className="px-3 py-1">
@@ -389,7 +383,7 @@ export default function PatrocinadoresTable() {
                                                                     <AlertDialogHeader>
                                                                         <AlertDialogTitle>Excluir patrocinador</AlertDialogTitle>
                                                                         <AlertDialogDescription>
-                                                                            Tem certeza de que deseja excluir "{row.name || 'Patrocinador'}"? Esta ação não pode ser desfeita.
+                                                                            Tem certeza de que deseja excluir &quot;{row.name || 'Patrocinador'}&quot;? Esta ação não pode ser desfeita.
                                                                         </AlertDialogDescription>
                                                                     </AlertDialogHeader>
                                                                     <AlertDialogFooter>
