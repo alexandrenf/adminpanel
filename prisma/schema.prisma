@@ -151,6 +151,17 @@ model EB {
     time        TimeRegional? @relation(fields: [timeID], references: [id], onDelete: Cascade)
 }
 
+model Patrocinador {
+    id          Int      @id @default(autoincrement())
+    name        String
+    description String?
+    website     String?
+    order       Int
+    imageLink   String?
+    type        String   @default("marca")
+}
+
+
 model CR {
     id          Int      @id @default(autoincrement())
     role        String
