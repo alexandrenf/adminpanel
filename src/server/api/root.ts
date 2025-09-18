@@ -15,6 +15,8 @@ import { configRouter } from "./routers/configRouter";
 import { registrosRouter } from "~/server/api/routers/registrosRouter";
 import { authorsRouter } from "~/server/api/routers/authorsRouter";
 import { noticiaImagesRouter } from "~/server/api/routers/noticiaImagesRouter";
+import { patrocinadorRouter } from "~/server/api/routers/patrocinadorRouter";
+import { patrocinadorPhotoRouter } from "~/server/api/routers/patrocinadorPhoto";
 
 /**
  * This is the primary router for your server.
@@ -27,6 +29,8 @@ export const appRouter = createTRPCRouter({
   file: fileRouter,
   eb: ebRouter,
   ebPhoto: ebPhotoRouter,
+  patrocinador: patrocinadorRouter,
+  patrocinadorPhoto: patrocinadorPhotoRouter,
   arquivo: arquivoRouter,
   photo: photoRouter,
   gestao: gestaoRouter,

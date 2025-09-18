@@ -29,7 +29,8 @@ import {
   UserCheck,
   Newspaper,
   Archive,
-  Calendar
+  Calendar,
+  Handshake
 } from "lucide-react";
 import { isIfmsaEmailSession } from "~/server/lib/authcheck";
 
@@ -78,6 +79,7 @@ const Navbar: React.FC = () => {
         { href: "/comites-locais", label: "LCs", icon: Users },
         { href: "/noticias", label: "Notícias", icon: Newspaper },
         { href: "/eb", label: "EBs", icon: UserCheck },
+        { href: "/patrocinadores", label: "Patrocinadores", icon: Handshake },
         { href: "/documentos", label: "Documentos", icon: FileText },
         { href: "/historico", label: "Histórico", icon: Clock },
         { href: "/cr", label: "CRs", icon: Archive },
