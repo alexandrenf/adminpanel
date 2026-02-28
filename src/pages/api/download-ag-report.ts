@@ -63,6 +63,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       XLSX.utils.book_append_sheet(workbook, participantsWs, 'Participantes');
     }
 
+    // Build modality lookup (id -> name) for registration export
+    const modalityNameById = new Map(
+      assemblyData.modalities.map((m) => [m._id, m.name])
+    );
+
     // Registrations Sheet
     if (assemblyData.registrations.length > 0) {
       const registrationsData = [
@@ -70,7 +75,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ...assemblyData.registrations.map(r => [
           r.participantId, r.participantName, r.participantType, r.email, r.status,
           new Date(r.registeredAt).toLocaleDateString('pt-BR'), 
-          r.modalityId, r.escola || '', r.regional || '', r.cidade || '', r.uf || '',
+          (r.modalityId ? modalityNameById.get(r.modalityId) : undefined) || r.modalityId || 'N/A',
+          r.escola || '', r.regional || '', r.cidade || '', r.uf || '',
           r.celular || '', r.cpf || '', r.dataNascimento || '',
           r.isPaymentExempt ? 'Sim' : 'Não',
           r.receiptStorageId ? 'Sim' : 'Não',

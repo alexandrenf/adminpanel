@@ -10,6 +10,7 @@ import { arquivadoRouter } from "./routers/arquivadoRouter";
 import { timesRouter } from "./routers/timesRouter";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { crRouter } from "./routers/crRouter";
+import { credRouter } from "./routers/credRouter";
 import { regionalRouter } from "./routers/regionalRouter";
 import { configRouter } from "./routers/configRouter";
 import { registrosRouter } from "~/server/api/routers/registrosRouter";
@@ -36,6 +37,7 @@ export const appRouter = createTRPCRouter({
   gestao: gestaoRouter,
   arquivado: arquivadoRouter,
   cr: crRouter,
+  cred: credRouter,
   regional: regionalRouter,
   times: timesRouter,
   config: configRouter,
