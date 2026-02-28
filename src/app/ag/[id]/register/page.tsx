@@ -1304,7 +1304,7 @@ export default function AGRegistrationPage() {
                                             <Label htmlFor="autorizacao" className="text-sm font-medium leading-relaxed">
                                                 {assembly.type === "AGE" 
                                                     ? "Autorizo o processamento dos meus dados para fins de inscrição e monitorização do evento. *"
-                                                    : "Autorizo o compartilhamento de meus dados (nome completo e email) para os patrocinadores do evento. *"
+                                                    : "Autorizo o compartilhamento de meus dados (nome completo, email e fotos) para os patrocinadores do evento. *"
                                                 }
                                             </Label>
                                             <p className="text-xs text-gray-600">
