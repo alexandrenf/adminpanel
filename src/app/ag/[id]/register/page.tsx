@@ -113,12 +113,49 @@ export default function AGRegistrationPage() {
     // Add AG config query to check global registration settings
     const agConfig = useQuery(convexApi.agConfig?.get);
     
-    // Fetch comitês locais from agParticipants
-    const comitesLocais = useQuery(convexApi.assemblies?.getComitesLocais) || [];
+    // Fetch participants scoped to this assembly to avoid pulling stale data from previous AGs
+    const comitesLocais = useQuery(
+        convexApi.assemblies?.getComitesLocaisWithStatus,
+        assemblyId ? { assemblyId: assemblyId as any } : "skip"
+    ) || [];
+    const ebParticipants = useQuery(
+        convexApi.assemblies?.getParticipantsByType,
+        assemblyId ? { assemblyId: assemblyId as any, type: "eb" } : "skip"
+    );
+    const crParticipants = useQuery(
+        convexApi.assemblies?.getParticipantsByType,
+        assemblyId ? { assemblyId: assemblyId as any, type: "cr" } : "skip"
+    );
     
-    // Fetch EBs and CRs from agParticipants
-    const ebs = useQuery(convexApi.assemblies?.getEBs) || [];
-    const crs = useQuery(convexApi.assemblies?.getCRs) || [];
+    const ebs = useMemo(() => {
+        return (ebParticipants || [])
+            .filter((participant) => participant.participantId?.trim())
+            .map((participant) => ({
+                id: participant.participantId.trim(),
+                name: participant.role?.trim()
+                    ? `${participant.role.trim()} - ${participant.name.trim()}`
+                    : participant.name.trim(),
+                participantId: participant.participantId.trim(),
+                participantName: participant.name?.trim() || "",
+                role: participant.role?.trim() || "",
+            }))
+            .sort((a, b) => a.role.localeCompare(b.role, 'pt-BR', { sensitivity: 'base' }));
+    }, [ebParticipants]);
+    
+    const crs = useMemo(() => {
+        return (crParticipants || [])
+            .filter((participant) => participant.participantId?.trim())
+            .map((participant) => ({
+                id: participant.participantId.trim(),
+                name: participant.role?.trim()
+                    ? `${participant.role.trim()} - ${participant.name.trim()}`
+                    : participant.name.trim(),
+                participantId: participant.participantId.trim(),
+                participantName: participant.name?.trim() || "",
+                role: participant.role?.trim() || "",
+            }))
+            .sort((a, b) => a.role.localeCompare(b.role, 'pt-BR', { sensitivity: 'base' }));
+    }, [crParticipants]);
     
     // Debug EB data loading
     useEffect(() => {

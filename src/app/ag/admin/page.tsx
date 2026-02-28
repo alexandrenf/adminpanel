@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
@@ -451,9 +451,39 @@ export default function AGAdminPage() {
     );
     
 
-    // Add queries for EB and CR data to lookup specific roles
-    const ebs = useQuery(convexApi.assemblies?.getEBs) || [];
-    const crs = useQuery(convexApi.assemblies?.getCRs) || [];
+    // Fetch EB/CR scoped to selected assembly to avoid data leaking from older AGs
+    const ebParticipants = useQuery(
+        convexApi.assemblies?.getParticipantsByType,
+        selectedAssemblyId ? { assemblyId: selectedAssemblyId as any, type: "eb" } : "skip"
+    );
+    const crParticipants = useQuery(
+        convexApi.assemblies?.getParticipantsByType,
+        selectedAssemblyId ? { assemblyId: selectedAssemblyId as any, type: "cr" } : "skip"
+    );
+    const ebs = useMemo(() => {
+        return (ebParticipants || [])
+            .filter((participant) => participant.participantId?.trim())
+            .map((participant) => ({
+                participantId: participant.participantId.trim(),
+                name: participant.role?.trim()
+                    ? `${participant.role.trim()} - ${participant.name.trim()}`
+                    : participant.name.trim(),
+                participantName: participant.name?.trim() || "",
+                role: participant.role?.trim() || "",
+            }));
+    }, [ebParticipants]);
+    const crs = useMemo(() => {
+        return (crParticipants || [])
+            .filter((participant) => participant.participantId?.trim())
+            .map((participant) => ({
+                participantId: participant.participantId.trim(),
+                name: participant.role?.trim()
+                    ? `${participant.role.trim()} - ${participant.name.trim()}`
+                    : participant.name.trim(),
+                participantName: participant.name?.trim() || "",
+                role: participant.role?.trim() || "",
+            }));
+    }, [crParticipants]);
 
     // Get modality stats for each modality
     const modalityStats = useQuery(
