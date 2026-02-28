@@ -153,7 +153,7 @@ const CreateOrEditCred = () => {
                     role,
                     email,
                     order: credData?.order ?? order ?? 0,
-                    imageLink: imageLinkToSave,
+                    imageLink: imageLinkToSave ?? undefined,
                 });
             } catch (error) {
                 console.error("Erro atualizando CRED", error);
@@ -353,30 +353,75 @@ const CreateOrEditCred = () => {
 };
 
 const readFile = (file: File): Promise<string> =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.addEventListener("load", () => resolve(reader.result as string), false);
+
+        const cleanup = () => {
+            reader.removeEventListener("load", onLoad);
+            reader.removeEventListener("error", onError);
+            reader.removeEventListener("abort", onAbort);
+        };
+
+        const onLoad = () => {
+            cleanup();
+            resolve(reader.result as string);
+        };
+
+        const onError = () => {
+            cleanup();
+            reject(reader.error ?? new Error("FileReader error while reading file"));
+        };
+
+        const onAbort = () => {
+            cleanup();
+            reject(new Error("FileReader was aborted while reading file"));
+        };
+
+        reader.addEventListener("load", onLoad);
+        reader.addEventListener("error", onError);
+        reader.addEventListener("abort", onAbort);
         reader.readAsDataURL(file);
     });
 
+const RESIZE_TIMEOUT_MS = 10_000;
+
 const resizeImage = (imageSrc: string): Promise<string> =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
         const image = new Image();
-        image.src = imageSrc;
+
+        const timeout = setTimeout(() => {
+            reject(new Error("resizeImage timed out: image never loaded"));
+        }, RESIZE_TIMEOUT_MS);
+
+        const settle = (fn: () => void) => {
+            clearTimeout(timeout);
+            fn();
+        };
+
+        image.onerror = () => {
+            settle(() => reject(new Error("resizeImage: failed to load image")));
+        };
+
         image.onload = () => {
             const canvas = document.createElement("canvas");
             canvas.width = 400;
             canvas.height = 400;
             const ctx = canvas.getContext("2d");
-            if (ctx) {
-                ctx.drawImage(image, 0, 0, 400, 400);
-                pica.resize(canvas, canvas, {
-                    quality: 3
-                }).then((result: HTMLCanvasElement) => {
-                    resolve(result.toDataURL("image/png"));
-                });
+            if (!ctx) {
+                settle(() => reject(new Error("resizeImage: canvas 2d context unavailable")));
+                return;
             }
+            ctx.drawImage(image, 0, 0, 400, 400);
+            pica.resize(canvas, canvas, { quality: 3 })
+                .then((result: HTMLCanvasElement) => {
+                    settle(() => resolve(result.toDataURL("image/png")));
+                })
+                .catch((err: unknown) => {
+                    settle(() => reject(err instanceof Error ? err : new Error(String(err))));
+                });
         };
+
+        image.src = imageSrc;
     });
 
 export default CreateOrEditCred;

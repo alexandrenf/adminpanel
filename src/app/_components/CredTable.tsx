@@ -101,11 +101,25 @@ export default function CredTable() {
 
     const handleDelete = async (id: number) => {
         setDeleteError(null);
-        await deleteMutation.mutateAsync({ id });
+        try {
+            await deleteMutation.mutateAsync({ id });
+            refetch();
+        } catch (error) {
+            setDeleteError(
+                error instanceof Error ? error.message : "Erro ao excluir credencial"
+            );
+        }
     };
 
     const handleDeleteAnyway = async (id: number) => {
-        await deleteAnywayMutation.mutateAsync({ id });
+        try {
+            await deleteAnywayMutation.mutateAsync({ id });
+            refetch();
+        } catch (error) {
+            setDeleteError(
+                error instanceof Error ? error.message : "Erro ao excluir credencial"
+            );
+        }
     };
 
     const handleEdit = (id: number) => {
