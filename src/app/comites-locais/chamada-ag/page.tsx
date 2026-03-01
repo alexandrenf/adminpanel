@@ -158,7 +158,6 @@ export default function ChamadaAGPage() {
 
     // QR Readers state
     const [isQrReadersDialogOpen, setIsQrReadersDialogOpen] = useState(false);
-    const [newReaderName, setNewReaderName] = useState("");
     const [isCreatingReader, setIsCreatingReader] = useState(false);
     const [isSelfAttendanceQrOpen, setIsSelfAttendanceQrOpen] = useState(false);
     const [currentSessionQrCode, setCurrentSessionQrCode] = useState<string>("");
@@ -263,7 +262,6 @@ export default function ChamadaAGPage() {
     const resetAttendanceOnly = useMutation(convexApi.attendance.resetAttendanceOnly);
 
     // QR Readers mutations
-    const createQrReader = useMutation(convexApi.qrReaders.create);
     const createSessionQrReader = useMutation(convexApi.qrReaders.createForSession);
     const removeQrReader = useMutation(convexApi.qrReaders.remove);
     const clearQrReaders = useMutation(convexApi.qrReaders.clearAll);
@@ -1341,48 +1339,6 @@ export default function ChamadaAGPage() {
         }
     };
 
-    const handleCreateQrReader = async () => {
-        if (!session?.user?.id) {
-            toast({
-                title: "Erro",
-                description: "Você precisa estar logado para criar um leitor QR.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        if (!newReaderName.trim()) {
-            toast({
-                title: "Erro",
-                description: "Digite um nome para o leitor QR.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        setIsCreatingReader(true);
-        try {
-            const result = await createQrReader({
-                name: newReaderName.trim(),
-                createdBy: session.user.id,
-            });
-
-            setNewReaderName("");
-            toast({
-                title: "✅ Leitor QR criado",
-                description: `Leitor "${newReaderName}" criado com sucesso!`,
-            });
-        } catch (error) {
-            toast({
-                title: "❌ Erro",
-                description: "Erro ao criar leitor QR. Tente novamente.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsCreatingReader(false);
-        }
-    };
-
     const handleDeleteQrReader = async (id: string, name: string) => {
         if (window.confirm(`Deseja realmente excluir o leitor "${name}"?`)) {
             try {
@@ -1982,50 +1938,37 @@ export default function ChamadaAGPage() {
                                                     <span>Gerenciar Leitores QR</span>
                                                 </DialogTitle>
                                                 <DialogDescription>
-                                                    Crie links únicos para dispositivos móveis lerem QR codes e marcarem presença.
+                                                    A criação de novos leitores está disponível apenas no botão &quot;Novo Leitor QR&quot; da sessão ativa.
                                                 </DialogDescription>
                                             </DialogHeader>
                                             
                                             <div className="space-y-4">
-                                                {/* Create new reader section */}
-                                                <div className="p-4 bg-gray-50 rounded-lg border">
-                                                    <h4 className="font-semibold mb-3 flex items-center space-x-2">
-                                                        <Plus className="w-4 h-4 text-green-600" />
-                                                        <span>Novo Leitor QR</span>
-                                                    </h4>
-                                                    <div className="flex space-x-2">
-                                                        <div className="flex-1">
-                                                            <Label htmlFor="reader-name">Nome do leitor</Label>
-                                                            <Input
-                                                                id="reader-name"
-                                                                placeholder="Ex: João da Silva"
-                                                                value={newReaderName}
-                                                                onChange={(e) => setNewReaderName(e.target.value)}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter') {
-                                                                        handleCreateQrReader();
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </div>
-                                                        <Button 
-                                                            onClick={handleCreateQrReader}
-                                                            disabled={isCreatingReader || !newReaderName.trim()}
-                                                            className="mt-6 bg-green-600 hover:bg-green-700"
-                                                        >
-                                                            {isCreatingReader ? (
-                                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                                                            ) : (
-                                                                <>
-                                                                    <Plus className="w-4 h-4 mr-1" />
-                                                                    Criar
-                                                                </>
-                                                            )}
-                                                        </Button>
-                                                    </div>
+                                                <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                                                    <h4 className="font-semibold text-amber-900 mb-2">Criação centralizada por sessão</h4>
+                                                    <p className="text-sm text-amber-800 mb-3">
+                                                        Isso evita leitores sem vínculo de sessão e garante funcionamento correto no controle de presença.
+                                                    </p>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="border-amber-300 text-amber-900 hover:bg-amber-100"
+                                                        onClick={() => {
+                                                            setIsQrReadersDialogOpen(false);
+                                                            if (currentSessionId) {
+                                                                setIsSessionQrDialogOpen(true);
+                                                                return;
+                                                            }
+                                                            toast({
+                                                                title: "Inicie uma sessão",
+                                                                description: "Crie ou selecione uma sessão ativa para usar 'Novo Leitor QR'.",
+                                                                variant: "destructive",
+                                                            });
+                                                        }}
+                                                    >
+                                                        <Plus className="w-4 h-4 mr-2" />
+                                                        {currentSessionId ? "Abrir Novo Leitor QR da Sessão" : "Selecionar Sessão Ativa"}
+                                                    </Button>
                                                 </div>
 
-                                                {/* Existing readers list */}
                                                 <div>
                                                     <h4 className="font-semibold mb-3 flex items-center justify-between">
                                                         <span>Leitores Ativos</span>
@@ -2036,7 +1979,7 @@ export default function ChamadaAGPage() {
                                                     
                                                     {qrReaders && qrReaders.length > 0 ? (
                                                         <div className="space-y-2 max-h-60 overflow-y-auto">
-                                                            {qrReaders.map((reader) => (
+                                                            {qrReaders.map((reader: any) => (
                                                                 <div 
                                                                     key={reader._id} 
                                                                     className="flex items-center justify-between p-3 bg-white border rounded-lg hover:bg-gray-50 transition-colors"
@@ -2046,6 +1989,16 @@ export default function ChamadaAGPage() {
                                                                         <p className="text-xs text-gray-500">
                                                                             Criado em {new Date(reader.createdAt).toLocaleString('pt-BR')}
                                                                         </p>
+                                                                        <p className="text-xs text-blue-700">
+                                                                            {reader.sessionId
+                                                                                ? `Sessão: ${reader.sessionName || reader.sessionId}${reader.sessionType ? ` (${getChamadaTypeLabel(reader.sessionType as "avulsa" | "plenaria" | "sessao")})` : ""}`
+                                                                                : "Sessão: não atribuída"}
+                                                                        </p>
+                                                                        {reader.assemblyName && (
+                                                                            <p className="text-xs text-gray-500">
+                                                                                AG: {reader.assemblyName}
+                                                                            </p>
+                                                                        )}
                                                                     </div>
                                                                     <div className="flex items-center space-x-1">
                                                                         <Button
@@ -2085,8 +2038,8 @@ export default function ChamadaAGPage() {
                                                     ) : (
                                                         <div className="text-center py-8 text-gray-500">
                                                             <Smartphone className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                                                            <p>Nenhum leitor QR criado ainda.</p>
-                                                            <p className="text-sm">Crie um leitor para começar!</p>
+                                                            <p>Nenhum leitor QR ativo.</p>
+                                                            <p className="text-sm">Use o botão &quot;Novo Leitor QR&quot; da sessão para criar leitores.</p>
                                                         </div>
                                                     )}
                                                 </div>

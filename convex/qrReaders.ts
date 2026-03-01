@@ -6,11 +6,36 @@ import { nanoid } from "nanoid";
 export const getAll = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
+    const readers = await ctx.db
       .query("qrReaders")
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .order("desc")
       .collect();
+
+    return await Promise.all(
+      readers.map(async (reader) => {
+        if (!reader.sessionId) {
+          return {
+            ...reader,
+            sessionName: null,
+            sessionStatus: null,
+            assemblyName: null,
+          };
+        }
+
+        const session = await ctx.db.get(reader.sessionId);
+        const assembly =
+          session?.assemblyId ? await ctx.db.get(session.assemblyId) : null;
+
+        return {
+          ...reader,
+          sessionName: session?.name ?? null,
+          sessionType: session?.type ?? reader.sessionType,
+          sessionStatus: session?.status ?? null,
+          assemblyName: assembly?.name ?? null,
+        };
+      })
+    );
   },
 });
 
@@ -72,18 +97,11 @@ export const create = mutation({
     name: v.string(),
     createdBy: v.string(),
   },
-  handler: async (ctx, args) => {
-    const token = nanoid(16); // Generate a unique 16-character token
-    
-    const id = await ctx.db.insert("qrReaders", {
-      name: args.name,
-      token,
-      createdAt: Date.now(),
-      createdBy: args.createdBy,
-      isActive: true,
-    });
-
-    return { id, token };
+  handler: async () => {
+    // General readers are intentionally disabled to avoid readers without session binding.
+    throw new Error(
+      "A criação de leitores gerais foi desativada. Use 'Novo Leitor QR' em uma sessão ativa."
+    );
   },
 });
 

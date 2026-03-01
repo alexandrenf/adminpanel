@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -17,6 +17,10 @@ type ScannedData = {
     participantName?: string;
     assemblyId?: string;
     assemblyName?: string;
+    registrationId?: string;
+    registrationParticipantType?: string;
+    registrationParticipantId?: string;
+    comiteLocal?: string;
     // Legacy QR code format
     type?: "eb" | "cr" | "comite";
     id?: string;
@@ -43,6 +47,14 @@ export default function QrReaderPage() {
     const sessionAttendance = useQuery(
         convexApi.agSessions?.getSessionAttendance,
         readerInfo?.sessionId ? { sessionId: readerInfo.sessionId as any } : "skip"
+    );
+
+    // Registration data is needed to resolve badge QR codes in plenária
+    const assemblyRegistrations = useQuery(
+        convexApi.agRegistrations.getByAssembly,
+        readerInfo?.sessionId && readerInfo?.assemblyId
+            ? { assemblyId: readerInfo.assemblyId as any }
+            : "skip"
     );
 
     // Get legacy attendance records for backwards compatibility
@@ -82,6 +94,29 @@ export default function QrReaderPage() {
     const isSessionReader = !!readerInfo.sessionId;
     const sessionData = (readerInfo as any)?.session || null;
     const assemblyData = (readerInfo as any)?.assembly || null;
+
+    const mapPlenaryRegistrationToTarget = (registrationType?: string, registrationParticipantId?: string, fallbackComiteLocal?: string) => {
+        if (!registrationType) return null;
+
+        if (registrationType === "eb" || registrationType === "cr") {
+            if (!registrationParticipantId) return null;
+            return {
+                targetType: registrationType,
+                targetId: registrationParticipantId,
+            };
+        }
+
+        if (registrationType === "comite_local" || registrationType === "comite") {
+            const comiteId = registrationParticipantId || fallbackComiteLocal;
+            if (!comiteId) return null;
+            return {
+                targetType: "comite",
+                targetId: comiteId,
+            };
+        }
+
+        return null;
+    };
 
     const handleQRCodeScan = (detectedCodes: { rawValue: string }[]) => {
         if (isProcessing || !detectedCodes?.[0]?.rawValue) return;
@@ -161,18 +196,69 @@ export default function QrReaderPage() {
             return;
         }
 
-        // Find participant in session attendance records
-        const allParticipants = [
-            ...sessionAttendance.ebs,
-            ...sessionAttendance.crs,
-            ...sessionAttendance.comites,
-            ...sessionAttendance.participantes,
-        ];
+        let participant: any = null;
 
-        const participant = allParticipants.find(p => 
-            p.participantId === qrData.participantId || 
-            p.participantName === qrData.participantName
-        );
+        if (sessionData?.type === "plenaria") {
+            if (assemblyRegistrations === undefined) {
+                toast({
+                    title: "Carregando dados",
+                    description: "Aguarde o carregamento da lista de participantes da assembleia.",
+                    variant: "destructive",
+                });
+                setIsProcessing(false);
+                return;
+            }
+
+            let target =
+                mapPlenaryRegistrationToTarget(
+                    qrData.registrationParticipantType,
+                    qrData.registrationParticipantId,
+                    qrData.comiteLocal
+                );
+
+            // Backward compatibility for old badge QR payloads.
+            if (!target && qrData.participantId) {
+                const registration = assemblyRegistrations?.find((reg: any) => reg._id === qrData.participantId);
+                target = mapPlenaryRegistrationToTarget(
+                    registration?.participantType,
+                    registration?.participantId,
+                    registration?.comiteLocal
+                );
+            }
+
+            if (!target) {
+                toast({
+                    title: "Participante não elegível",
+                    description: "Na plenária, apenas EBs, CRs e Comitês Locais podem marcar presença.",
+                    variant: "destructive",
+                });
+                setIsProcessing(false);
+                return;
+            }
+
+            const plenaryParticipants = [
+                ...sessionAttendance.ebs,
+                ...sessionAttendance.crs,
+                ...sessionAttendance.comites,
+            ];
+
+            participant = plenaryParticipants.find(
+                (p: any) => p.participantType === target.targetType && p.participantId === target.targetId
+            );
+        } else {
+            // Sessão específica: presença por inscrição individual.
+            const allParticipants = [
+                ...sessionAttendance.ebs,
+                ...sessionAttendance.crs,
+                ...sessionAttendance.comites,
+                ...sessionAttendance.participantes,
+            ];
+
+            participant = allParticipants.find((p: any) =>
+                p.participantId === qrData.participantId ||
+                p.participantName === qrData.participantName
+            );
+        }
 
         if (!participant) {
             toast({
