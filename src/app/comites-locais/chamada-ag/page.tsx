@@ -250,7 +250,6 @@ export default function ChamadaAGPage() {
     const crsAttendance = useQuery(convexApi.attendance.getByType, { type: "cr" });
     const comitesAttendance = useQuery(convexApi.attendance.getByType, { type: "comite" });
     const qrReaders = useQuery(convexApi.qrReaders.getAll);
-    const legacyQrReaders = (qrReaders || []).filter(reader => !reader.sessionId);
 
     // Check if Convex data is loading
     const isConvexLoading = ebsAttendance === undefined || crsAttendance === undefined || comitesAttendance === undefined;
@@ -1972,15 +1971,15 @@ export default function ChamadaAGPage() {
 
                                                 <div>
                                                     <h4 className="font-semibold mb-3 flex items-center justify-between">
-                                                        <span>Leitores Legados (sem sessão)</span>
+                                                        <span>Leitores Ativos</span>
                                                         <Badge variant="outline" className="text-cyan-600 border-cyan-200">
-                                                            {legacyQrReaders.length} leitores
+                                                            {qrReaders?.length || 0} leitores
                                                         </Badge>
                                                     </h4>
                                                     
-                                                    {legacyQrReaders.length > 0 ? (
+                                                    {qrReaders && qrReaders.length > 0 ? (
                                                         <div className="space-y-2 max-h-60 overflow-y-auto">
-                                                            {legacyQrReaders.map((reader) => (
+                                                            {qrReaders.map((reader: any) => (
                                                                 <div 
                                                                     key={reader._id} 
                                                                     className="flex items-center justify-between p-3 bg-white border rounded-lg hover:bg-gray-50 transition-colors"
@@ -1990,6 +1989,16 @@ export default function ChamadaAGPage() {
                                                                         <p className="text-xs text-gray-500">
                                                                             Criado em {new Date(reader.createdAt).toLocaleString('pt-BR')}
                                                                         </p>
+                                                                        <p className="text-xs text-blue-700">
+                                                                            {reader.sessionId
+                                                                                ? `Sessão: ${reader.sessionName || reader.sessionId}${reader.sessionType ? ` (${getChamadaTypeLabel(reader.sessionType as "avulsa" | "plenaria" | "sessao")})` : ""}`
+                                                                                : "Sessão: não atribuída"}
+                                                                        </p>
+                                                                        {reader.assemblyName && (
+                                                                            <p className="text-xs text-gray-500">
+                                                                                AG: {reader.assemblyName}
+                                                                            </p>
+                                                                        )}
                                                                     </div>
                                                                     <div className="flex items-center space-x-1">
                                                                         <Button
@@ -2029,8 +2038,8 @@ export default function ChamadaAGPage() {
                                                     ) : (
                                                         <div className="text-center py-8 text-gray-500">
                                                             <Smartphone className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                                                            <p>Não há leitores legados ativos.</p>
-                                                            <p className="text-sm">Use o botão &quot;Novo Leitor QR&quot; da sessão para criar leitores válidos.</p>
+                                                            <p>Nenhum leitor QR ativo.</p>
+                                                            <p className="text-sm">Use o botão &quot;Novo Leitor QR&quot; da sessão para criar leitores.</p>
                                                         </div>
                                                     )}
                                                 </div>
