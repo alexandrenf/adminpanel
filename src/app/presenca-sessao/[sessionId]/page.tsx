@@ -82,23 +82,81 @@ export default function SelfAttendancePage() {
         };
         checkEmail();
     }, [session]);
-    
+
+    const resolveSelfAttendanceTarget = () => {
+        if (!sessionData || !session?.user?.id) return null;
+
+        // Sessões específicas usam presença por inscrição aprovada (individual).
+        if (sessionData.type === "sessao") {
+            if (!userRegistration || userRegistration.status !== "approved") return null;
+            return {
+                participantId: userRegistration._id,
+                participantType: "individual",
+                participantName: userRegistration.participantName || session.user.name || "Participante",
+                participantRole: userRegistration.participantRole,
+            };
+        }
+
+        // Plenária: EB/CR por indivíduo e Comitê por entidade (comitê).
+        if (sessionData.type === "plenaria") {
+            if (!userRegistration || userRegistration.status !== "approved") return null;
+
+            if (userRegistration.participantType === "eb" || userRegistration.participantType === "cr") {
+                return {
+                    participantId: userRegistration.participantId,
+                    participantType: userRegistration.participantType,
+                    participantName: userRegistration.participantName || session.user.name || "Participante",
+                    participantRole: userRegistration.participantRole,
+                };
+            }
+
+            if (userRegistration.participantType === "comite_local" || userRegistration.participantType === "comite") {
+                const comiteId = userRegistration.participantId || userRegistration.comiteLocal;
+                if (!comiteId) return null;
+
+                return {
+                    participantId: comiteId,
+                    participantType: "comite",
+                    participantName: userRegistration.comiteLocal || userRegistration.participantName || "Comitê Local",
+                    participantRole: userRegistration.participantRole,
+                };
+            }
+
+            return null;
+        }
+
+        // Fallback (não usado para avulsa nesta tela).
+        return {
+            participantId: session.user.id,
+            participantType: "user",
+            participantName: session.user.name || "Participante",
+            participantRole: undefined as string | undefined,
+        };
+    };
+
+    const selfAttendanceTarget = resolveSelfAttendanceTarget();
 
     useEffect(() => {
         if (sessionData && session?.user?.id) {
-            // Determine participant ID using the same logic as marking attendance
-            const participantId = sessionData.type === "sessao" && userRegistration 
-                ? userRegistration._id 
-                : session.user.id;
+            if (!selfAttendanceTarget) {
+                setHasMarkedAttendance(false);
+                return;
+            }
 
-            // Check if user has already marked attendance with status "present"
             const userAttendance = sessionData.attendanceRecords?.find(
-                (record: any) => record.participantId === participantId 
-                    && record.attendance === "present"
+                (record: any) =>
+                    record.participantId === selfAttendanceTarget.participantId &&
+                    record.participantType === selfAttendanceTarget.participantType &&
+                    record.attendance === "present"
             );
             setHasMarkedAttendance(!!userAttendance);
         }
-    }, [sessionData, session, userRegistration]);
+    }, [
+        sessionData,
+        session?.user?.id,
+        selfAttendanceTarget?.participantId,
+        selfAttendanceTarget?.participantType,
+    ]);
 
     const handleMarkAttendance = async () => {
         if (!session?.user?.id || !sessionData) {
@@ -128,20 +186,25 @@ export default function SelfAttendancePage() {
             return;
         }
 
+        if (!selfAttendanceTarget) {
+            toast({
+                title: "❌ Não elegível",
+                description: sessionData.type === "plenaria"
+                    ? "Na plenária, auto presença está disponível apenas para EBs, CRs e Comitês Locais com inscrição aprovada."
+                    : "Você precisa de inscrição aprovada nesta assembleia para marcar presença.",
+                variant: "destructive",
+            });
+            return;
+        }
+
         setIsLoading(true);
 
         try {
-            // For sessao type, we need the registration ID
-            // For plenaria type, we can use either registration ID or user ID
-            const participantId = sessionData.type === "sessao" && userRegistration 
-                ? userRegistration._id 
-                : session.user.id;
-
             const result = await markAttendance({
                 sessionId: sessionId as Id<"agSessions">,
-                participantId,
-                participantName: session.user.name || "Participante",
-                participantType: sessionData.type === "sessao" ? "individual" : "user"
+                participantId: selfAttendanceTarget.participantId,
+                participantName: selfAttendanceTarget.participantName,
+                participantType: selfAttendanceTarget.participantType,
             });
 
             if (result.success) {
@@ -330,11 +393,25 @@ export default function SelfAttendancePage() {
                                         Fazer Login
                                     </Button>
                                 </div>
-                            ) : sessionData.type === "sessao" && !userRegistration ? (
+                            ) : sessionData.type !== "avulsa" && !userRegistration ? (
                                 <div className="space-y-4">
                                     <AlertCircle className="w-12 h-12 text-orange-500 mx-auto" />
                                     <p className="text-orange-600">
                                         Você não está inscrito nesta assembleia e não pode participar desta sessão.
+                                    </p>
+                                </div>
+                            ) : sessionData.type !== "avulsa" && !!userRegistration && userRegistration.status !== "approved" ? (
+                                <div className="space-y-4">
+                                    <AlertCircle className="w-12 h-12 text-orange-500 mx-auto" />
+                                    <p className="text-orange-600">
+                                        Sua inscrição ainda não foi aprovada. Aguarde aprovação para marcar presença.
+                                    </p>
+                                </div>
+                            ) : sessionData.type === "plenaria" && !selfAttendanceTarget ? (
+                                <div className="space-y-4">
+                                    <AlertCircle className="w-12 h-12 text-orange-500 mx-auto" />
+                                    <p className="text-orange-600">
+                                        Na plenária, auto presença está disponível apenas para EBs, CRs e Comitês Locais.
                                     </p>
                                 </div>
                             ) : hasMarkedAttendance ? (
