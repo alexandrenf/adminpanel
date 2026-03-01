@@ -94,10 +94,14 @@ export default function QRCodePage() {
         if (registration && finalAssembly) {
             // Create QR code data with participant information
             const qrData = {
+                registrationId: registration._id,
                 participantId: registration._id,
                 participantName: registration.participantName,
                 assemblyId: finalAssembly._id,
-                assemblyName: finalAssembly.name
+                assemblyName: finalAssembly.name,
+                registrationParticipantType: registration.participantType,
+                registrationParticipantId: registration.participantId,
+                comiteLocal: registration.comiteLocal
             };
             
             // Convert to JSON string for QR code

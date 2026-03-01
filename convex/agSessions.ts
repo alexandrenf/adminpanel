@@ -68,7 +68,7 @@ const initializeSessionAttendance = async (
           lastUpdatedBy: createdBy,
         });
       } else if (participant.type === "comite") {
-        // Individual attendance for each comité in plenária
+        // Group attendance for each comité in plenária
         attendanceRecords.push({
           sessionId: sessionId as any,
           assemblyId: assemblyId as any,
@@ -181,6 +181,15 @@ export const markAttendance = mutation({
     markedBy: v.string(),
   },
   handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    if (session.status !== "active") {
+      throw new Error("Session is not active");
+    }
+
     // Find existing attendance record
     const existingRecord = await ctx.db
       .query("agSessionAttendance")
@@ -203,30 +212,29 @@ export const markAttendance = mutation({
         lastUpdatedBy: args.markedBy,
       });
       return existingRecord._id;
-    } else {
-      // Get session to get assemblyId
-      const session = await ctx.db.get(args.sessionId);
-      if (!session) {
-        throw new Error("Session not found");
-      }
-
-      // Create new attendance record
-      const newRecord = await ctx.db.insert("agSessionAttendance", {
-        sessionId: args.sessionId,
-        assemblyId: session.assemblyId, // Can be undefined for avulsa sessions
-        participantId: args.participantId,
-        participantType: args.participantType,
-        participantName: args.participantName,
-        participantRole: args.participantRole,
-        attendance: args.attendance,
-        markedAt: now,
-        markedBy: args.markedBy,
-        lastUpdated: now,
-        lastUpdatedBy: args.markedBy,
-      });
-
-      return newRecord;
     }
+
+    // Prevent creating orphan attendance records for plenária/sessão.
+    if (session.type !== "avulsa") {
+      throw new Error("Participant not found in this session");
+    }
+
+    // Create new attendance record (avulsa only)
+    const newRecord = await ctx.db.insert("agSessionAttendance", {
+      sessionId: args.sessionId,
+      assemblyId: session.assemblyId, // Can be undefined for avulsa sessions
+      participantId: args.participantId,
+      participantType: args.participantType,
+      participantName: args.participantName,
+      participantRole: args.participantRole,
+      attendance: args.attendance,
+      markedAt: now,
+      markedBy: args.markedBy,
+      lastUpdated: now,
+      lastUpdatedBy: args.markedBy,
+    });
+
+    return newRecord;
   },
 });
 
@@ -342,7 +350,8 @@ export const markSelfAttendance = mutation({
     sessionId: v.id("agSessions"),
     participantId: v.string(),
     participantName: v.string(),
-    participantType: v.string(), // "individual" | "user" - "individual" for registered participants, "user" for direct users
+    participantType: v.string(), // "individual" | "eb" | "cr" | "comite" | "user"
+    participantRole: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Get session first
@@ -360,7 +369,12 @@ export const markSelfAttendance = mutation({
     const existingRecord = await ctx.db
       .query("agSessionAttendance")
       .withIndex("by_session", (q: any) => q.eq("sessionId", args.sessionId))
-      .filter((q: any) => q.eq(q.field("participantId"), args.participantId))
+      .filter((q: any) =>
+        q.and(
+          q.eq(q.field("participantId"), args.participantId),
+          q.eq(q.field("participantType"), args.participantType)
+        )
+      )
       .first();
 
     if (existingRecord) {
@@ -375,6 +389,11 @@ export const markSelfAttendance = mutation({
       return { success: true };
     }
 
+    // For plenária and sessão, only pre-initialized participants can self-mark.
+    if (session.type !== "avulsa") {
+      return { success: false, error: "Participante não habilitado para esta sessão." };
+    }
+
     // Create new attendance record for self-marked attendance
     const now = Date.now();
     await ctx.db.insert("agSessionAttendance", {
@@ -383,6 +402,7 @@ export const markSelfAttendance = mutation({
       participantId: args.participantId,
       participantType: args.participantType, // Now using consistent types directly
       participantName: args.participantName,
+      participantRole: args.participantRole,
       attendance: "present",
       markedAt: now,
       markedBy: args.participantId, // Self-marked

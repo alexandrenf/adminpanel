@@ -72,18 +72,11 @@ export const create = mutation({
     name: v.string(),
     createdBy: v.string(),
   },
-  handler: async (ctx, args) => {
-    const token = nanoid(16); // Generate a unique 16-character token
-    
-    const id = await ctx.db.insert("qrReaders", {
-      name: args.name,
-      token,
-      createdAt: Date.now(),
-      createdBy: args.createdBy,
-      isActive: true,
-    });
-
-    return { id, token };
+  handler: async () => {
+    // General readers are intentionally disabled to avoid readers without session binding.
+    throw new Error(
+      "A criação de leitores gerais foi desativada. Use 'Novo Leitor QR' em uma sessão ativa."
+    );
   },
 });
 
